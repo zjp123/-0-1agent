@@ -1,0 +1,25 @@
+{
+  "name": "agent-zero-to-one",
+  "version": "0.0.1",
+  "description": "从0到1构建全能Agent",
+  "type": "module",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent-server.js",
+    "chat": "node agent.js",
+    "web": "node agent-server.js",
+    "cli": "node agent-rag.js"
+  },
+  "keywords": [
+    "agent",
+    "ai",
+    "llm",
+    "deepseek"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^4.22.2",
+    "openai": "^6.39.1"
+  }
+}
