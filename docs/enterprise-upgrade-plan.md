@@ -11,22 +11,22 @@
 | 层级 | 选型 |
 |------|------|
 | 语言 | TypeScript |
-| HTTP 框架 | Fastify |
+| HTTP 框架 | NestJS（Express 适配器） |
 | 前端 | Next.js 14 (App Router) |
 | 主数据库 | PostgreSQL 16 |
 | 向量数据库 | Qdrant |
 | 缓存 / 限流 | Redis 7 |
 | ORM | Drizzle ORM |
-| 认证 | JWT + Refresh Token |
-| 日志 | Pino |
-| 验证 | Zod |
+| 认证 | JWT + Refresh Token（@nestjs/jwt） |
+| 日志 | Pino（nestjs-pino） |
+| 验证 | class-validator + class-transformer |
 | 计算器 | mathjs（替换 eval） |
 | Embedding | DeepSeek Embedding API |
 | 搜索工具 | Brave Search API |
 | 天气工具 | OpenWeatherMap API |
 | 容器化 | Docker + docker-compose |
 | CI/CD | GitHub Actions |
-| 监控 | OpenTelemetry + Pino |
+| 监控 | OpenTelemetry + nestjs-pino |
 
 ---
 
@@ -37,10 +37,10 @@
   ↓ HTTPS / WebSocket
 Nginx (反向代理 + SSL + 限流)
   ↓
-Fastify 服务器
-  ├── Auth 模块 (JWT)
-  ├── Chat 模块 (SSE 流式)
-  └── 知识库模块 (RAG)
+NestJS 服务器（Express）
+  ├── AuthModule（JWT 认证）
+  ├── ChatModule（SSE 流式）
+  └── KnowledgeModule（RAG 知识库）
         ↓
     Agent 核心引擎
     ├── ReAct Loop（多步推理）
@@ -57,44 +57,71 @@ Fastify 服务器
 
 ---
 
-## Phase 1 — 安全加固（立即）
+## Phase 1 — 初始化 NestJS 项目 + 安全加固
 
-> 目标：消除所有高危漏洞，不依赖任何外部服务，改动成本最小。
+> 目标：搭建 NestJS 项目骨架，迁移现有功能，消除所有高危漏洞。
 
-### 1.1 消除 eval() 安全漏洞
+### 1.1 初始化 NestJS 项目
+
+- [ ] 安装 NestJS CLI：`npm install -g @nestjs/cli`
+- [ ] 新建项目：`nest new server`（选择 npm，使用默认 Express 适配器）
+- [ ] 项目结构：
+  ```
+  server/
+    src/
+      app.module.ts         —— 根模块
+      main.ts               —— 入口，配置全局中间件
+      chat/                 —— 聊天模块
+      agent/                —— Agent 核心模块
+      knowledge/            —— 知识库模块
+      auth/                 —— 认证模块（Phase 6）
+    test/
+  ```
+- [ ] 将旧 `agent-server.js` 的逻辑逐步迁移到 NestJS 模块
+
+### 1.2 消除 eval() 安全漏洞
 
 - [ ] 安装 mathjs：`npm install mathjs`
-- [ ] 替换 `agent-server.js` 中的 `eval(expression)` 为 `mathjs.evaluate(expression)`
+- [ ] 替换计算工具中的 `eval(expression)` 为 `mathjs.evaluate(expression)`
 - [ ] 删除原有的正则安全过滤（mathjs 自带沙箱）
 - [ ] 测试：`128 * 256`、`sqrt(16)`、`sin(PI/2)` 均正常
 
-### 1.2 添加请求验证
+### 1.3 添加请求验证（NestJS 方式）
 
-- [ ] 安装：`npm install zod`
-- [ ] 对 `POST /api/chat` 的 body 做 Zod schema 验证（message 必填、sessionId 格式校验）
-- [ ] 对所有 DELETE/GET 路由参数做校验
-- [ ] 验证失败返回 400 + 明确错误信息
+- [ ] 安装：`npm install class-validator class-transformer`
+- [ ] 在 `main.ts` 全局启用 ValidationPipe：
+  ```typescript
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  ```
+- [ ] 为 `POST /api/chat` 创建 `CreateChatDto`（message 必填、sessionId 格式校验）
+- [ ] 验证失败自动返回 400 + 字段级错误信息
 
-### 1.3 添加安全响应头
+### 1.4 添加安全响应头 + CORS
 
 - [ ] 安装：`npm install helmet`
-- [ ] 在 Express 中加入 `app.use(helmet())`
-- [ ] 配置 CORS：`npm install cors`，只允许指定域名
+- [ ] 在 `main.ts` 中配置：
+  ```typescript
+  app.use(helmet());
+  app.enableCors({ origin: process.env.ALLOWED_ORIGIN });
+  ```
 
-### 1.4 添加速率限制
+### 1.5 添加速率限制（NestJS 方式）
 
-- [ ] 安装：`npm install express-rate-limit`
-- [ ] `/api/chat` 接口：每 IP 每分钟最多 20 次
-- [ ] 其他 API：每 IP 每分钟最多 100 次
-- [ ] 超限返回 429 + Retry-After 头
+- [ ] 安装：`npm install @nestjs/throttler`
+- [ ] 在 `AppModule` 中配置 ThrottlerModule：
+  ```typescript
+  ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }])
+  ```
+- [ ] `/api/chat` 接口加 `@Throttle({ default: { limit: 20, ttl: 60000 } })` 守卫
+- [ ] 超限自动返回 429
 
-### 1.5 添加请求超时
+### 1.6 添加请求超时
 
 - [ ] LLM 调用设置 30 秒超时
 - [ ] 工具调用（webSearch 等）设置 10 秒超时
 - [ ] 超时后向客户端发送友好错误消息
 
-**Phase 1 完成标志**：运行 `npm run web`，用 curl 测试安全头、限流、非法输入均正常处理。
+**Phase 1 完成标志**：NestJS 服务启动，用 curl 测试安全头、限流、非法输入均正常处理；`nest build` 无报错。
 
 ---
 
@@ -144,7 +171,7 @@ Fastify 服务器
 ### 2.2 PostgreSQL 建表
 
 - [ ] 安装：`npm install pg drizzle-orm` + `npm install -D drizzle-kit`
-- [ ] 创建 `src/db/schema.js`，定义以下表：
+- [ ] 创建 `src/db/schema.ts`，定义以下表：
 
   ```
   users         (id, name, role, created_at)
@@ -189,7 +216,7 @@ Fastify 服务器
 
 ### 3.2 实现标准 ReAct 循环
 
-- [ ] 创建 `src/agent/loop.js`，实现以下逻辑：
+- [ ] 创建 `src/agent/loop.ts`，实现以下逻辑：（作为 NestJS AgentService 中的方法）
   ```
   while (轮次 < MAX_STEPS):
     response = LLM(messages + tools)
@@ -206,11 +233,11 @@ Fastify 服务器
 
 ### 3.3 工具注册表模块化
 
-- [ ] 创建 `src/agent/tools/` 目录
+- [ ] 创建 `src/agent/tools/` 目录（TypeScript）
 - [ ] 每个工具独立一个文件（`time.js`、`weather.js`、`calculator.js` 等）
-- [ ] 每个工具文件导出 `{ definition, execute }` 两个对象
-- [ ] 创建 `src/agent/tools/registry.js` 统一注册和调用
-- [ ] 新增工具只需新建文件 + 注册，不改其他代码
+- [ ] 每个工具文件导出实现 `ToolHandler` 接口的类（definition + execute）
+- [ ] 创建 `src/agent/tools/registry.ts`，作为可注入的 NestJS Provider 统一注册和调用
+- [ ] 新增工具只需新建类文件 + 在 AgentModule 中注册 Provider，不改其他代码
 
 ### 3.4 接入真实天气 API
 
@@ -244,7 +271,7 @@ Fastify 服务器
 ### 4.2 接入 Embedding 模型
 
 - [ ] 确认 DeepSeek 提供 embedding API（或使用 OpenAI `text-embedding-3-small`）
-- [ ] 创建 `src/lib/embeddings.js`：
+- [ ] 创建 `src/lib/embeddings.ts`（作为可注入的 NestJS Provider）：
   - `embedText(text)` → 返回向量数组
   - 加入缓存（相同文本不重复调用 API）
 - [ ] 测试：`embedText("苹果手机")` 返回 1536 维数组
@@ -285,7 +312,7 @@ Fastify 服务器
 ### 5.1 初始化 Next.js 项目
 
 - [ ] `npx create-next-app@latest apps/web --typescript --tailwind --app`
-- [ ] 配置代理：Next.js 请求转发到 Fastify 后端
+- [ ] 配置代理：Next.js 请求转发到 NestJS 后端（`next.config.js` rewrites）
 
 ### 5.2 核心组件
 
@@ -327,8 +354,8 @@ Fastify 服务器
 
 ### 6.2 JWT 中间件
 
-- [ ] 创建 `authMiddleware`：验证请求头中的 Bearer Token
-- [ ] 所有 `/api/chat`、`/api/sessions`、`/api/knowledge` 路由加上中间件
+- [ ] 创建 NestJS `AuthGuard`（`@nestjs/passport` + `passport-jwt`）：验证请求头中的 Bearer Token
+- [ ] 所有 `/api/chat`、`/api/sessions`、`/api/knowledge` 路由加上 `@UseGuards(JwtAuthGuard)` 装饰器
 - [ ] Token 过期返回 401，前端自动用 Refresh Token 续期
 
 ### 6.3 数据隔离
@@ -347,8 +374,8 @@ Fastify 服务器
 
 ### 7.1 结构化日志
 
-- [ ] 安装：`npm install pino pino-pretty`
-- [ ] 替换所有 `console.log` 为 Pino logger
+- [ ] 安装：`npm install nestjs-pino pino-http pino-pretty`
+- [ ] 替换所有 `console.log` 为注入的 `Logger`（NestJS 内置）或 nestjs-pino PinoLogger
 - [ ] 每个请求记录：request_id、user_id、路由、耗时、状态码
 - [ ] 每次 LLM 调用记录：model、input_tokens、output_tokens、耗时、工具调用列表
 - [ ] 错误日志包含完整 stack trace
@@ -460,4 +487,4 @@ LOG_LEVEL=info
 
 ---
 
-*最后更新：2026-05-31*
+*最后更新：2026-06-02*
