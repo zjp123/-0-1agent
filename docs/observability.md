@@ -4,7 +4,9 @@
 
 Observability 模块负责记录 Agent 平台运行过程中的关键事件，帮助开发、排障、评估和后续回放。
 
-当前阶段先实现 in-memory trace store，保证事件模型和查询 API 稳定。后续可替换为 OpenTelemetry、Pino、Prometheus、数据库或日志平台。
+当前 trace store 已迁移到 PostgreSQL。持久化说明见 [trace-persistence.md](./trace-persistence.md)。
+
+后续仍可继续接入 OpenTelemetry、Pino、Prometheus 或日志平台。
 
 ## 当前实现
 
@@ -15,7 +17,7 @@ apps/api/src/observability/
   observability.types.ts
   observability.service.ts
   observability.controller.ts
-  in-memory-trace.store.ts
+  postgres-trace.store.ts
   dto/
     list-traces.dto.ts
 ```

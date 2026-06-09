@@ -1,12 +1,22 @@
 import { Module } from "@nestjs/common";
 
-import { InMemoryTraceStore } from "./in-memory-trace.store.js";
+import { DatabaseModule } from "../db/database.module.js";
+import { TRACE_STORE } from "./observability.constants.js";
 import { ObservabilityController } from "./observability.controller.js";
 import { ObservabilityService } from "./observability.service.js";
+import { PostgresTraceStore } from "./postgres-trace.store.js";
 
 @Module({
+  imports: [DatabaseModule],
   controllers: [ObservabilityController],
-  providers: [InMemoryTraceStore, ObservabilityService],
+  providers: [
+    PostgresTraceStore,
+    {
+      provide: TRACE_STORE,
+      useExisting: PostgresTraceStore,
+    },
+    ObservabilityService,
+  ],
   exports: [ObservabilityService],
 })
 export class ObservabilityModule {}

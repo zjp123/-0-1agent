@@ -1,10 +1,11 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
-import { InMemoryTraceStore } from "./in-memory-trace.store.js";
+import { TRACE_STORE } from "./observability.constants.js";
 import type {
   TraceEvent,
   TraceEventType,
   TraceQuery,
+  TraceStore,
 } from "./observability.types.js";
 
 export type ObservabilityStatus = {
@@ -15,7 +16,7 @@ export type ObservabilityStatus = {
 
 @Injectable()
 export class ObservabilityService {
-  constructor(private readonly traceStore: InMemoryTraceStore) {}
+  constructor(@Inject(TRACE_STORE) private readonly traceStore: TraceStore) {}
 
   record(event: Omit<TraceEvent, "id" | "timestamp"> & { timestamp?: string }): TraceEvent {
     const traceEvent: TraceEvent = {
@@ -35,17 +36,17 @@ export class ObservabilityService {
       traceEvent.tenantId = event.tenantId;
     }
 
-    this.traceStore.append(traceEvent);
+    void Promise.resolve(this.traceStore.append(traceEvent));
     return traceEvent;
   }
 
-  list(query: TraceQuery = {}): TraceEvent[] {
+  async list(query: TraceQuery = {}): Promise<TraceEvent[]> {
     return this.traceStore.list(query);
   }
 
   getStatus(): ObservabilityStatus {
     return {
-      store: "in-memory",
+      store: "postgres",
       signals: [
         "structured trace events",
         "model usage",

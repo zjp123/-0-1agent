@@ -24,9 +24,15 @@ export type TraceEvent = {
 
 export type TraceQuery = {
   requestId?: string;
+  tenantId?: string;
   type?: TraceEventType;
   limit?: number;
 };
+
+export interface TraceStore {
+  append(event: TraceEvent): Promise<void> | void;
+  list(query?: TraceQuery): Promise<TraceEvent[]> | TraceEvent[];
+}
 
 export type AgentRunCompletedAttributes = {
   stopReason: AgentStopReason;
