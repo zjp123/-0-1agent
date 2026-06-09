@@ -1,7 +1,12 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Inject } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import { DatabaseService, type DatabaseHealth } from "../db/database.service.js";
+import { VECTOR_STORE } from "../vector-store/vector-store.constants.js";
+import type {
+  VectorStore,
+  VectorStoreHealth,
+} from "../vector-store/vector-store.types.js";
 
 type HealthResponse = {
   status: "ok";
@@ -11,6 +16,7 @@ type HealthResponse = {
   timestamp: string;
   dependencies: {
     database: DatabaseHealth;
+    vectorStore: VectorStoreHealth;
   };
 };
 
@@ -19,6 +25,7 @@ export class HealthController {
   constructor(
     private readonly config: ConfigService,
     private readonly database: DatabaseService,
+    @Inject(VECTOR_STORE) private readonly vectorStore: VectorStore,
   ) {}
 
   @Get()
@@ -31,6 +38,7 @@ export class HealthController {
       timestamp: new Date().toISOString(),
       dependencies: {
         database: await this.database.ping(),
+        vectorStore: await this.vectorStore.health(),
       },
     };
   }

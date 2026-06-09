@@ -1,20 +1,38 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
 import type { ModelMessage } from "../model-gateway/model-gateway.types.js";
-import { InMemoryKnowledgeStore } from "./in-memory-knowledge.store.js";
+import {
+  EMBEDDING_PROVIDER,
+  VECTOR_STORE,
+} from "../vector-store/vector-store.constants.js";
+import type {
+  EmbeddingProvider,
+  VectorPoint,
+  VectorStore,
+} from "../vector-store/vector-store.types.js";
+import { KNOWLEDGE_STORE } from "./knowledge.constants.js";
 import { KnowledgeChunkerService } from "./knowledge-chunker.service.js";
 import type {
   IngestKnowledgeInput,
   KnowledgeDocument,
   KnowledgeIngestResult,
   KnowledgeSearchResult,
+  KnowledgeStore,
   RetrieveKnowledgeInput,
 } from "./rag.types.js";
+
+const VECTOR_CANDIDATE_MULTIPLIER = 3;
 
 export type RagStatus = {
   enabled: boolean;
   store: string;
   retrievalMode: string;
+  vectorIndexing: {
+    enabled: boolean;
+    collection: string;
+    embeddingModel: string;
+    dimensions: number;
+  };
   pipeline: string[];
 };
 
@@ -22,7 +40,10 @@ export type RagStatus = {
 export class RagService {
   constructor(
     private readonly chunker: KnowledgeChunkerService,
-    private readonly store: InMemoryKnowledgeStore,
+    @Inject(KNOWLEDGE_STORE) private readonly store: KnowledgeStore,
+    @Inject(EMBEDDING_PROVIDER)
+    private readonly embeddingProvider: EmbeddingProvider,
+    @Inject(VECTOR_STORE) private readonly vectorStore: VectorStore,
   ) {}
 
   async ingest(input: IngestKnowledgeInput): Promise<KnowledgeIngestResult> {
@@ -30,6 +51,7 @@ export class RagService {
     const chunks = this.chunker.chunk(document);
     const result = { document, chunks };
     await this.store.saveDocument(result);
+    await this.indexChunks(result);
     return result;
   }
 
@@ -37,8 +59,34 @@ export class RagService {
     return this.store.listDocuments(tenantId);
   }
 
-  retrieve(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]> {
-    return this.store.search(input);
+  async retrieve(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]> {
+    const keywordResults = await this.store.search(input);
+    if (!this.vectorStore.isEnabled()) {
+      return keywordResults.map((result) => ({
+        ...result,
+        retrievalMode: "keyword",
+        scores: {
+          keyword: result.score,
+        },
+      }));
+    }
+
+    const vectorResults = await this.retrieveVector(input);
+    if (vectorResults.length === 0) {
+      return keywordResults.map((result) => ({
+        ...result,
+        retrievalMode: "keyword",
+        scores: {
+          keyword: result.score,
+        },
+      }));
+    }
+
+    return this.mergeHybridResults(
+      keywordResults,
+      vectorResults,
+      input.limit ?? 5,
+    );
   }
 
   async retrieveAsContextMessages(
@@ -60,17 +108,171 @@ export class RagService {
   getStatus(): RagStatus {
     return {
       enabled: true,
-      store: "in-memory",
+      store: "postgres",
       retrievalMode: "keyword",
+      vectorIndexing: {
+        enabled: this.vectorStore.isEnabled(),
+        collection: this.vectorStore.getCollectionName(),
+        embeddingModel: this.embeddingProvider.getModel(),
+        dimensions: this.embeddingProvider.getDimension(),
+      },
       pipeline: [
         "document ingestion",
         "chunking",
-        "embedding planned",
+        "embedding",
+        "vector indexing",
         "keyword retrieval",
         "source citation",
         "tenant filtering",
       ],
     };
+  }
+
+  private async indexChunks(result: KnowledgeIngestResult): Promise<void> {
+    if (!this.vectorStore.isEnabled() || result.chunks.length === 0) {
+      return;
+    }
+
+    const vectors = await this.embeddingProvider.embedMany(
+      result.chunks.map((chunk) => `${chunk.title}\n${chunk.content}`),
+    );
+    const points: VectorPoint[] = result.chunks.map((chunk, index) => ({
+      id: chunk.id,
+      vector: vectors[index] ?? [],
+      payload: {
+        tenantId: chunk.tenantId,
+        documentId: chunk.documentId,
+        chunkId: chunk.id,
+        title: chunk.title,
+        sourceType: chunk.sourceType,
+        sourceUri: chunk.sourceUri ?? null,
+        tags: chunk.tags,
+        chunkIndex: chunk.index,
+        tokenEstimate: chunk.tokenEstimate,
+      },
+    }));
+
+    await this.vectorStore.upsert(points);
+  }
+
+  private async retrieveVector(
+    input: RetrieveKnowledgeInput,
+  ): Promise<KnowledgeSearchResult[]> {
+    const [queryVector] = await this.embeddingProvider.embedMany([input.query]);
+    if (!queryVector) {
+      return [];
+    }
+
+    const vectorLimit = Math.max(
+      input.limit ?? 5,
+      (input.limit ?? 5) * VECTOR_CANDIDATE_MULTIPLIER,
+    );
+    const vectorResults = await this.vectorStore.search({
+      vector: queryVector,
+      limit: vectorLimit,
+      filter: this.toVectorFilter(input),
+    });
+    if (vectorResults.length === 0) {
+      return [];
+    }
+
+    const chunks = await this.store.findChunksByIds(
+      input.tenantId,
+      vectorResults.map((result) => result.id),
+    );
+    const chunksById = new Map(chunks.map((chunk) => [chunk.id, chunk]));
+    const requiredTags = input.tags ?? [];
+
+    return vectorResults
+      .map((result) => {
+        const chunk = chunksById.get(result.id);
+        if (!chunk) {
+          return undefined;
+        }
+        if (!requiredTags.every((tag) => chunk.tags.includes(tag))) {
+          return undefined;
+        }
+        const searchResult: KnowledgeSearchResult = {
+          chunk,
+          score: result.score,
+          matchedTerms: [],
+          retrievalMode: "vector" as const,
+          scores: {
+            vector: result.score,
+          },
+        };
+        return searchResult;
+      })
+      .filter((result): result is KnowledgeSearchResult => Boolean(result));
+  }
+
+  private mergeHybridResults(
+    keywordResults: KnowledgeSearchResult[],
+    vectorResults: KnowledgeSearchResult[],
+    limit: number,
+  ): KnowledgeSearchResult[] {
+    const merged = new Map<string, KnowledgeSearchResult>();
+
+    for (const result of keywordResults) {
+      merged.set(result.chunk.id, {
+        ...result,
+        retrievalMode: "keyword",
+        scores: {
+          keyword: result.score,
+        },
+      });
+    }
+
+    for (const result of vectorResults) {
+      const existing = merged.get(result.chunk.id);
+      if (!existing) {
+        merged.set(result.chunk.id, result);
+        continue;
+      }
+
+      merged.set(result.chunk.id, {
+        chunk: existing.chunk,
+        score: existing.score + result.score,
+        matchedTerms: existing.matchedTerms,
+        retrievalMode: "hybrid",
+        scores: {
+          keyword: existing.scores?.keyword ?? existing.score,
+          vector: result.scores?.vector ?? result.score,
+        },
+      });
+    }
+
+    return [...merged.values()]
+      .map((result) => ({
+        ...result,
+        score:
+          (result.scores?.keyword ?? 0) * 1 +
+          (result.scores?.vector ?? 0) * 4,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  }
+
+  private toVectorFilter(input: RetrieveKnowledgeInput): Record<string, unknown> {
+    const must: Array<Record<string, unknown>> = [
+      {
+        key: "tenantId",
+        match: {
+          value: input.tenantId,
+        },
+      },
+    ];
+
+    for (const tag of input.tags ?? []) {
+      must.push({
+        key: "tags",
+        match: {
+          value: tag,
+        },
+      });
+    }
+
+    return { must };
   }
 
   private formatResults(results: KnowledgeSearchResult[]): string {

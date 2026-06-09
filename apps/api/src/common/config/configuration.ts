@@ -19,6 +19,14 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (!value) {
+    return fallback;
+  }
+
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
 export const configuration = registerAs("app", () => ({
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number.parseInt(process.env.PORT ?? "3000", 10),
@@ -37,6 +45,13 @@ export const configuration = registerAs("app", () => ({
   },
   qdrant: {
     url: process.env.QDRANT_URL ?? "http://localhost:6333",
+    apiKey: process.env.QDRANT_API_KEY,
+    enabled: parseBoolean(process.env.QDRANT_ENABLED, false),
+    collection:
+      process.env.QDRANT_COLLECTION ?? "enterprise_agent_knowledge_chunks",
+    vectorSize: parsePositiveInt(process.env.QDRANT_VECTOR_SIZE, 384),
+    distance: process.env.QDRANT_DISTANCE ?? "Cosine",
+    timeoutMs: parsePositiveInt(process.env.QDRANT_TIMEOUT_MS, 10_000),
   },
   model: {
     provider: process.env.LLM_PROVIDER ?? "deepseek",

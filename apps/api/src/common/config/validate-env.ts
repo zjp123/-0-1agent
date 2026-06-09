@@ -11,11 +11,26 @@ export function validateEnv(env: RawEnv): RawEnv {
     throw new Error("PORT must be a number");
   }
 
-  for (const key of ["LLM_TIMEOUT_MS", "LLM_MAX_RETRIES"]) {
+  for (const key of [
+    "LLM_TIMEOUT_MS",
+    "LLM_MAX_RETRIES",
+    "QDRANT_VECTOR_SIZE",
+    "QDRANT_TIMEOUT_MS",
+  ]) {
     const value = asString(env, key);
     if (value && !/^\d+$/.test(value)) {
       throw new Error(`${key} must be a positive integer`);
     }
+  }
+
+  const qdrantEnabled = asString(env, "QDRANT_ENABLED");
+  if (
+    qdrantEnabled &&
+    !["1", "0", "true", "false", "yes", "no", "on", "off"].includes(
+      qdrantEnabled.toLowerCase(),
+    )
+  ) {
+    throw new Error("QDRANT_ENABLED must be a boolean");
   }
 
   const nodeEnv = asString(env, "NODE_ENV") ?? "development";

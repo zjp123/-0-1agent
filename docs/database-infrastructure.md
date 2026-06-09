@@ -93,6 +93,12 @@ REDIS_URL=redis://localhost:6379
 REDIS_PORT=6379
 
 QDRANT_URL=http://localhost:6333
+QDRANT_ENABLED=false
+QDRANT_API_KEY=
+QDRANT_COLLECTION=enterprise_agent_knowledge_chunks
+QDRANT_VECTOR_SIZE=384
+QDRANT_DISTANCE=Cosine
+QDRANT_TIMEOUT_MS=10000
 QDRANT_HTTP_PORT=6333
 QDRANT_GRPC_PORT=6334
 ```
@@ -146,15 +152,16 @@ npm run db:push
 - schema 初版
 - package scripts
 - env 示例
+- Qdrant HTTP client 基础实现
+- Qdrant collection 初始化逻辑
+- VectorStore health check
 
 未完成：
 
 - 实际 migrations 生成
-- 实际数据库连接 Provider
-- in-memory store 替换
 - Redis rate limiter
-- Qdrant collection 初始化
-- embedding provider
+- 真实 embedding provider
+- Qdrant payload index
 - 数据迁移脚本
 
 ## Database Connection

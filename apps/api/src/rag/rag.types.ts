@@ -50,6 +50,11 @@ export type KnowledgeSearchResult = {
   chunk: KnowledgeChunk;
   score: number;
   matchedTerms: string[];
+  retrievalMode?: "keyword" | "vector" | "hybrid";
+  scores?: {
+    keyword?: number;
+    vector?: number;
+  };
 };
 
 export type KnowledgeIngestResult = {
@@ -61,4 +66,5 @@ export interface KnowledgeStore {
   saveDocument(result: KnowledgeIngestResult): Promise<void>;
   listDocuments(tenantId: string): Promise<KnowledgeDocument[]>;
   search(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]>;
+  findChunksByIds(tenantId: string, chunkIds: string[]): Promise<KnowledgeChunk[]>;
 }
