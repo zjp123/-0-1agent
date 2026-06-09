@@ -18,9 +18,6 @@ const SOURCE_TYPES: KnowledgeSourceType[] = [
 
 export class IngestKnowledgeDto {
   @IsString()
-  tenantId!: string;
-
-  @IsString()
   @MinLength(1)
   title!: string;
 

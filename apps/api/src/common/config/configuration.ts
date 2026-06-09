@@ -23,6 +23,9 @@ export const configuration = registerAs("app", () => ({
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number.parseInt(process.env.PORT ?? "3000", 10),
   allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS),
+  auth: {
+    apiKey: process.env.API_KEY,
+  },
   model: {
     provider: process.env.LLM_PROVIDER ?? "deepseek",
     defaultModel: process.env.LLM_DEFAULT_MODEL ?? "deepseek-chat",

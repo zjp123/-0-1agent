@@ -1,5 +1,10 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 
+import { ApiKeyGuard } from "../auth/api-key.guard.js";
+import { CurrentUser } from "../auth/current-user.decorator.js";
+import { RequirePermissions } from "../auth/permissions.decorator.js";
+import { PermissionsGuard } from "../auth/permissions.guard.js";
+import type { RequestUser } from "../auth/auth.types.js";
 import {
   AgentCapabilitySnapshot,
   AgentRuntimeService,
@@ -17,19 +22,20 @@ export class AgentRuntimeController {
   }
 
   @Post("run")
-  runAgent(@Body() body: RunAgentDto): Promise<AgentRunResult> {
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("agent:run")
+  runAgent(
+    @Body() body: RunAgentDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<AgentRunResult> {
     const options: AgentRunOptions = {
       requestId: body.requestId,
       userMessage: body.message,
-      permissions: [],
+      userId: user.userId,
+      tenantId: user.tenantId,
+      permissions: user.permissions,
     };
 
-    if (body.userId) {
-      options.userId = body.userId;
-    }
-    if (body.tenantId) {
-      options.tenantId = body.tenantId;
-    }
     if (body.systemPrompt) {
       options.systemPrompt = body.systemPrompt;
     }

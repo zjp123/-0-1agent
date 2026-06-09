@@ -94,7 +94,6 @@ POST /api/knowledge/ingest
 
 ```json
 {
-  "tenantId": "default",
   "title": "企业报销制度",
   "content": "差旅报销需要在 30 天内提交发票和审批单。",
   "sourceType": "manual",
@@ -112,7 +111,6 @@ POST /api/knowledge/retrieve
 
 ```json
 {
-  "tenantId": "default",
   "query": "差旅报销多久内提交",
   "limit": 5,
   "tags": ["finance"]
@@ -122,12 +120,12 @@ POST /api/knowledge/retrieve
 ### 文档列表
 
 ```http
-GET /api/knowledge/documents?tenantId=default
+GET /api/knowledge/documents
 ```
 
 ## Agent Runtime 接入
 
-`POST /api/agent/run` 如果传入 `tenantId`，Runtime 会：
+`POST /api/agent/run` 会从认证上下文读取 `tenantId`，然后：
 
 1. 使用用户消息作为 query
 2. 调用 `RagService.retrieveAsContextMessages()`

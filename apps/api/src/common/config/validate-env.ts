@@ -25,5 +25,9 @@ export function validateEnv(env: RawEnv): RawEnv {
     throw new Error("LLM_API_KEY is required in production");
   }
 
+  if (nodeEnv === "production" && !asString(env, "API_KEY")) {
+    throw new Error("API_KEY is required in production");
+  }
+
   return env;
 }

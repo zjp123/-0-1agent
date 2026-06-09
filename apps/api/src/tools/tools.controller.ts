@@ -1,5 +1,10 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 
+import { ApiKeyGuard } from "../auth/api-key.guard.js";
+import { CurrentUser } from "../auth/current-user.decorator.js";
+import { RequirePermissions } from "../auth/permissions.decorator.js";
+import { PermissionsGuard } from "../auth/permissions.guard.js";
+import type { RequestUser } from "../auth/auth.types.js";
 import { ExecuteToolDto } from "./dto/execute-tool.dto.js";
 import { ToolRegistryService } from "./tool-registry.service.js";
 import type {
@@ -18,17 +23,18 @@ export class ToolsController {
   }
 
   @Post("execute")
-  executeTool(@Body() body: ExecuteToolDto): Promise<ToolCallResponse> {
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("tools:execute")
+  executeTool(
+    @Body() body: ExecuteToolDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ToolCallResponse> {
     const context: ToolExecutionContext = {
       requestId: body.requestId,
-      permissions: [],
+      userId: user.userId,
+      tenantId: user.tenantId,
+      permissions: user.permissions,
     };
-    if (body.userId) {
-      context.userId = body.userId;
-    }
-    if (body.tenantId) {
-      context.tenantId = body.tenantId;
-    }
 
     return this.registry.execute({
       name: body.name,

@@ -51,7 +51,7 @@ baseCode/              # 旧 Demo 代码归档，不作为新架构依赖
 - `POST /api/tools/execute`
 - `POST /api/knowledge/ingest`
 - `POST /api/knowledge/retrieve`
-- `GET /api/knowledge/documents?tenantId=...`
+- `GET /api/knowledge/documents`
 - `GET /api/observability/traces`
 
 ## 命令

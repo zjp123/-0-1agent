@@ -1,5 +1,10 @@
-import { Body, Controller, Get, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
 
+import { ApiKeyGuard } from "../auth/api-key.guard.js";
+import { CurrentUser } from "../auth/current-user.decorator.js";
+import { RequirePermissions } from "../auth/permissions.decorator.js";
+import { PermissionsGuard } from "../auth/permissions.guard.js";
+import type { RequestUser } from "../auth/auth.types.js";
 import { IngestKnowledgeDto } from "./dto/ingest-knowledge.dto.js";
 import { RetrieveKnowledgeDto } from "./dto/retrieve-knowledge.dto.js";
 import { RagService } from "./rag.service.js";
@@ -16,9 +21,14 @@ export class RagController {
   constructor(private readonly rag: RagService) {}
 
   @Post("ingest")
-  ingest(@Body() body: IngestKnowledgeDto): Promise<KnowledgeIngestResult> {
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:write")
+  ingest(
+    @Body() body: IngestKnowledgeDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<KnowledgeIngestResult> {
     const input: IngestKnowledgeInput = {
-      tenantId: body.tenantId,
+      tenantId: user.tenantId,
       title: body.title,
       content: body.content,
     };
@@ -36,18 +46,28 @@ export class RagController {
   }
 
   @Post("retrieve")
-  retrieve(@Body() body: RetrieveKnowledgeDto): Promise<KnowledgeSearchResult[]> {
-    return this.rag.retrieve(this.toRetrieveInput(body));
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  retrieve(
+    @Body() body: RetrieveKnowledgeDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<KnowledgeSearchResult[]> {
+    return this.rag.retrieve(this.toRetrieveInput(body, user));
   }
 
   @Get("documents")
-  listDocuments(@Query("tenantId") tenantId: string): Promise<KnowledgeDocument[]> {
-    return this.rag.listDocuments(tenantId);
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  listDocuments(@CurrentUser() user: RequestUser): Promise<KnowledgeDocument[]> {
+    return this.rag.listDocuments(user.tenantId);
   }
 
-  private toRetrieveInput(body: RetrieveKnowledgeDto): RetrieveKnowledgeInput {
+  private toRetrieveInput(
+    body: RetrieveKnowledgeDto,
+    user: RequestUser,
+  ): RetrieveKnowledgeInput {
     const input: RetrieveKnowledgeInput = {
-      tenantId: body.tenantId,
+      tenantId: user.tenantId,
       query: body.query,
     };
     if (body.limit !== undefined) {

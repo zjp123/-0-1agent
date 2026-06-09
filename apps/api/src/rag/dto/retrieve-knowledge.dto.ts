@@ -10,9 +10,6 @@ import {
 
 export class RetrieveKnowledgeDto {
   @IsString()
-  tenantId!: string;
-
-  @IsString()
   @MinLength(1)
   query!: string;
 
