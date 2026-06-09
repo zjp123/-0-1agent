@@ -5,6 +5,7 @@ import { Pool } from "pg";
 
 import { DatabaseService } from "./database.service.js";
 import { DRIZZLE_DB, PG_POOL } from "./database.constants.js";
+import { IdentityService } from "./identity.service.js";
 import * as schema from "./schema.js";
 
 @Global()
@@ -25,7 +26,8 @@ import * as schema from "./schema.js";
       useFactory: (pool: Pool) => drizzle(pool, { schema }),
     },
     DatabaseService,
+    IdentityService,
   ],
-  exports: [DatabaseService, DRIZZLE_DB, PG_POOL],
+  exports: [DatabaseService, IdentityService, DRIZZLE_DB, PG_POOL],
 })
 export class DatabaseModule {}

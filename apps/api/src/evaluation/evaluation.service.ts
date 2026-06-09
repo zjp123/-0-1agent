@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 
-import { InMemoryEvaluationStore } from "./in-memory-evaluation.store.js";
+import { EVALUATION_STORE } from "./evaluation.constants.js";
 import type {
   CreateEvaluationCaseInput,
   EvaluationCase,
   EvaluationRun,
+  EvaluationStore,
   RunEvaluationInput,
 } from "./evaluation.types.js";
 
@@ -17,7 +18,9 @@ export type EvaluationStatus = {
 
 @Injectable()
 export class EvaluationService {
-  constructor(private readonly store: InMemoryEvaluationStore) {}
+  constructor(
+    @Inject(EVALUATION_STORE) private readonly store: EvaluationStore,
+  ) {}
 
   createCase(input: CreateEvaluationCaseInput): Promise<EvaluationCase> {
     return this.store.createCase(input);
@@ -62,7 +65,7 @@ export class EvaluationService {
   getStatus(): EvaluationStatus {
     return {
       enabled: true,
-      store: "in-memory",
+      store: "postgres",
       evaluators: ["string_contains"],
       capabilities: [
         "eval case management",

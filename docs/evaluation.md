@@ -6,6 +6,8 @@ Evaluation 模块负责沉淀 Agent 平台的回归评估能力。它用于记�
 
 当前阶段先实现 deterministic 的基础评估链路，不接 LLM Judge，不自动运行 Agent。这样可以先稳定数据模型和 API。
 
+当前 EvaluationStore 已迁移到 PostgreSQL，持久化说明见 [evaluation-persistence.md](./evaluation-persistence.md)。
+
 ## 当前实现
 
 路径：
@@ -15,7 +17,7 @@ apps/api/src/evaluation/
   evaluation.types.ts
   evaluation.service.ts
   evaluation.controller.ts
-  in-memory-evaluation.store.ts
+  postgres-evaluation.store.ts
   evaluation.module.ts
   dto/
     create-evaluation-case.dto.ts
