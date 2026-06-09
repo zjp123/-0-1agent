@@ -157,12 +157,16 @@ npm run db:push
 - embedding provider
 - 数据迁移脚本
 
+## Database Connection
+
+数据库连接模块文档见 [database-connection.md](./database-connection.md)。
+
 ## 下一步
 
-建议下一步实现 `Database Connection`：
+建议下一步先替换 `EvaluationStore`：
 
-1. 创建 Drizzle database provider
-2. 创建 health check 数据库探测
-3. 生成 migration
-4. 替换一个低风险 store，例如 EvaluationStore
-5. 再逐步替换 Knowledge / Workflow / Trace
+1. 新增 PostgresEvaluationStore
+2. 复用现有 EvaluationStore 接口
+3. 写入 `evaluation_cases`
+4. 写入 `evaluation_runs`
+5. 保持 controller/service 不变

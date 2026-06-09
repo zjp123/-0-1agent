@@ -6,6 +6,7 @@ import { AppController } from "./app.controller.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { configuration } from "./common/config/configuration.js";
 import { validateEnv } from "./common/config/validate-env.js";
+import { DatabaseModule } from "./db/database.module.js";
 import { EvaluationModule } from "./evaluation/evaluation.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { MemoryContextModule } from "./memory-context/memory-context.module.js";
@@ -22,6 +23,7 @@ import { WorkflowModule } from "./workflow/workflow.module.js";
       load: [configuration],
       validate: validateEnv,
     }),
+    DatabaseModule,
     HealthModule,
     ModelGatewayModule,
     AgentRuntimeModule,

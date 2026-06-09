@@ -30,6 +30,7 @@ export const configuration = registerAs("app", () => ({
     url:
       process.env.DATABASE_URL ??
       "postgresql://agent:agent_password@localhost:5432/agent_db",
+    poolMax: parsePositiveInt(process.env.DATABASE_POOL_MAX, 10),
   },
   redis: {
     url: process.env.REDIS_URL ?? "redis://localhost:6379",
