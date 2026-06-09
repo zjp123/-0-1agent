@@ -79,14 +79,26 @@ export class AgentRuntimeService {
     const maxDurationMs = options.maxDurationMs ?? 60_000;
     const steps: AgentRuntimeStep[] = [];
     const usage = this.emptyUsage();
+    this.recordTrace(options, "agent.run.started", {
+      maxSteps,
+      maxDurationMs,
+      hasTenant: Boolean(options.tenantId),
+      hasHistory: Boolean(options.messages?.length),
+    });
+
     const contextRequest: BuildContextRequest = {
       userMessage: options.userMessage,
     };
+    let retrievedKnowledgeCount = 0;
     if (options.tenantId) {
       const retrievedKnowledge = await this.rag.retrieveAsContextMessages({
         tenantId: options.tenantId,
         query: options.userMessage,
         limit: 5,
+      });
+      retrievedKnowledgeCount = retrievedKnowledge.length;
+      this.recordTrace(options, "rag.retrieved", {
+        resultMessageCount: retrievedKnowledge.length,
       });
       if (retrievedKnowledge.length > 0) {
         contextRequest.retrievedKnowledge = retrievedKnowledge;
@@ -106,6 +118,14 @@ export class AgentRuntimeService {
     }
 
     const context = this.memoryContext.buildContext(contextRequest);
+    this.recordTrace(options, "agent.context.built", {
+      estimatedInputTokens: context.estimatedInputTokens,
+      droppedMessages: context.droppedMessages,
+      sourceCount: context.sources.length,
+      includedSourceCount: context.sources.filter((source) => source.included).length,
+      retrievedKnowledgeCount,
+    });
+
     const messages = [...context.messages];
     const toolDefinitions = this.tools
       .listDefinitions()
@@ -139,9 +159,30 @@ export class AgentRuntimeService {
         modelResponse = await this.modelGateway.generateText(modelRequest);
       } catch {
         stopReason = "model_error";
+        this.recordTrace(options, "model.failed", {
+          step,
+          messageCount: messages.length,
+        });
         break;
       }
       this.addUsage(usage, modelResponse.usage);
+      this.recordTrace(
+        options,
+        "model.completed",
+        {
+          step,
+          provider: modelResponse.provider,
+          model: modelResponse.model,
+          latencyMs: modelResponse.latencyMs,
+          attempts: modelResponse.attempts,
+          finishReason: modelResponse.finishReason,
+          toolCallCount: modelResponse.toolCalls.length,
+          promptTokens: modelResponse.usage?.promptTokens ?? 0,
+          completionTokens: modelResponse.usage?.completionTokens ?? 0,
+          totalTokens: modelResponse.usage?.totalTokens ?? 0,
+        },
+        modelResponse.latencyMs,
+      );
       const modelStep: AgentRuntimeStep = {
         type: "model",
         step,
@@ -181,6 +222,17 @@ export class AgentRuntimeService {
             arguments: this.parseToolArguments(toolCall.arguments),
             context: toolContext,
           });
+          this.recordTrace(
+            options,
+            "tool.completed",
+            {
+              step,
+              toolName: toolResponse.toolName,
+              status: toolResponse.status,
+              latencyMs: toolResponse.latencyMs,
+            },
+            toolResponse.latencyMs,
+          );
           steps.push({
             type: "tool",
             step,
@@ -210,6 +262,20 @@ export class AgentRuntimeService {
       answer = this.stopReasonMessage(stopReason);
     }
 
+    const durationMs = Date.now() - startedAt;
+    this.recordTrace(
+      options,
+      "agent.run.completed",
+      {
+        stopReason,
+        stepCount: steps.length,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        totalTokens: usage.totalTokens,
+      },
+      durationMs,
+    );
+
     return {
       requestId: options.requestId,
       answer,
@@ -223,7 +289,7 @@ export class AgentRuntimeService {
         droppedMessages: context.droppedMessages,
       },
       usage,
-      durationMs: Date.now() - startedAt,
+      durationMs,
     };
   }
 
@@ -301,5 +367,28 @@ export class AgentRuntimeService {
       return value;
     }
     return `${value.slice(0, maxLength)}...`;
+  }
+
+  private recordTrace(
+    options: AgentRunOptions,
+    type: Parameters<ObservabilityService["record"]>[0]["type"],
+    attributes: Parameters<ObservabilityService["record"]>[0]["attributes"],
+    durationMs?: number,
+  ): void {
+    const event: Parameters<ObservabilityService["record"]>[0] = {
+      requestId: options.requestId,
+      type,
+      attributes,
+    };
+    if (options.userId) {
+      event.userId = options.userId;
+    }
+    if (options.tenantId) {
+      event.tenantId = options.tenantId;
+    }
+    if (durationMs !== undefined) {
+      event.durationMs = durationMs;
+    }
+    this.observability.record(event);
   }
 }

@@ -1,0 +1,29 @@
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
+
+import type { TraceEventType } from "../observability.types.js";
+
+const TRACE_EVENT_TYPES: TraceEventType[] = [
+  "agent.run.started",
+  "agent.context.built",
+  "rag.retrieved",
+  "model.completed",
+  "model.failed",
+  "tool.completed",
+  "agent.run.completed",
+];
+
+export class ListTracesDto {
+  @IsOptional()
+  @IsUUID()
+  requestId?: string;
+
+  @IsOptional()
+  @IsIn(TRACE_EVENT_TYPES)
+  type?: TraceEventType;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  limit?: number;
+}
