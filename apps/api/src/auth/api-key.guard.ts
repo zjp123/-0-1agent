@@ -39,6 +39,7 @@ export class ApiKeyGuard implements CanActivate {
         "knowledge:write",
         "observability:read",
         "workflow:manage",
+        "evaluation:manage",
       ],
       authType: "api_key",
     };
@@ -65,6 +66,7 @@ export class ApiKeyGuard implements CanActivate {
         "knowledge:write",
         "observability:read",
         "workflow:manage",
+        "evaluation:manage",
       ],
       authType: "dev",
     };

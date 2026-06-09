@@ -4,7 +4,8 @@ export type Permission =
   | "knowledge:read"
   | "knowledge:write"
   | "observability:read"
-  | "workflow:manage";
+  | "workflow:manage"
+  | "evaluation:manage";
 
 export type Role = "developer" | "operator" | "admin";
 

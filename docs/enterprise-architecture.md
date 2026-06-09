@@ -57,6 +57,10 @@ baseCode/              # 旧 Demo 代码归档，不作为新架构依赖
 - `GET /api/workflows`
 - `GET /api/workflows/:workflowId`
 - `PATCH /api/workflows/:workflowId/steps/:stepId`
+- `POST /api/evaluations/cases`
+- `GET /api/evaluations/cases`
+- `POST /api/evaluations/cases/:caseId/runs`
+- `GET /api/evaluations/runs`
 
 ## 命令
 
