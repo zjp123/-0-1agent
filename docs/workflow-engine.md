@@ -4,7 +4,7 @@
 
 Workflow Engine 负责承载复杂任务的计划、状态和执行历史。它是后续 Plan/Execute、可恢复任务、人工确认节点、多步任务循环和多智能体编排的基础。
 
-当前阶段先实现 in-memory workflow store 和基础 API，稳定数据模型和状态流转。
+当前 WorkflowStore 已迁移到 PostgreSQL。持久化说明见 [workflow-persistence.md](./workflow-persistence.md)。
 
 ## 当前实现
 
@@ -15,7 +15,7 @@ apps/api/src/workflow/
   workflow.types.ts
   workflow.service.ts
   workflow.controller.ts
-  in-memory-workflow.store.ts
+  postgres-workflow.store.ts
   dto/
     create-workflow.dto.ts
     update-workflow-step.dto.ts

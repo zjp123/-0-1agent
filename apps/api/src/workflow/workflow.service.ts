@@ -1,10 +1,11 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
-import { InMemoryWorkflowStore } from "./in-memory-workflow.store.js";
+import { WORKFLOW_STORE } from "./workflow.constants.js";
 import type {
   CreateWorkflowInput,
   UpdateWorkflowStepInput,
   Workflow,
+  WorkflowStore,
 } from "./workflow.types.js";
 
 export type WorkflowStatus = {
@@ -15,7 +16,7 @@ export type WorkflowStatus = {
 
 @Injectable()
 export class WorkflowService {
-  constructor(private readonly store: InMemoryWorkflowStore) {}
+  constructor(@Inject(WORKFLOW_STORE) private readonly store: WorkflowStore) {}
 
   create(input: CreateWorkflowInput): Promise<Workflow> {
     return this.store.create(input);
@@ -36,7 +37,7 @@ export class WorkflowService {
   getStatus(): WorkflowStatus {
     return {
       enabled: true,
-      store: "in-memory",
+      store: "postgres",
       capabilities: [
         "planning",
         "step state",
