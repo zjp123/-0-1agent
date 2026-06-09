@@ -1,0 +1,168 @@
+# Database / Infrastructure
+
+## 目标
+
+Database / Infrastructure 基础版负责建立企业级 Agent 平台的生产持久化目标。
+
+当前项目仍有多个 in-memory store，但基础设施已经确定为：
+
+```text
+PostgreSQL + Redis + Qdrant
+```
+
+本阶段先完成 Docker Compose、Drizzle 配置和数据库 schema 初版。后续再逐步把 in-memory store 替换为持久化实现。
+
+## 技术选型
+
+### PostgreSQL
+
+用途：
+
+- 租户
+- 用户
+- 会话
+- 消息
+- 知识文档 metadata
+- 知识 chunks metadata
+- workflow
+- evaluation
+- trace events
+
+### Redis
+
+用途：
+
+- 限流
+- 活跃会话缓存
+- 短期任务状态
+- 后续异步任务队列协调
+
+### Qdrant
+
+用途：
+
+- RAG chunk vectors
+- 向量相似度检索
+- payload filter
+- tenant/tag/source metadata filter
+
+Qdrant 是核心 RAG 向量检索引擎，wiki 只是未来的知识来源 connector。
+
+## 文件
+
+```text
+infra/
+  docker-compose.yml
+
+apps/api/
+  drizzle.config.ts
+  src/db/schema.ts
+```
+
+## Docker Compose
+
+启动：
+
+```bash
+npm run infra:up
+```
+
+停止：
+
+```bash
+npm run infra:down
+```
+
+服务：
+
+- PostgreSQL: `localhost:5432`
+- Redis: `localhost:6379`
+- Qdrant HTTP: `localhost:6333`
+- Qdrant gRPC: `localhost:6334`
+
+## 环境变量
+
+```bash
+DATABASE_URL=postgresql://agent:agent_password@localhost:5432/agent_db
+POSTGRES_DB=agent_db
+POSTGRES_USER=agent
+POSTGRES_PASSWORD=agent_password
+POSTGRES_PORT=5432
+
+REDIS_URL=redis://localhost:6379
+REDIS_PORT=6379
+
+QDRANT_URL=http://localhost:6333
+QDRANT_HTTP_PORT=6333
+QDRANT_GRPC_PORT=6334
+```
+
+## Drizzle
+
+生成 migration：
+
+```bash
+npm run db:generate
+```
+
+推送 schema：
+
+```bash
+npm run db:push
+```
+
+## Schema 初版
+
+当前定义的表：
+
+- `tenants`
+- `users`
+- `sessions`
+- `messages`
+- `knowledge_documents`
+- `knowledge_chunks`
+- `workflows`
+- `workflow_steps`
+- `evaluation_cases`
+- `evaluation_runs`
+- `trace_events`
+
+当前定义的枚举：
+
+- `message_role`
+- `workflow_status`
+- `workflow_step_status`
+- `evaluation_case_type`
+
+## 当前边界
+
+已完成：
+
+- Docker Compose
+- PostgreSQL 服务
+- Redis 服务
+- Qdrant 服务
+- Drizzle config
+- schema 初版
+- package scripts
+- env 示例
+
+未完成：
+
+- 实际 migrations 生成
+- 实际数据库连接 Provider
+- in-memory store 替换
+- Redis rate limiter
+- Qdrant collection 初始化
+- embedding provider
+- 数据迁移脚本
+
+## 下一步
+
+建议下一步实现 `Database Connection`：
+
+1. 创建 Drizzle database provider
+2. 创建 health check 数据库探测
+3. 生成 migration
+4. 替换一个低风险 store，例如 EvaluationStore
+5. 再逐步替换 Knowledge / Workflow / Trace

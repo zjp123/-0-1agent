@@ -26,6 +26,17 @@ export const configuration = registerAs("app", () => ({
   auth: {
     apiKey: process.env.API_KEY,
   },
+  database: {
+    url:
+      process.env.DATABASE_URL ??
+      "postgresql://agent:agent_password@localhost:5432/agent_db",
+  },
+  redis: {
+    url: process.env.REDIS_URL ?? "redis://localhost:6379",
+  },
+  qdrant: {
+    url: process.env.QDRANT_URL ?? "http://localhost:6333",
+  },
   model: {
     provider: process.env.LLM_PROVIDER ?? "deepseek",
     defaultModel: process.env.LLM_DEFAULT_MODEL ?? "deepseek-chat",

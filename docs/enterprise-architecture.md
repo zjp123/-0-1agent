@@ -69,6 +69,10 @@ npm install
 npm run check
 npm run build
 npm run dev:api
+npm run infra:up
+npm run infra:down
+npm run db:generate
+npm run db:push
 ```
 
 如果本机 npm 用户配置里有失效 token，可以使用临时 npmrc 安装公开依赖：
@@ -77,13 +81,16 @@ npm run dev:api
 npm install --userconfig /private/tmp/enterprise-agent-empty.npmrc
 ```
 
+## 基础设施
+
+当前基础设施文档见 [database-infrastructure.md](./database-infrastructure.md)。
+
 ## 下一步
 
-下一阶段建议实现 `Model Gateway`：
+下一阶段建议实现 `Database Connection`：
 
-1. 定义统一模型请求/响应类型
-2. 接入 OpenAI-compatible Provider
-3. 支持 DeepSeek 配置
-4. 加入 timeout、retry、fallback
-5. 记录 latency、token usage 和错误信息
-6. 为 Agent Runtime 提供统一调用接口
+1. 创建 Drizzle database provider
+2. 创建 health check 数据库探测
+3. 生成 migration
+4. 替换一个低风险 store，例如 EvaluationStore
+5. 再逐步替换 Knowledge / Workflow / Trace

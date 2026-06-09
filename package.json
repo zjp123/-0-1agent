@@ -12,7 +12,11 @@
     "dev:api": "npm run start:dev -w @enterprise-agent/api",
     "build": "npm run build -w @enterprise-agent/api",
     "start:api": "npm run start -w @enterprise-agent/api",
-    "check": "npm run check -w @enterprise-agent/api"
+    "check": "npm run check -w @enterprise-agent/api",
+    "db:generate": "npm run db:generate -w @enterprise-agent/api",
+    "db:push": "npm run db:push -w @enterprise-agent/api",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down"
   },
   "engines": {
     "node": ">=22.0.0",
