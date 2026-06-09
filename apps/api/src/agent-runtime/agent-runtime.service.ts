@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 
 import { AuthService } from "../auth/auth.service.js";
 import { MemoryContextService } from "../memory-context/memory-context.service.js";
+import type { BuildContextRequest } from "../memory-context/memory-context.types.js";
 import type {
   ModelMessage,
   ModelRequest,
@@ -78,7 +79,34 @@ export class AgentRuntimeService {
     const maxDurationMs = options.maxDurationMs ?? 60_000;
     const steps: AgentRuntimeStep[] = [];
     const usage = this.emptyUsage();
-    const messages = this.buildInitialMessages(options);
+    const contextRequest: BuildContextRequest = {
+      userMessage: options.userMessage,
+    };
+    if (options.tenantId) {
+      const retrievedKnowledge = await this.rag.retrieveAsContextMessages({
+        tenantId: options.tenantId,
+        query: options.userMessage,
+        limit: 5,
+      });
+      if (retrievedKnowledge.length > 0) {
+        contextRequest.retrievedKnowledge = retrievedKnowledge;
+      }
+    }
+    if (options.systemPrompt) {
+      contextRequest.systemPrompt = options.systemPrompt;
+    }
+    if (options.messages) {
+      contextRequest.history = options.messages;
+    }
+    if (options.contextMaxTokens !== undefined) {
+      contextRequest.maxTokens = options.contextMaxTokens;
+    }
+    if (options.reservedResponseTokens !== undefined) {
+      contextRequest.reservedResponseTokens = options.reservedResponseTokens;
+    }
+
+    const context = this.memoryContext.buildContext(contextRequest);
+    const messages = [...context.messages];
     const toolDefinitions = this.tools
       .listDefinitions()
       .map((definition) => this.toModelToolDefinition(definition));
@@ -188,29 +216,15 @@ export class AgentRuntimeService {
       stopReason,
       steps,
       messages,
+      context: {
+        budget: context.budget,
+        estimatedInputTokens: context.estimatedInputTokens,
+        sources: context.sources,
+        droppedMessages: context.droppedMessages,
+      },
       usage,
       durationMs: Date.now() - startedAt,
     };
-  }
-
-  private buildInitialMessages(options: AgentRunOptions): ModelMessage[] {
-    const messages: ModelMessage[] = [];
-    if (options.systemPrompt) {
-      messages.push({ role: "system", content: options.systemPrompt });
-    } else {
-      messages.push({
-        role: "system",
-        content:
-          "You are an enterprise-grade agent. Use tools when needed, keep answers concise, and explain uncertainty clearly.",
-      });
-    }
-
-    if (options.messages) {
-      messages.push(...options.messages);
-    }
-
-    messages.push({ role: "user", content: options.userMessage });
-    return messages;
   }
 
   private buildToolContext(options: AgentRunOptions): ToolExecutionContext {

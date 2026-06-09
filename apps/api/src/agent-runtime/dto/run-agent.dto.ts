@@ -44,6 +44,18 @@ export class RunAgentDto {
   @IsOptional()
   @IsInt()
   @Min(1000)
+  @Max(200000)
+  contextMaxTokens?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  reservedResponseTokens?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
   @Max(120000)
   maxDurationMs?: number;
 

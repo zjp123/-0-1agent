@@ -4,6 +4,7 @@ import type {
   ModelToolDefinition,
   ModelUsage,
 } from "../model-gateway/model-gateway.types.js";
+import type { BuildContextResult } from "../memory-context/memory-context.types.js";
 import type {
   ToolAuditEvent,
   ToolCallResponse,
@@ -24,6 +25,8 @@ export type AgentRunOptions = {
   systemPrompt?: string;
   messages?: ModelMessage[];
   userMessage: string;
+  contextMaxTokens?: number;
+  reservedResponseTokens?: number;
   maxSteps?: number;
   maxDurationMs?: number;
   model?: string;
@@ -65,6 +68,10 @@ export type AgentRunResult = {
   stopReason: AgentStopReason;
   steps: AgentRuntimeStep[];
   messages: ModelMessage[];
+  context: Pick<
+    BuildContextResult,
+    "budget" | "estimatedInputTokens" | "sources" | "droppedMessages"
+  >;
   usage: ModelUsage;
   durationMs: number;
 };

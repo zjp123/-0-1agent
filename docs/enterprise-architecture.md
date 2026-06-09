@@ -49,6 +49,9 @@ baseCode/              # 旧 Demo 代码归档，不作为新架构依赖
 - `POST /api/agent/run`
 - `GET /api/tools`
 - `POST /api/tools/execute`
+- `POST /api/knowledge/ingest`
+- `POST /api/knowledge/retrieve`
+- `GET /api/knowledge/documents?tenantId=...`
 
 ## 命令
 

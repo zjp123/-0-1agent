@@ -39,6 +39,12 @@ export class AgentRuntimeController {
     if (body.maxSteps !== undefined) {
       options.maxSteps = body.maxSteps;
     }
+    if (body.contextMaxTokens !== undefined) {
+      options.contextMaxTokens = body.contextMaxTokens;
+    }
+    if (body.reservedResponseTokens !== undefined) {
+      options.reservedResponseTokens = body.reservedResponseTokens;
+    }
     if (body.maxDurationMs !== undefined) {
       options.maxDurationMs = body.maxDurationMs;
     }
