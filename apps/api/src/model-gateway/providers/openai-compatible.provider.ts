@@ -5,6 +5,7 @@ import type {
   ChatCompletionAssistantMessageParam,
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
   ChatCompletionSystemMessageParam,
   ChatCompletionTool,
   ChatCompletionUserMessageParam,
@@ -145,10 +146,16 @@ export class OpenAiCompatibleProvider implements ModelProvider {
     }
 
     if (message.role === "assistant") {
-      return {
+      const assistantMessage: ChatCompletionAssistantMessageParam = {
         role: "assistant",
         content: message.content,
-      } satisfies ChatCompletionAssistantMessageParam;
+      };
+      if (message.toolCalls && message.toolCalls.length > 0) {
+        assistantMessage.tool_calls = message.toolCalls.map((toolCall) =>
+          this.toOpenAiToolCall(toolCall),
+        );
+      }
+      return assistantMessage;
     }
 
     if (message.role === "system") {
@@ -170,6 +177,21 @@ export class OpenAiCompatibleProvider implements ModelProvider {
       userMessage.name = message.name;
     }
     return userMessage;
+  }
+
+  private toOpenAiToolCall(toolCall: {
+    id: string;
+    name: string;
+    arguments: string;
+  }): ChatCompletionMessageToolCall {
+    return {
+      id: toolCall.id,
+      type: "function",
+      function: {
+        name: toolCall.name,
+        arguments: toolCall.arguments,
+      },
+    };
   }
 
   private toToolCalls(

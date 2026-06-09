@@ -5,6 +5,7 @@ export type ModelMessage = {
   content: string;
   name?: string;
   toolCallId?: string;
+  toolCalls?: ModelToolCall[];
 };
 
 export type ModelToolDefinition = {

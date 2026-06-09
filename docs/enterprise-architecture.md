@@ -46,6 +46,7 @@ baseCode/              # 旧 Demo 代码归档，不作为新架构依赖
 
 - `GET /api/health`
 - `GET /api/agent/capabilities`
+- `POST /api/agent/run`
 - `GET /api/tools`
 - `POST /api/tools/execute`
 
