@@ -42,6 +42,7 @@ type RequestUser = {
 - `knowledge:read`
 - `knowledge:write`
 - `observability:read`
+- `workflow:manage`
 
 当前角色：
 
@@ -88,6 +89,10 @@ API_KEY=dev-api-key
 - `POST /api/knowledge/retrieve`
 - `GET /api/knowledge/documents`
 - `GET /api/observability/traces`
+- `POST /api/workflows`
+- `GET /api/workflows`
+- `GET /api/workflows/:workflowId`
+- `PATCH /api/workflows/:workflowId/steps/:stepId`
 
 当前保持公开接口：
 

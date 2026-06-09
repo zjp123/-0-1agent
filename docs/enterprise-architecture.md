@@ -53,6 +53,10 @@ baseCode/              # 旧 Demo 代码归档，不作为新架构依赖
 - `POST /api/knowledge/retrieve`
 - `GET /api/knowledge/documents`
 - `GET /api/observability/traces`
+- `POST /api/workflows`
+- `GET /api/workflows`
+- `GET /api/workflows/:workflowId`
+- `PATCH /api/workflows/:workflowId/steps/:stepId`
 
 ## 命令
 
