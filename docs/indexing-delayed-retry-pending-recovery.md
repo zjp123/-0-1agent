@@ -134,21 +134,22 @@ PostgreSQL `indexing_jobs` 仍是最终状态源：
 - XAUTOCLAIM pending recovery
 - recovery loop 并发保护
 - worker status 增加 delayed / consumerPending 指标
+- worker metrics endpoint
+- pending recovery 审计 trace
 
 未完成：
 
-- queue dashboard
-- worker metrics endpoint
-- pending recovery 审计 trace
+- queue dashboard UI
+- Prometheus metrics export
 - retry delay jitter
 - BullMQ 评估
 
 ## 下一步
 
-建议下一步实现 `Queue Metrics / Dashboard`：
+建议下一步实现 `Indexing Operations Runbook / Alerts`：
 
-1. 增加 queue metrics endpoint
-2. 增加 pending / delayed / dead-letter 分布指标
-3. 增加 worker active heartbeat 指标
-4. 增加 recovery action trace
-5. 增加 queue 运维 runbook
+1. 定义 pending / delayed / dead-letter 告警阈值
+2. 增加队列排障 runbook
+3. 增加 dead-letter replay all / purge 等运维动作
+4. 增加 Prometheus metrics export
+5. 后续做多 worker 聚合 dashboard

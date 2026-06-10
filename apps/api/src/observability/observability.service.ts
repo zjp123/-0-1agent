@@ -63,6 +63,7 @@ export class ObservabilityService {
         "rag.indexing.completed",
         "rag.indexing.failed",
         "rag.indexing.admin",
+        "rag.indexing.recovery",
         "model.completed",
         "model.failed",
         "tool.completed",

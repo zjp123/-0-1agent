@@ -8,8 +8,11 @@ import {
 import { RagService } from "./rag.service.js";
 import type {
   IndexingJob,
+  IndexingWorkerMetrics,
   IndexingWorkerStatus,
 } from "./rag.types.js";
+
+type IndexingWorkerCounters = IndexingWorkerMetrics["counters"];
 
 @Injectable()
 export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -27,6 +30,25 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly pendingClaimBatchSize: number;
   private recoveryTimer: ReturnType<typeof setInterval> | undefined;
   private recoveryRunning = false;
+  private readonly startedAt = Date.now();
+  private lastRecoveryAt: string | undefined;
+  private lastRecoveryError: string | undefined;
+  private readonly counters: IndexingWorkerCounters = {
+    jobsStarted: 0,
+    jobsCompleted: 0,
+    jobsFailed: 0,
+    jobsSkipped: 0,
+    jobsDeadLettered: 0,
+    jobsRetried: 0,
+    messagesDequeued: 0,
+    messagesAcked: 0,
+    delayedPromoted: 0,
+    pendingClaimed: 0,
+    expiredJobsRequeued: 0,
+    recoveryRuns: 0,
+    recoveryFailures: 0,
+    queueErrors: 0,
+  };
 
   constructor(
     private readonly config: ConfigService,
@@ -191,6 +213,23 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async getMetrics(): Promise<IndexingWorkerMetrics> {
+    const status = await this.getStatus();
+    const metrics: IndexingWorkerMetrics = {
+      ...status,
+      uptimeMs: Date.now() - this.startedAt,
+      recoveryRunning: this.recoveryRunning,
+      counters: { ...this.counters },
+    };
+    if (this.lastRecoveryAt) {
+      metrics.lastRecoveryAt = this.lastRecoveryAt;
+    }
+    if (this.lastRecoveryError) {
+      metrics.lastRecoveryError = this.lastRecoveryError;
+    }
+    return metrics;
+  }
+
   async listDeadLetters(limit: number): Promise<IndexingQueueMessage[]> {
     try {
       return await this.queue.listDeadLetters(limit);
@@ -222,6 +261,7 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
         if (!message) {
           continue;
         }
+        this.counters.messagesDequeued += 1;
 
         const job = await this.rag.getIndexingJob(
           message.tenantId,
@@ -229,11 +269,14 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
         );
         if (!job) {
           await this.queue.ack(message);
+          this.counters.messagesAcked += 1;
           continue;
         }
         await this.processJob(job);
         await this.queue.ack(message);
+        this.counters.messagesAcked += 1;
       } catch {
+        this.counters.queueErrors += 1;
         await this.sleep(1_000);
       }
     }
@@ -263,6 +306,7 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     if (attempted.status === "cancelled") {
       return;
     }
+    this.counters.jobsStarted += 1;
 
     const heartbeat = setInterval(() => {
       void this.rag.heartbeatIndexingJob({
@@ -275,8 +319,14 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     try {
       const result = await this.rag.runReindexJob(attempted);
       if (result.status !== "failed") {
+        if (result.status === "completed") {
+          this.counters.jobsCompleted += 1;
+        } else {
+          this.counters.jobsSkipped += 1;
+        }
         return;
       }
+      this.counters.jobsFailed += 1;
 
       if (attempted.attempts < attempted.maxAttempts) {
         await this.queue.enqueueDelayed(
@@ -286,6 +336,7 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
           },
           this.retryDelayForAttempt(attempted.attempts),
         );
+        this.counters.jobsRetried += 1;
         return;
       }
 
@@ -293,6 +344,7 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
         attempted,
         result.error ?? "Indexing job failed",
       );
+      this.counters.jobsDeadLettered += 1;
       try {
         await this.queue.deadLetter({
           tenantId: attempted.tenantId,
@@ -313,18 +365,45 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.recoveryRunning = true;
+    this.counters.recoveryRuns += 1;
+    let promotedDelayed = 0;
+    let claimedPending = 0;
+    let requeuedExpired = 0;
     try {
-      await this.queue.promoteDueDelayed(this.retryPromotionBatchSize);
-      await this.recoverPendingMessages();
-      await this.recoverExpiredJobs();
-    } catch {
-      // Recovery is best effort; the next interval will retry.
+      promotedDelayed = await this.queue.promoteDueDelayed(
+        this.retryPromotionBatchSize,
+      );
+      this.counters.delayedPromoted += promotedDelayed;
+      claimedPending = await this.recoverPendingMessages();
+      this.counters.pendingClaimed += claimedPending;
+      requeuedExpired = await this.recoverExpiredJobs();
+      this.counters.expiredJobsRequeued += requeuedExpired;
+      this.lastRecoveryError = undefined;
+      this.recordRecoveryTrace({
+        promotedDelayed,
+        claimedPending,
+        requeuedExpired,
+        result: "completed",
+      });
+    } catch (error) {
+      this.counters.recoveryFailures += 1;
+      this.counters.queueErrors += 1;
+      this.lastRecoveryError =
+        error instanceof Error ? error.message : "Unknown recovery error";
+      this.recordRecoveryTrace({
+        promotedDelayed,
+        claimedPending,
+        requeuedExpired,
+        result: "failed",
+        error: this.lastRecoveryError,
+      });
     } finally {
+      this.lastRecoveryAt = new Date().toISOString();
       this.recoveryRunning = false;
     }
   }
 
-  private async recoverPendingMessages(): Promise<void> {
+  private async recoverPendingMessages(): Promise<number> {
     const messages = await this.queue.claimPending(
       this.workerId,
       this.pendingClaimMinIdleMs,
@@ -332,35 +411,64 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     );
     for (const message of messages) {
       if (this.stopped) {
-        return;
+        return messages.length;
       }
       const job = await this.rag.getIndexingJob(message.tenantId, message.jobId);
       if (job) {
         await this.processJob(job);
       }
       await this.queue.ack(message);
+      this.counters.messagesAcked += 1;
     }
+    return messages.length;
   }
 
-  private async recoverExpiredJobs(): Promise<void> {
+  private async recoverExpiredJobs(): Promise<number> {
     if (this.stopped) {
-      return;
+      return 0;
     }
 
+    let requeued = 0;
     try {
       const expiredJobs = await this.rag.findExpiredIndexingJobs(new Date());
       for (const job of expiredJobs) {
         if (this.stopped) {
-          return;
+          return requeued;
         }
         await this.queue.enqueue({
           tenantId: job.tenantId,
           jobId: job.id,
         });
+        requeued += 1;
       }
     } catch {
       // Recovery is best effort; the next interval will retry.
     }
+    return requeued;
+  }
+
+  private recordRecoveryTrace(input: {
+    promotedDelayed: number;
+    claimedPending: number;
+    requeuedExpired: number;
+    result: "completed" | "failed";
+    error?: string;
+  }): void {
+    const recovery = {
+      workerId: this.workerId,
+      promotedDelayed: input.promotedDelayed,
+      claimedPending: input.claimedPending,
+      requeuedExpired: input.requeuedExpired,
+      result: input.result,
+    };
+    if (input.error) {
+      this.rag.recordIndexingRecoveryAction({
+        ...recovery,
+        error: input.error,
+      });
+      return;
+    }
+    this.rag.recordIndexingRecoveryAction(recovery);
   }
 
   private retryDelayForAttempt(attempt: number): number {

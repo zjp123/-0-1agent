@@ -19,6 +19,7 @@ import { RetrieveKnowledgeDto } from "./dto/retrieve-knowledge.dto.js";
 import { RagService } from "./rag.service.js";
 import type {
   IndexingJob,
+  IndexingWorkerMetrics,
   IndexingWorkerStatus,
   KnowledgeDocument,
   KnowledgeIngestResult,
@@ -99,6 +100,13 @@ export class RagController {
   @RequirePermissions("knowledge:read")
   getIndexingWorkerStatus(): Promise<IndexingWorkerStatus> {
     return this.indexingWorker.getStatus();
+  }
+
+  @Get("reindex/worker/metrics")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  getIndexingWorkerMetrics(): Promise<IndexingWorkerMetrics> {
+    return this.indexingWorker.getMetrics();
   }
 
   @Get("reindex/jobs/stuck")

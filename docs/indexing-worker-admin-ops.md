@@ -53,6 +53,33 @@ GET /api/knowledge/reindex/worker/status
 - retryDelayMaxMs
 - pendingClaimMinIdleMs
 
+### Worker Metrics
+
+```http
+GET /api/knowledge/reindex/worker/metrics
+```
+
+在 worker status 基础上额外返回：
+
+- uptimeMs
+- recoveryRunning
+- lastRecoveryAt
+- lastRecoveryError
+- counters.jobsStarted
+- counters.jobsCompleted
+- counters.jobsFailed
+- counters.jobsSkipped
+- counters.jobsDeadLettered
+- counters.jobsRetried
+- counters.messagesDequeued
+- counters.messagesAcked
+- counters.delayedPromoted
+- counters.pendingClaimed
+- counters.expiredJobsRequeued
+- counters.recoveryRuns
+- counters.recoveryFailures
+- counters.queueErrors
+
 ### Stuck Jobs
 
 ```http
@@ -100,6 +127,7 @@ Admin Ops 当前使用认证上下文中的 `tenantId`：
 
 ```text
 rag.indexing.admin
+rag.indexing.recovery
 ```
 
 当前记录的 action：
@@ -113,6 +141,15 @@ attributes：
 - action
 - jobId
 - result
+
+`rag.indexing.recovery` attributes：
+
+- workerId
+- promotedDelayed
+- claimedPending
+- requeuedExpired
+- result
+- error
 
 ## 当前边界
 
@@ -131,10 +168,12 @@ attributes：
 - tenant filter
 - delayed retry status fields
 - pending recovery status fields
+- worker metrics endpoint
+- process-level counters
+- recovery action trace
 
 未完成：
 
-- worker metrics endpoint
 - queue latency
 - stuck job alert
 - dead-letter replay all
@@ -142,10 +181,10 @@ attributes：
 
 ## 下一步
 
-建议下一步实现 `Queue Metrics / Dashboard`：
+建议下一步实现 `Indexing Operations Runbook / Alerts`：
 
-1. 增加 queue metrics endpoint
-2. 增加 pending / delayed / dead-letter 分布指标
-3. 增加 worker active heartbeat 指标
-4. 增加 recovery action trace
+1. 定义 pending / delayed / dead-letter 告警阈值
+2. 增加队列排障 runbook
+3. 增加 dead-letter replay all / purge 等运维动作
+4. 增加 Prometheus metrics export
 5. 增加 admin operation reason

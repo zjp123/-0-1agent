@@ -151,19 +151,21 @@ POST /api/knowledge/reindex/jobs/:jobId/cancel
 - stuck job query
 - dead-letter list API
 - admin audit trace
+- worker metrics endpoint
+- recovery action trace
 
 未完成：
 
-- queue dashboard
-- worker metrics endpoint
+- queue dashboard UI
+- Prometheus metrics export
 - BullMQ
 
 ## 下一步
 
-建议下一步实现 `Queue Metrics / Dashboard`：
+建议下一步实现 `Indexing Operations Runbook / Alerts`：
 
-1. 增加 queue metrics endpoint
-2. 增加 pending / delayed / dead-letter 分布指标
-3. 增加 worker active heartbeat 指标
-4. 增加 recovery action trace
+1. 定义 pending / delayed / dead-letter 告警阈值
+2. 增加队列排障 runbook
+3. 增加 dead-letter replay all / purge 等运维动作
+4. 增加 Prometheus metrics export
 5. 后续可替换 BullMQ

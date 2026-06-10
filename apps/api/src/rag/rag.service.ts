@@ -183,6 +183,29 @@ export class RagService {
     this.observability.record(event);
   }
 
+  recordIndexingRecoveryAction(input: {
+    workerId: string;
+    promotedDelayed: number;
+    claimedPending: number;
+    requeuedExpired: number;
+    result: "completed" | "failed";
+    error?: string;
+  }): void {
+    const attributes: Parameters<ObservabilityService["record"]>[0]["attributes"] = {
+      workerId: input.workerId,
+      promotedDelayed: input.promotedDelayed,
+      claimedPending: input.claimedPending,
+      requeuedExpired: input.requeuedExpired,
+      result: input.result,
+      error: input.error ?? null,
+    };
+    this.observability.record({
+      requestId: `indexing-recovery-${crypto.randomUUID()}`,
+      type: "rag.indexing.recovery",
+      attributes,
+    });
+  }
+
   async runReindexJob(job: IndexingJob): Promise<RunIndexingJobResult> {
     const metadata = this.indexingMetadata(job);
     try {

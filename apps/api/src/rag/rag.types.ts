@@ -139,6 +139,29 @@ export type IndexingWorkerStatus = {
   pendingClaimMinIdleMs: number;
 };
 
+export type IndexingWorkerMetrics = IndexingWorkerStatus & {
+  uptimeMs: number;
+  recoveryRunning: boolean;
+  lastRecoveryAt?: string;
+  lastRecoveryError?: string;
+  counters: {
+    jobsStarted: number;
+    jobsCompleted: number;
+    jobsFailed: number;
+    jobsSkipped: number;
+    jobsDeadLettered: number;
+    jobsRetried: number;
+    messagesDequeued: number;
+    messagesAcked: number;
+    delayedPromoted: number;
+    pendingClaimed: number;
+    expiredJobsRequeued: number;
+    recoveryRuns: number;
+    recoveryFailures: number;
+    queueErrors: number;
+  };
+};
+
 export type CreateIndexingJobInput = {
   tenantId: string;
   userId: string;
