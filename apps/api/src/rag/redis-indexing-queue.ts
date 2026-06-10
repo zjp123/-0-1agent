@@ -155,6 +155,13 @@ export class RedisIndexingQueue implements OnModuleDestroy {
       .filter((item): item is IndexingQueueMessage => Boolean(item));
   }
 
+  async removeDeadLetter(message: IndexingQueueMessage): Promise<void> {
+    if (!message.messageId) {
+      return;
+    }
+    await this.command("XDEL", this.deadLetterQueueName, message.messageId);
+  }
+
   async dequeue(consumerName: string): Promise<IndexingQueueMessage | undefined> {
     await this.ensureConsumerGroup();
     const response = await this.command(

@@ -84,6 +84,34 @@ export const configuration = registerAs("app", () => ({
       process.env.INDEXING_PENDING_CLAIM_BATCH_SIZE,
       10,
     ),
+    alertPendingThreshold: parsePositiveInt(
+      process.env.INDEXING_ALERT_PENDING_THRESHOLD,
+      100,
+    ),
+    alertDelayedThreshold: parsePositiveInt(
+      process.env.INDEXING_ALERT_DELAYED_THRESHOLD,
+      100,
+    ),
+    alertDeadLetterThreshold: parsePositiveInt(
+      process.env.INDEXING_ALERT_DEAD_LETTER_THRESHOLD,
+      1,
+    ),
+    alertQueueErrorsThreshold: parsePositiveInt(
+      process.env.INDEXING_ALERT_QUEUE_ERRORS_THRESHOLD,
+      10,
+    ),
+    alertRecoveryFailuresThreshold: parsePositiveInt(
+      process.env.INDEXING_ALERT_RECOVERY_FAILURES_THRESHOLD,
+      1,
+    ),
+    alertStaleRecoveryMs: parsePositiveInt(
+      process.env.INDEXING_ALERT_STALE_RECOVERY_MS,
+      120_000,
+    ),
+    deadLetterAdminBatchSize: parsePositiveInt(
+      process.env.INDEXING_DEAD_LETTER_ADMIN_BATCH_SIZE,
+      100,
+    ),
   },
   qdrant: {
     url: process.env.QDRANT_URL ?? "http://localhost:6333",

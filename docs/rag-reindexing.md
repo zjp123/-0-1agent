@@ -220,10 +220,10 @@ QDRANT_VECTOR_SIZE=1536
 
 ## 下一步
 
-建议下一步实现 `Indexing Operations Runbook / Alerts`：
+建议下一步实现 `Prometheus / OpenTelemetry Metrics Export`：
 
-1. 定义 pending / delayed / dead-letter 告警阈值
-2. 增加队列排障 runbook
-3. 增加 dead-letter replay all / purge 等运维动作
-4. 增加 Prometheus metrics export
+1. 增加 Prometheus-style metrics endpoint
+2. 将 worker counters 映射为 metric names
+3. 增加 queue depth gauges
+4. 增加 alert webhook 或外部告警集成
 5. 后续评估 BullMQ 替换

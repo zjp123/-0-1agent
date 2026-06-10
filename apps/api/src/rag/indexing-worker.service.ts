@@ -7,7 +7,10 @@ import {
 } from "./redis-indexing-queue.js";
 import { RagService } from "./rag.service.js";
 import type {
+  DeadLetterBatchResult,
   IndexingJob,
+  IndexingWorkerAlerts,
+  IndexingWorkerAlert,
   IndexingWorkerMetrics,
   IndexingWorkerStatus,
 } from "./rag.types.js";
@@ -28,6 +31,13 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly retryPromotionBatchSize: number;
   private readonly pendingClaimMinIdleMs: number;
   private readonly pendingClaimBatchSize: number;
+  private readonly alertPendingThreshold: number;
+  private readonly alertDelayedThreshold: number;
+  private readonly alertDeadLetterThreshold: number;
+  private readonly alertQueueErrorsThreshold: number;
+  private readonly alertRecoveryFailuresThreshold: number;
+  private readonly alertStaleRecoveryMs: number;
+  private readonly deadLetterAdminBatchSize: number;
   private recoveryTimer: ReturnType<typeof setInterval> | undefined;
   private recoveryRunning = false;
   private readonly startedAt = Date.now();
@@ -89,6 +99,34 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     this.pendingClaimBatchSize = this.config.get<number>(
       "app.redis.pendingClaimBatchSize",
       10,
+    );
+    this.alertPendingThreshold = this.config.get<number>(
+      "app.redis.alertPendingThreshold",
+      100,
+    );
+    this.alertDelayedThreshold = this.config.get<number>(
+      "app.redis.alertDelayedThreshold",
+      100,
+    );
+    this.alertDeadLetterThreshold = this.config.get<number>(
+      "app.redis.alertDeadLetterThreshold",
+      1,
+    );
+    this.alertQueueErrorsThreshold = this.config.get<number>(
+      "app.redis.alertQueueErrorsThreshold",
+      10,
+    );
+    this.alertRecoveryFailuresThreshold = this.config.get<number>(
+      "app.redis.alertRecoveryFailuresThreshold",
+      1,
+    );
+    this.alertStaleRecoveryMs = this.config.get<number>(
+      "app.redis.alertStaleRecoveryMs",
+      120_000,
+    );
+    this.deadLetterAdminBatchSize = this.config.get<number>(
+      "app.redis.deadLetterAdminBatchSize",
+      100,
     );
   }
 
@@ -155,6 +193,7 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       tenantId: job.tenantId,
       jobId: job.id,
     });
+    await this.removeDeadLetterMessagesForJob(job.tenantId, job.id);
     this.rag.recordIndexingAdminAction({
       tenantId: input.tenantId,
       userId: input.userId,
@@ -228,6 +267,167 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       metrics.lastRecoveryError = this.lastRecoveryError;
     }
     return metrics;
+  }
+
+  async getAlerts(): Promise<IndexingWorkerAlerts> {
+    const metrics = await this.getMetrics();
+    const alerts: IndexingWorkerAlert[] = [];
+
+    if (!metrics.enabled) {
+      alerts.push({
+        code: "indexing_worker_disabled",
+        severity: "warning",
+        message: "Indexing worker is disabled.",
+        value: false,
+      });
+    }
+    if (metrics.stopped) {
+      alerts.push({
+        code: "indexing_worker_stopped",
+        severity: "critical",
+        message: "Indexing worker has stopped.",
+        value: true,
+      });
+    }
+    if (!metrics.queueAvailable) {
+      alerts.push({
+        code: "indexing_queue_unavailable",
+        severity: "critical",
+        message: "Indexing queue is unavailable.",
+        value: metrics.queueError ?? "unavailable",
+      });
+    }
+    this.addThresholdAlert(alerts, {
+      code: "indexing_pending_high",
+      message: "Redis stream depth is above threshold.",
+      value: metrics.queueDepth.pending,
+      threshold: this.alertPendingThreshold,
+      severity: "warning",
+    });
+    this.addThresholdAlert(alerts, {
+      code: "indexing_delayed_high",
+      message: "Delayed retry queue depth is above threshold.",
+      value: metrics.queueDepth.delayed,
+      threshold: this.alertDelayedThreshold,
+      severity: "warning",
+    });
+    this.addThresholdAlert(alerts, {
+      code: "indexing_dead_letter_present",
+      message: "Dead-letter queue has messages.",
+      value: metrics.queueDepth.deadLetter,
+      threshold: this.alertDeadLetterThreshold,
+      severity: "critical",
+    });
+    this.addThresholdAlert(alerts, {
+      code: "indexing_queue_errors_high",
+      message: "Worker queue error counter is above threshold.",
+      value: metrics.counters.queueErrors,
+      threshold: this.alertQueueErrorsThreshold,
+      severity: "warning",
+    });
+    this.addThresholdAlert(alerts, {
+      code: "indexing_recovery_failures_high",
+      message: "Recovery failure counter is above threshold.",
+      value: metrics.counters.recoveryFailures,
+      threshold: this.alertRecoveryFailuresThreshold,
+      severity: "critical",
+    });
+
+    const lastRecoveryAgeMs = this.lastRecoveryAgeMs(metrics);
+    if (
+      metrics.enabled &&
+      !metrics.stopped &&
+      ((lastRecoveryAgeMs === undefined &&
+        metrics.uptimeMs > this.alertStaleRecoveryMs) ||
+        (lastRecoveryAgeMs !== undefined &&
+          lastRecoveryAgeMs > this.alertStaleRecoveryMs))
+    ) {
+      alerts.push({
+        code: "indexing_recovery_stale",
+        severity: "warning",
+        message: "Last recovery loop is older than threshold.",
+        value: lastRecoveryAgeMs ?? "never",
+        threshold: this.alertStaleRecoveryMs,
+      });
+    }
+
+    const hasCritical = alerts.some((alert) => alert.severity === "critical");
+    return {
+      status: hasCritical ? "critical" : alerts.length > 0 ? "warning" : "ok",
+      checkedAt: new Date().toISOString(),
+      thresholds: {
+        pending: this.alertPendingThreshold,
+        delayed: this.alertDelayedThreshold,
+        deadLetter: this.alertDeadLetterThreshold,
+        queueErrors: this.alertQueueErrorsThreshold,
+        recoveryFailures: this.alertRecoveryFailuresThreshold,
+        staleRecoveryMs: this.alertStaleRecoveryMs,
+      },
+      alerts,
+      metrics,
+    };
+  }
+
+  async replayTenantDeadLetters(input: {
+    tenantId: string;
+    userId: string;
+  }): Promise<DeadLetterBatchResult> {
+    const messages = await this.listDeadLetters(this.deadLetterAdminBatchSize);
+    const result = this.emptyDeadLetterBatchResult(input.tenantId, messages.length);
+    for (const message of messages) {
+      if (message.tenantId !== input.tenantId) {
+        result.skipped += 1;
+        continue;
+      }
+      result.matched += 1;
+      const job = await this.rag.replayDeadLetterIndexingJob(
+        input.tenantId,
+        message.jobId,
+      );
+      if (!job) {
+        result.skipped += 1;
+        continue;
+      }
+      await this.queue.enqueue({
+        tenantId: job.tenantId,
+        jobId: job.id,
+      });
+      await this.queue.removeDeadLetter(message);
+      result.processed += 1;
+      result.jobIds.push(job.id);
+    }
+    this.rag.recordIndexingAdminAction({
+      tenantId: input.tenantId,
+      userId: input.userId,
+      action: "replay_dead_letter_all",
+      result: `processed:${result.processed}`,
+    });
+    return result;
+  }
+
+  async purgeTenantDeadLetters(input: {
+    tenantId: string;
+    userId: string;
+  }): Promise<DeadLetterBatchResult> {
+    const messages = await this.listDeadLetters(this.deadLetterAdminBatchSize);
+    const result = this.emptyDeadLetterBatchResult(input.tenantId, messages.length);
+    for (const message of messages) {
+      if (message.tenantId !== input.tenantId) {
+        result.skipped += 1;
+        continue;
+      }
+      result.matched += 1;
+      await this.queue.removeDeadLetter(message);
+      result.processed += 1;
+      result.jobIds.push(message.jobId);
+    }
+    this.rag.recordIndexingAdminAction({
+      tenantId: input.tenantId,
+      userId: input.userId,
+      action: "purge_dead_letter",
+      result: `processed:${result.processed}`,
+    });
+    return result;
   }
 
   async listDeadLetters(limit: number): Promise<IndexingQueueMessage[]> {
@@ -469,6 +669,64 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.rag.recordIndexingRecoveryAction(recovery);
+  }
+
+  private addThresholdAlert(
+    alerts: IndexingWorkerAlert[],
+    input: {
+      code: string;
+      message: string;
+      value: number;
+      threshold: number;
+      severity: "warning" | "critical";
+    },
+  ): void {
+    if (input.value < input.threshold) {
+      return;
+    }
+    alerts.push({
+      code: input.code,
+      severity: input.severity,
+      message: input.message,
+      value: input.value,
+      threshold: input.threshold,
+    });
+  }
+
+  private lastRecoveryAgeMs(
+    metrics: Pick<IndexingWorkerMetrics, "lastRecoveryAt">,
+  ): number | undefined {
+    if (!metrics.lastRecoveryAt) {
+      return undefined;
+    }
+    const timestamp = Date.parse(metrics.lastRecoveryAt);
+    return Number.isFinite(timestamp) ? Date.now() - timestamp : undefined;
+  }
+
+  private emptyDeadLetterBatchResult(
+    tenantId: string,
+    scanned: number,
+  ): DeadLetterBatchResult {
+    return {
+      tenantId,
+      scanned,
+      matched: 0,
+      processed: 0,
+      skipped: 0,
+      jobIds: [],
+    };
+  }
+
+  private async removeDeadLetterMessagesForJob(
+    tenantId: string,
+    jobId: string,
+  ): Promise<void> {
+    const messages = await this.listDeadLetters(this.deadLetterAdminBatchSize);
+    for (const message of messages) {
+      if (message.tenantId === tenantId && message.jobId === jobId) {
+        await this.queue.removeDeadLetter(message);
+      }
+    }
   }
 
   private retryDelayForAttempt(attempt: number): number {

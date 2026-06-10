@@ -80,6 +80,20 @@ GET /api/knowledge/reindex/worker/metrics
 - counters.recoveryFailures
 - counters.queueErrors
 
+### Worker Alerts
+
+```http
+GET /api/knowledge/reindex/worker/alerts
+```
+
+返回当前 worker 的告警摘要：
+
+- status
+- checkedAt
+- thresholds
+- alerts
+- metrics
+
 ### Stuck Jobs
 
 ```http
@@ -95,6 +109,22 @@ GET /api/knowledge/reindex/dead-letter
 ```
 
 返回当前租户下 dead-letter queue 中最近的消息。
+
+### Dead-letter Replay All
+
+```http
+POST /api/knowledge/reindex/dead-letter/replay-all
+```
+
+批量 replay 当前租户下的 dead-letter messages。
+
+### Dead-letter Purge
+
+```http
+POST /api/knowledge/reindex/dead-letter/purge
+```
+
+批量删除当前租户下的 Redis dead-letter messages，不修改 PostgreSQL job 状态。
 
 ### Replay
 
@@ -120,6 +150,7 @@ Admin Ops 当前使用认证上下文中的 `tenantId`：
 - stuck job list 按 tenant 过滤
 - dead-letter list 按 tenant 过滤
 - cancel/replay 只能操作当前 tenant 的 job
+- replay all / purge 只能处理当前 tenant 的 dead-letter messages
 
 ## Audit Trace
 
@@ -135,6 +166,8 @@ rag.indexing.recovery
 - `enqueue_reindex`
 - `cancel`
 - `replay_dead_letter`
+- `replay_dead_letter_all`
+- `purge_dead_letter`
 
 attributes：
 
@@ -171,20 +204,24 @@ attributes：
 - worker metrics endpoint
 - process-level counters
 - recovery action trace
+- worker alerts API
+- dead-letter replay all
+- dead-letter purge
+- alert threshold config
 
 未完成：
 
 - queue latency
-- stuck job alert
-- dead-letter replay all
 - admin operation reason/comment
+- Prometheus metrics export
+- alert webhook
 
 ## 下一步
 
-建议下一步实现 `Indexing Operations Runbook / Alerts`：
+建议下一步实现 `Prometheus / OpenTelemetry Metrics Export`：
 
-1. 定义 pending / delayed / dead-letter 告警阈值
-2. 增加队列排障 runbook
-3. 增加 dead-letter replay all / purge 等运维动作
-4. 增加 Prometheus metrics export
+1. 增加 Prometheus-style metrics endpoint
+2. 将 worker counters 映射为 metric names
+3. 增加 queue depth gauges
+4. 增加 alert webhook 或外部告警集成
 5. 增加 admin operation reason

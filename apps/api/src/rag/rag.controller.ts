@@ -18,7 +18,9 @@ import { IngestKnowledgeDto } from "./dto/ingest-knowledge.dto.js";
 import { RetrieveKnowledgeDto } from "./dto/retrieve-knowledge.dto.js";
 import { RagService } from "./rag.service.js";
 import type {
+  DeadLetterBatchResult,
   IndexingJob,
+  IndexingWorkerAlerts,
   IndexingWorkerMetrics,
   IndexingWorkerStatus,
   KnowledgeDocument,
@@ -109,6 +111,13 @@ export class RagController {
     return this.indexingWorker.getMetrics();
   }
 
+  @Get("reindex/worker/alerts")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  getIndexingWorkerAlerts(): Promise<IndexingWorkerAlerts> {
+    return this.indexingWorker.getAlerts();
+  }
+
   @Get("reindex/jobs/stuck")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("knowledge:read")
@@ -127,6 +136,30 @@ export class RagController {
   ): Promise<IndexingQueueMessage[]> {
     const messages = await this.indexingWorker.listDeadLetters(50);
     return messages.filter((message) => message.tenantId === user.tenantId);
+  }
+
+  @Post("reindex/dead-letter/replay-all")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:write")
+  replayAllDeadLetters(
+    @CurrentUser() user: RequestUser,
+  ): Promise<DeadLetterBatchResult> {
+    return this.indexingWorker.replayTenantDeadLetters({
+      tenantId: user.tenantId,
+      userId: user.userId,
+    });
+  }
+
+  @Post("reindex/dead-letter/purge")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:write")
+  purgeDeadLetters(
+    @CurrentUser() user: RequestUser,
+  ): Promise<DeadLetterBatchResult> {
+    return this.indexingWorker.purgeTenantDeadLetters({
+      tenantId: user.tenantId,
+      userId: user.userId,
+    });
   }
 
   @Get("reindex/jobs/:jobId")

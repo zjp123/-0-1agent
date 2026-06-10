@@ -70,6 +70,20 @@ knowledge:read
 - `lastRecoveryError`
 - `counters`
 
+### Worker Alerts
+
+```http
+GET /api/knowledge/reindex/worker/alerts
+```
+
+返回基于 metrics 和阈值计算出的运维摘要：
+
+- `status`
+- `checkedAt`
+- `thresholds`
+- `alerts`
+- `metrics`
+
 ## Counters
 
 当前 counters 为进程内计数器，进程重启后清零：
@@ -133,6 +147,8 @@ attributes：
 - delayed / pending / dead-letter 指标
 - recovery loop counters
 - recovery action trace
+- worker alerts API
+- alert threshold config
 
 未完成：
 
@@ -141,14 +157,14 @@ attributes：
 - 多 worker 聚合视图
 - queue latency percentiles
 - dashboard UI
-- alert rules
+- alert webhook
 
 ## 下一步
 
-建议下一步实现 `Indexing Operations Runbook / Alerts`：
+建议下一步实现 `Prometheus / OpenTelemetry Metrics Export`：
 
-1. 定义 pending / delayed / dead-letter 告警阈值
-2. 增加队列排障 runbook
-3. 增加 dead-letter replay all / purge 等运维动作
-4. 增加 Prometheus metrics export
+1. 增加 Prometheus-style metrics endpoint
+2. 将 worker counters 映射为 metric names
+3. 增加 queue depth gauges
+4. 增加 alert webhook 或外部告警集成
 5. 后续做多 worker 聚合 dashboard

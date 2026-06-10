@@ -162,6 +162,40 @@ export type IndexingWorkerMetrics = IndexingWorkerStatus & {
   };
 };
 
+export type IndexingAlertSeverity = "warning" | "critical";
+
+export type IndexingWorkerAlert = {
+  code: string;
+  severity: IndexingAlertSeverity;
+  message: string;
+  value: number | string | boolean;
+  threshold?: number;
+};
+
+export type IndexingWorkerAlerts = {
+  status: "ok" | IndexingAlertSeverity;
+  checkedAt: string;
+  thresholds: {
+    pending: number;
+    delayed: number;
+    deadLetter: number;
+    queueErrors: number;
+    recoveryFailures: number;
+    staleRecoveryMs: number;
+  };
+  alerts: IndexingWorkerAlert[];
+  metrics: IndexingWorkerMetrics;
+};
+
+export type DeadLetterBatchResult = {
+  tenantId: string;
+  scanned: number;
+  matched: number;
+  processed: number;
+  skipped: number;
+  jobIds: string[];
+};
+
 export type CreateIndexingJobInput = {
   tenantId: string;
   userId: string;
