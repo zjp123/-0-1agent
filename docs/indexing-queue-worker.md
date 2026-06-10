@@ -25,8 +25,9 @@ apps/api/src/rag/
 ```bash
 REDIS_URL=redis://localhost:6379
 INDEXING_QUEUE_NAME=enterprise-agent:indexing-jobs
+INDEXING_CONSUMER_GROUP=enterprise-agent-indexers
 INDEXING_WORKER_ENABLED=true
-INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS=5
+INDEXING_WORKER_BLOCK_TIMEOUT_SECONDS=5
 INDEXING_JOB_MAX_ATTEMPTS=3
 INDEXING_WORKER_HEARTBEAT_INTERVAL_MS=10000
 INDEXING_WORKER_ID=
@@ -37,11 +38,13 @@ INDEXING_WORKER_RECOVERY_INTERVAL_MS=30000
 
 ## Queue 协议
 
-当前使用 Redis List：
+当前使用 Redis Streams：
 
-- enqueue: `LPUSH`
-- consume: `BRPOP`
-- dead-letter: `LPUSH enterprise-agent:indexing-jobs:dead-letter`
+- enqueue: `XADD`
+- consumer group: `XGROUP CREATE`
+- consume: `XREADGROUP`
+- ack: `XACK`
+- dead-letter: `XADD enterprise-agent:indexing-jobs:dead-letter`
 
 消息格式：
 
@@ -58,7 +61,7 @@ INDEXING_WORKER_RECOVERY_INTERVAL_MS=30000
 
 - 不增加依赖安装风险
 - 先验证业务边界
-- 后续可替换为 Redis Streams / BullMQ
+- 后续可替换为官方 Redis SDK 或 BullMQ
 
 ## 执行流程
 
@@ -66,7 +69,7 @@ INDEXING_WORKER_RECOVERY_INTERVAL_MS=30000
 2. `RagService.createReindexJob()` 创建 `indexing_jobs` 记录
 3. `IndexingWorkerService.enqueueReindexJob()` 写入 Redis queue
 4. API 返回 job
-5. `IndexingWorkerService` 在模块启动后循环 `BRPOP`
+5. `IndexingWorkerService` 在模块启动后循环 `XREADGROUP`
 6. worker 读取 job
 7. worker acquire lease
 8. worker 增加 attempts
@@ -111,7 +114,9 @@ POST /api/knowledge/reindex/jobs/:jobId/cancel
 已完成：
 
 - Redis queue config
-- Redis List enqueue/dequeue
+- Redis Streams enqueue/dequeue
+- Redis consumer group
+- XACK
 - worker module lifecycle
 - job enqueue
 - worker consume
@@ -133,14 +138,16 @@ POST /api/knowledge/reindex/jobs/:jobId/cancel
 
 未完成：
 
-- Redis Streams / BullMQ
+- delayed retry
+- Redis pending entry recovery
+- BullMQ
 
 ## 下一步
 
-建议下一步实现 `Redis Streams / BullMQ Migration`：
+建议下一步实现 `Delayed Retry / Pending Recovery`：
 
-1. 替换轻量 RESP client
-2. 使用更可靠的 ack / retry 语义
-3. 增加 delayed retry
-4. 增加 queue dashboard
-5. 保留当前 PostgreSQL job 状态作为 source of truth
+1. 增加 delayed retry
+2. 使用 XPENDING / XCLAIM 恢复 pending messages
+3. 增加 queue dashboard
+4. 增加 admin operation reason
+5. 后续可替换 BullMQ

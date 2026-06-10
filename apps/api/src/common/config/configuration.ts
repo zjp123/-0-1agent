@@ -44,9 +44,12 @@ export const configuration = registerAs("app", () => ({
     url: process.env.REDIS_URL ?? "redis://localhost:6379",
     indexingQueue:
       process.env.INDEXING_QUEUE_NAME ?? "enterprise-agent:indexing-jobs",
+    indexingConsumerGroup:
+      process.env.INDEXING_CONSUMER_GROUP ?? "enterprise-agent-indexers",
     workerEnabled: parseBoolean(process.env.INDEXING_WORKER_ENABLED, true),
-    brpopTimeoutSeconds: parsePositiveInt(
-      process.env.INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS,
+    blockTimeoutSeconds: parsePositiveInt(
+      process.env.INDEXING_WORKER_BLOCK_TIMEOUT_SECONDS ??
+        process.env.INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS,
       5,
     ),
     maxAttempts: parsePositiveInt(process.env.INDEXING_JOB_MAX_ATTEMPTS, 3),

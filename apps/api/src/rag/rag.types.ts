@@ -121,6 +121,7 @@ export type IndexingWorkerStatus = {
   concurrency: number;
   queueName: string;
   deadLetterQueueName: string;
+  consumerGroup: string;
   queueDepth: {
     pending: number;
     deadLetter: number;

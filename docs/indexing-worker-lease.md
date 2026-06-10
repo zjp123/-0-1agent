@@ -72,7 +72,7 @@ status = running AND (leaseUntil is null OR leaseUntil <= now)
 
 `INDEXING_WORKER_CONCURRENCY` 控制当前进程启动几个 worker loop。
 
-每个 loop 都会独立 `BRPOP`，但执行前必须 acquire lease，因此多 loop / 多实例下同一个 job 不会被正常重复执行。
+每个 loop 都会独立 `XREADGROUP`，但执行前必须 acquire lease，因此多 loop / 多实例下同一个 job 不会被正常重复执行。
 
 ## Dead-letter Replay
 
@@ -101,17 +101,20 @@ POST /api/knowledge/reindex/jobs/:jobId/replay
 - worker concurrency
 - dead-letter replay API
 - lease migration
+- Redis Streams consumer group
 
 未完成：
 
-- Redis Streams / BullMQ
+- delayed retry
+- Redis pending entry recovery
+- queue dashboard
 
 ## 下一步
 
-建议下一步实现 `Redis Streams / BullMQ Migration`：
+建议下一步实现 `Delayed Retry / Pending Recovery`：
 
-1. 替换轻量 RESP client
-2. 使用更可靠的 ack / retry 语义
-3. 增加 delayed retry
+1. 失败重试不要立即入队，增加延迟
+2. 使用 XPENDING 查看 pending messages
+3. 使用 XCLAIM / XAUTOCLAIM 恢复超时 pending
 4. 增加 queue dashboard
-5. 保留当前 PostgreSQL job 状态作为 source of truth
+5. 后续评估 BullMQ 替换

@@ -60,7 +60,7 @@ worker 消费 job 后会先增加 `attempts`。
 
 ## Dead-letter
 
-dead-letter 使用 Redis List：
+dead-letter 使用 Redis Stream：
 
 ```text
 enterprise-agent:indexing-jobs:dead-letter
@@ -141,20 +141,24 @@ POST /api/knowledge/reindex/jobs/:jobId/replay
 - dead-letter replay API
 - cancelled status
 - reliability migration
+- Redis Streams consumer group
+- XACK 消费确认
 
 未完成：
 
 - worker metrics
 - workerId 查询过滤
 - lease timeout 告警
-- Redis Streams / BullMQ
+- delayed retry
+- Redis pending entry recovery
+- BullMQ 评估
 
 ## 下一步
 
-建议下一步实现 `Worker Metrics / Admin Ops`：
+建议下一步实现 `Delayed Retry / Pending Recovery`：
 
-1. 增加 worker 状态 API
-2. 增加 queue depth 指标
-3. 增加 stuck job 告警
-4. 增加 dead-letter 列表 API
-5. 后续迁移到 Redis Streams 或 BullMQ
+1. 失败重试不要立即入队，增加延迟
+2. 使用 XPENDING 查看 pending messages
+3. 使用 XCLAIM / XAUTOCLAIM 恢复超时 pending
+4. 增加 queue dashboard
+5. 后续评估 BullMQ 替换

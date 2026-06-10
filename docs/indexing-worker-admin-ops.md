@@ -38,6 +38,7 @@ GET /api/knowledge/reindex/worker/status
 - concurrency
 - queueName
 - deadLetterQueueName
+- consumerGroup
 - queueDepth.pending
 - queueDepth.deadLetter
 - queueAvailable
@@ -131,10 +132,10 @@ attributes：
 
 ## 下一步
 
-建议下一步实现 `Redis Streams / BullMQ Migration`：
+建议下一步实现 `Delayed Retry / Pending Recovery`：
 
-1. 替换轻量 RESP client
-2. 使用 ack / retry / delay 原生语义
+1. 增加 delayed retry
+2. 使用 XPENDING / XCLAIM 恢复 pending messages
 3. 增加 queue dashboard
 4. 增加 admin operation reason
-5. 保留 PostgreSQL job 状态作为 source of truth
+5. 后续可替换 BullMQ

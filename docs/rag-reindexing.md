@@ -86,9 +86,9 @@ GET /api/knowledge/reindex/jobs/:jobId
 
 1. 从认证上下文读取当前 tenantId
 2. 创建 `indexing_jobs` 记录，状态为 `pending`
-3. 将 jobId/tenantId 写入 Redis queue
+3. 将 jobId/tenantId 写入 Redis Stream
 4. API 立即返回 job
-5. worker 使用 `BRPOP` 消费 queue
+5. worker 使用 `XREADGROUP` 消费 stream message
 6. worker 将 job 标记为 `running`
 7. 调用 `KnowledgeStore.listChunks(tenantId)`
 8. 调用 `VectorStore.ensureCollection()`
@@ -192,6 +192,9 @@ indexing_jobs
 - retry attempts
 - dead-letter
 - heartbeat
+- worker lease / concurrency
+- Redis Streams consumer group
+- XACK 消费确认
 - processed chunks 进度更新
 - indexing completed / failed trace
 
@@ -200,8 +203,9 @@ indexing_jobs
 - 按 documentId 局部 re-index
 - Qdrant delete/update 同步
 - provider/dimension 切换检测
-- 多实例 worker 协调
-- job lease / visibility timeout
+- delayed retry
+- Redis pending entry recovery
+- queue dashboard
 
 ## 运维注意
 
@@ -216,10 +220,10 @@ QDRANT_VECTOR_SIZE=1536
 
 ## 下一步
 
-建议下一步实现 `Worker Lease / Concurrency`：
+建议下一步实现 `Delayed Retry / Pending Recovery`：
 
-1. 增加 workerId
-2. 增加 job lease / visibility timeout
-3. 增加 stuck job recovery
-4. 增加并发控制
-5. 后续迁移到 Redis Streams 或 BullMQ
+1. 失败重试不要立即入队，增加延迟
+2. 使用 XPENDING 查看 pending messages
+3. 使用 XCLAIM / XAUTOCLAIM 恢复超时 pending
+4. 增加 queue dashboard
+5. 后续评估 BullMQ 替换

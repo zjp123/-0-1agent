@@ -5,6 +5,7 @@ import net from "node:net";
 export type IndexingQueueMessage = {
   jobId: string;
   tenantId: string;
+  messageId?: string;
 };
 
 export type QueueDepth = {
@@ -18,7 +19,8 @@ export class RedisIndexingQueue implements OnModuleDestroy {
   private readonly redisUrl: URL;
   private readonly queueName: string;
   private readonly deadLetterQueueName: string;
-  private readonly brpopTimeoutSeconds: number;
+  private readonly consumerGroup: string;
+  private readonly blockMs: number;
   private closed = false;
 
   constructor(config: ConfigService) {
@@ -30,10 +32,12 @@ export class RedisIndexingQueue implements OnModuleDestroy {
       "enterprise-agent:indexing-jobs",
     );
     this.deadLetterQueueName = `${this.queueName}:dead-letter`;
-    this.brpopTimeoutSeconds = config.get<number>(
-      "app.redis.brpopTimeoutSeconds",
-      5,
+    this.consumerGroup = config.get<string>(
+      "app.redis.indexingConsumerGroup",
+      "enterprise-agent-indexers",
     );
+    this.blockMs =
+      config.get<number>("app.redis.blockTimeoutSeconds", 5) * 1_000;
   }
 
   onModuleDestroy(): void {
@@ -48,24 +52,53 @@ export class RedisIndexingQueue implements OnModuleDestroy {
     return this.deadLetterQueueName;
   }
 
+  getConsumerGroup(): string {
+    return this.consumerGroup;
+  }
+
   isClosed(): boolean {
     return this.closed;
   }
 
   async enqueue(message: IndexingQueueMessage): Promise<void> {
     await this.command(
-      "LPUSH",
+      "XADD",
       this.queueName,
-      JSON.stringify(message),
+      "*",
+      "payload",
+      this.serializeMessage(message),
     );
   }
 
   async deadLetter(message: IndexingQueueMessage): Promise<void> {
     await this.command(
-      "LPUSH",
+      "XADD",
       this.deadLetterQueueName,
-      JSON.stringify(message),
+      "*",
+      "payload",
+      this.serializeMessage(message),
     );
+  }
+
+  async ensureConsumerGroup(): Promise<void> {
+    try {
+      await this.command(
+        "XGROUP",
+        "CREATE",
+        this.queueName,
+        this.consumerGroup,
+        "0",
+        "MKSTREAM",
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.toUpperCase().includes("BUSYGROUP")
+      ) {
+        return;
+      }
+      throw error;
+    }
   }
 
   async depth(): Promise<QueueDepth> {
@@ -81,50 +114,122 @@ export class RedisIndexingQueue implements OnModuleDestroy {
   }
 
   async listDeadLetters(limit: number): Promise<IndexingQueueMessage[]> {
-    const end = Math.max(0, limit - 1);
     const response = await this.command(
-      "LRANGE",
+      "XREVRANGE",
       this.deadLetterQueueName,
-      "0",
-      String(end),
+      "+",
+      "-",
+      "COUNT",
+      String(limit),
     );
     if (!Array.isArray(response)) {
       return [];
     }
     return response
-      .map((item) => (typeof item === "string" ? this.parseMessage(item) : undefined))
+      .map((item) => this.parseStreamEntry(item))
       .filter((item): item is IndexingQueueMessage => Boolean(item));
   }
 
-  async dequeue(): Promise<IndexingQueueMessage | undefined> {
+  async dequeue(consumerName: string): Promise<IndexingQueueMessage | undefined> {
+    await this.ensureConsumerGroup();
     const response = await this.command(
-      "BRPOP",
+      "XREADGROUP",
+      "GROUP",
+      this.consumerGroup,
+      consumerName,
+      "COUNT",
+      "1",
+      "BLOCK",
+      String(this.blockMs),
+      "STREAMS",
       this.queueName,
-      String(this.brpopTimeoutSeconds),
+      ">",
     );
-    if (!Array.isArray(response) || response.length < 2) {
+    const message = this.parseReadGroupResponse(response);
+    return message;
+  }
+
+  async ack(message: IndexingQueueMessage): Promise<void> {
+    if (!message.messageId) {
+      return;
+    }
+    await this.command(
+      "XACK",
+      this.queueName,
+      this.consumerGroup,
+      message.messageId,
+    );
+  }
+
+  private parseReadGroupResponse(response: unknown): IndexingQueueMessage | undefined {
+    if (!Array.isArray(response) || response.length === 0) {
       return undefined;
     }
 
-    const payload = response[1];
-    if (typeof payload !== "string") {
+    const stream = response[0];
+    if (!Array.isArray(stream) || stream.length < 2) {
       return undefined;
     }
 
-    const parsed = this.parseMessage(payload);
-    if (!parsed) {
+    const entries = stream[1];
+    if (!Array.isArray(entries) || entries.length === 0) {
       return undefined;
     }
-    return parsed;
+
+    return this.parseStreamEntry(entries[0]);
   }
 
   private async length(queueName: string): Promise<number> {
-    const response = await this.command("LLEN", queueName);
+    const response = await this.command("XLEN", queueName);
     return typeof response === "number" ? response : 0;
   }
 
+  private parseStreamEntry(entry: unknown): IndexingQueueMessage | undefined {
+    if (!Array.isArray(entry) || entry.length < 2) {
+      return undefined;
+    }
+
+    const messageId = entry[0];
+    const fields = entry[1];
+    if (typeof messageId !== "string" || !Array.isArray(fields)) {
+      return undefined;
+    }
+
+    let payload: string | undefined;
+    for (let index = 0; index < fields.length; index += 2) {
+      if (fields[index] === "payload" && typeof fields[index + 1] === "string") {
+        payload = fields[index + 1];
+        break;
+      }
+    }
+    if (!payload) {
+      return undefined;
+    }
+
+    const message = this.parseMessage(payload);
+    if (!message) {
+      return undefined;
+    }
+    return {
+      ...message,
+      messageId,
+    };
+  }
+
+  private serializeMessage(message: IndexingQueueMessage): string {
+    return JSON.stringify({
+      jobId: message.jobId,
+      tenantId: message.tenantId,
+    });
+  }
+
   private parseMessage(payload: string): IndexingQueueMessage | undefined {
-    const parsed = JSON.parse(payload) as Partial<IndexingQueueMessage>;
+    let parsed: Partial<IndexingQueueMessage>;
+    try {
+      parsed = JSON.parse(payload) as Partial<IndexingQueueMessage>;
+    } catch {
+      return undefined;
+    }
     if (typeof parsed.jobId !== "string" || typeof parsed.tenantId !== "string") {
       return undefined;
     }

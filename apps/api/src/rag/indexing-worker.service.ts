@@ -125,6 +125,7 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       concurrency: this.concurrency,
       queueName: this.queue.getQueueName(),
       deadLetterQueueName: this.queue.getDeadLetterQueueName(),
+      consumerGroup: this.queue.getConsumerGroup(),
       leaseMs: this.leaseMs,
       heartbeatIntervalMs: this.heartbeatIntervalMs,
       recoveryIntervalMs: this.recoveryIntervalMs,
@@ -183,7 +184,7 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
   private async workLoop(): Promise<void> {
     while (!this.stopped && !this.queue.isClosed()) {
       try {
-        const message = await this.queue.dequeue();
+        const message = await this.queue.dequeue(this.workerId);
         if (!message) {
           continue;
         }
@@ -193,9 +194,11 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
           message.jobId,
         );
         if (!job) {
+          await this.queue.ack(message);
           continue;
         }
         await this.processJob(job);
+        await this.queue.ack(message);
       } catch {
         await this.sleep(1_000);
       }
