@@ -17,6 +17,7 @@ import type {
   IngestKnowledgeInput,
   KnowledgeDocument,
   KnowledgeIngestResult,
+  KnowledgeReindexResult,
   KnowledgeSearchResult,
   KnowledgeStore,
   RetrieveKnowledgeInput,
@@ -53,12 +54,43 @@ export class RagService {
     const chunks = this.chunker.chunk(document);
     const result = { document, chunks };
     await this.store.saveDocument(result);
-    await this.indexChunks(result);
+    await this.indexChunks(result.chunks);
     return result;
   }
 
   listDocuments(tenantId: string): Promise<KnowledgeDocument[]> {
     return this.store.listDocuments(tenantId);
+  }
+
+  async reindexTenant(tenantId: string): Promise<KnowledgeReindexResult> {
+    if (!this.vectorStore.isEnabled()) {
+      return {
+        tenantId,
+        status: "skipped",
+        chunkCount: 0,
+        vectorStoreEnabled: false,
+        collection: this.vectorStore.getCollectionName(),
+        embeddingModel: this.embeddingProvider.getModel(),
+        dimensions: this.embeddingProvider.getDimension(),
+      };
+    }
+
+    const chunks = await this.store.listChunks(tenantId);
+    await this.vectorStore.ensureCollection();
+    await this.vectorStore.ensurePayloadIndexes();
+    if (chunks.length > 0) {
+      await this.indexChunks(chunks);
+    }
+
+    return {
+      tenantId,
+      status: "completed",
+      chunkCount: chunks.length,
+      vectorStoreEnabled: true,
+      collection: this.vectorStore.getCollectionName(),
+      embeddingModel: this.embeddingProvider.getModel(),
+      dimensions: this.embeddingProvider.getDimension(),
+    };
   }
 
   async retrieve(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]> {
@@ -130,15 +162,17 @@ export class RagService {
     };
   }
 
-  private async indexChunks(result: KnowledgeIngestResult): Promise<void> {
-    if (!this.vectorStore.isEnabled() || result.chunks.length === 0) {
+  private async indexChunks(
+    chunks: KnowledgeIngestResult["chunks"],
+  ): Promise<void> {
+    if (!this.vectorStore.isEnabled() || chunks.length === 0) {
       return;
     }
 
     const vectors = await this.embeddingProvider.embedMany(
-      result.chunks.map((chunk) => `${chunk.title}\n${chunk.content}`),
+      chunks.map((chunk) => `${chunk.title}\n${chunk.content}`),
     );
-    const points: VectorPoint[] = result.chunks.map((chunk, index) => ({
+    const points: VectorPoint[] = chunks.map((chunk, index) => ({
       id: chunk.id,
       vector: vectors[index] ?? [],
       payload: {

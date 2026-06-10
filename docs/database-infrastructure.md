@@ -162,14 +162,16 @@ npm run db:push
 - env 示例
 - Qdrant HTTP client 基础实现
 - Qdrant collection 初始化逻辑
+- Qdrant payload index 初始化
 - VectorStore health check
+- OpenAI-compatible embedding provider
+- local-hash embedding fallback
 
 未完成：
 
 - 实际 migrations 生成
 - Redis rate limiter
-- 真实 embedding provider
-- Qdrant payload index
+- Redis queue / async jobs
 - 数据迁移脚本
 
 ## Database Connection

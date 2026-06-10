@@ -91,6 +91,7 @@ EMBEDDING_MAX_RETRIES=2
 
 - `health()`
 - `ensureCollection()`
+- `ensurePayloadIndexes()`
 - `upsert(points)`
 - `search(input)`
 
@@ -101,6 +102,7 @@ EMBEDDING_MAX_RETRIES=2
 - 请求支持 timeout
 - 支持 api-key header
 - collection 不存在时自动创建
+- tenantId / tags / sourceType / documentId / chunkId payload index 初始化
 
 ## LocalHashEmbeddingProvider
 
@@ -226,6 +228,7 @@ Qdrant payload 当前包含：
 - Qdrant env 校验
 - embedding env 校验
 - collection 自动创建
+- payload index 初始化
 - vector upsert
 - vector search
 - hybrid retrieval
@@ -234,11 +237,9 @@ Qdrant payload 当前包含：
 
 未完成：
 
-- Qdrant payload index
 - Qdrant delete/update 同步
 - 异步 indexing job / outbox
 - indexing 失败重试和告警
-- vector search 失败自动 fallback
 
 ## 运维前置
 
@@ -256,10 +257,10 @@ QDRANT_ENABLED=true npm run start:dev -w @enterprise-agent/api
 
 ## 下一步
 
-建议下一步实现 `Re-index / Indexing Job`：
+建议下一步实现 `异步 Indexing Job`：
 
-1. 增加知识 chunk re-index API
-2. 支持 embedding provider 切换后的全量重建
-3. 将 indexing 从同步请求迁移为异步 job
-4. 增加 indexing 失败重试
-5. 记录 indexing trace event
+1. 将 re-index 从同步请求迁移为异步 job
+2. 增加 Redis queue
+3. 增加 indexing 失败重试
+4. 记录 indexing trace event
+5. 暴露 job 状态查询 API

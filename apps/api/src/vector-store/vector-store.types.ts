@@ -38,6 +38,7 @@ export interface VectorStore {
   getCollectionName(): string;
   health(): Promise<VectorStoreHealth>;
   ensureCollection(): Promise<void>;
+  ensurePayloadIndexes(): Promise<void>;
   upsert(points: VectorPoint[]): Promise<void>;
   search(input: VectorSearchInput): Promise<VectorSearchResult[]>;
 }

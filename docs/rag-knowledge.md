@@ -189,6 +189,7 @@ GET /api/knowledge/documents
 - knowledge_chunks 落库
 - VectorStore 抽象
 - QdrantVectorStore
+- Qdrant payload index 初始化
 - EmbeddingProvider 抽象
 - LocalHashEmbeddingProvider
 - OpenAiCompatibleEmbeddingProvider
@@ -198,6 +199,7 @@ GET /api/knowledge/documents
 - hybrid retrieval
 - vector failure fallback
 - `rag.vector.failed` trace
+- tenant re-index API
 - Agent Runtime 接入
 - Memory & Context 注入点
 
@@ -212,10 +214,10 @@ GET /api/knowledge/documents
 
 ## 下一步
 
-建议下一步实现 `Qdrant payload index + indexing job`：
+建议下一步实现 `异步 Indexing Job`：
 
-1. 为 tenantId / tags 建 payload index
-2. 增加 chunk re-index API
-3. 支持 embedding provider 切换后的全量重建
-4. indexing 异步化
-5. indexing 失败重试
+1. 将 re-index 从同步请求迁移为异步 job
+2. 增加 job 状态查询
+3. indexing 失败重试
+4. indexing trace
+5. 后续接 Redis queue

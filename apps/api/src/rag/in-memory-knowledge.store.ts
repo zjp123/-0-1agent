@@ -26,6 +26,10 @@ export class InMemoryKnowledgeStore implements KnowledgeStore {
     );
   }
 
+  async listChunks(tenantId: string): Promise<KnowledgeIngestResult["chunks"]> {
+    return this.chunksByTenant.get(tenantId) ?? [];
+  }
+
   async search(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]> {
     const terms = this.tokenize(input.query);
     if (terms.length === 0) {

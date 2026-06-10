@@ -17,6 +17,14 @@ type QdrantSearchResponse = {
   }>;
 };
 
+const PAYLOAD_INDEXES = [
+  "tenantId",
+  "tags",
+  "sourceType",
+  "documentId",
+  "chunkId",
+] as const;
+
 @Injectable()
 export class QdrantVectorStore implements VectorStore {
   private readonly enabled: boolean;
@@ -94,6 +102,18 @@ export class QdrantVectorStore implements VectorStore {
         },
       },
     });
+    await this.ensurePayloadIndexes();
+  }
+
+  async ensurePayloadIndexes(): Promise<void> {
+    if (!this.enabled) {
+      return;
+    }
+
+    const encoded = encodeURIComponent(this.collection);
+    for (const fieldName of PAYLOAD_INDEXES) {
+      await this.createPayloadIndex(encoded, fieldName);
+    }
   }
 
   async upsert(points: VectorPoint[]): Promise<void> {
@@ -102,6 +122,7 @@ export class QdrantVectorStore implements VectorStore {
     }
 
     await this.ensureCollection();
+    await this.ensurePayloadIndexes();
     await this.request(`/collections/${encodeURIComponent(this.collection)}/points?wait=true`, {
       method: "PUT",
       body: {
@@ -151,6 +172,32 @@ export class QdrantVectorStore implements VectorStore {
       throw await this.toError(response);
     }
     return true;
+  }
+
+  private async createPayloadIndex(
+    encodedCollection: string,
+    fieldName: string,
+  ): Promise<void> {
+    const response = await this.requestRaw(
+      `/collections/${encodedCollection}/index`,
+      {
+        method: "PUT",
+        body: {
+          field_name: fieldName,
+          field_schema: "keyword",
+        },
+      },
+    );
+
+    if (response.ok || response.status === 409) {
+      return;
+    }
+
+    const error = await this.toError(response);
+    if (error.message.toLowerCase().includes("already exists")) {
+      return;
+    }
+    throw error;
   }
 
   private async request<T>(

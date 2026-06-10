@@ -64,9 +64,20 @@ export type KnowledgeIngestResult = {
   chunks: KnowledgeChunk[];
 };
 
+export type KnowledgeReindexResult = {
+  tenantId: string;
+  status: "completed" | "skipped";
+  chunkCount: number;
+  vectorStoreEnabled: boolean;
+  collection: string;
+  embeddingModel: string;
+  dimensions: number;
+};
+
 export interface KnowledgeStore {
   saveDocument(result: KnowledgeIngestResult): Promise<void>;
   listDocuments(tenantId: string): Promise<KnowledgeDocument[]>;
+  listChunks(tenantId: string): Promise<KnowledgeChunk[]>;
   search(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]>;
   findChunksByIds(tenantId: string, chunkIds: string[]): Promise<KnowledgeChunk[]>;
 }

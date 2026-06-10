@@ -97,10 +97,10 @@ Agent Runtime 调用 RAG 时会传入 requestId 和 userId，因此 fallback tra
 
 ## 下一步
 
-建议下一步实现 `Qdrant payload index + re-index job`：
+建议下一步实现 `异步 Indexing Job`：
 
-1. 为 tenantId / tags 建 payload index
-2. 增加 chunk re-index API
-3. provider/dimension 切换后全量重建
-4. indexing 失败重试
-5. 记录 indexing trace
+1. 将 re-index 从同步请求迁移为异步 job
+2. provider/dimension 切换后全量重建
+3. indexing 失败重试
+4. 记录 indexing trace
+5. 暴露 job 状态查询 API

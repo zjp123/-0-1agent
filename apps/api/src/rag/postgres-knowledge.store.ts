@@ -75,6 +75,24 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
     return rows.map((row) => this.toDocument(row, tenantId));
   }
 
+  async listChunks(tenantId: string): Promise<KnowledgeChunk[]> {
+    const resolvedTenantId = await this.identity.ensureTenant(tenantId);
+    const rows = await this.db
+      .select({
+        chunk: knowledgeChunks,
+        document: knowledgeDocuments,
+      })
+      .from(knowledgeChunks)
+      .innerJoin(
+        knowledgeDocuments,
+        eq(knowledgeChunks.documentId, knowledgeDocuments.id),
+      )
+      .where(eq(knowledgeChunks.tenantId, resolvedTenantId))
+      .orderBy(knowledgeChunks.chunkIndex);
+
+    return rows.map((row) => this.toChunk(row.chunk, row.document, tenantId));
+  }
+
   async search(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]> {
     const terms = this.tokenize(input.query);
     if (terms.length === 0) {

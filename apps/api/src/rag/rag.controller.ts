@@ -11,6 +11,7 @@ import { RagService } from "./rag.service.js";
 import type {
   KnowledgeDocument,
   KnowledgeIngestResult,
+  KnowledgeReindexResult,
   KnowledgeSearchResult,
   IngestKnowledgeInput,
   RetrieveKnowledgeInput,
@@ -60,6 +61,13 @@ export class RagController {
   @RequirePermissions("knowledge:read")
   listDocuments(@CurrentUser() user: RequestUser): Promise<KnowledgeDocument[]> {
     return this.rag.listDocuments(user.tenantId);
+  }
+
+  @Post("reindex")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:write")
+  reindex(@CurrentUser() user: RequestUser): Promise<KnowledgeReindexResult> {
+    return this.rag.reindexTenant(user.tenantId);
   }
 
   private toRetrieveInput(
