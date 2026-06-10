@@ -13,6 +13,7 @@ import { CurrentUser } from "../auth/current-user.decorator.js";
 import { RequirePermissions } from "../auth/permissions.decorator.js";
 import { PermissionsGuard } from "../auth/permissions.guard.js";
 import type { RequestUser } from "../auth/auth.types.js";
+import { IndexingWorkerService } from "./indexing-worker.service.js";
 import { IngestKnowledgeDto } from "./dto/ingest-knowledge.dto.js";
 import { RetrieveKnowledgeDto } from "./dto/retrieve-knowledge.dto.js";
 import { RagService } from "./rag.service.js";
@@ -27,7 +28,10 @@ import type {
 
 @Controller("knowledge")
 export class RagController {
-  constructor(private readonly rag: RagService) {}
+  constructor(
+    private readonly rag: RagService,
+    private readonly indexingWorker: IndexingWorkerService,
+  ) {}
 
   @Post("ingest")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
@@ -75,7 +79,7 @@ export class RagController {
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("knowledge:write")
   reindex(@CurrentUser() user: RequestUser): Promise<IndexingJob> {
-    return this.rag.createReindexJob({
+    return this.indexingWorker.enqueueReindexJob({
       tenantId: user.tenantId,
       userId: user.userId,
     });

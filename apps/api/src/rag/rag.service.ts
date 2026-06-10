@@ -22,6 +22,7 @@ import type {
   IngestKnowledgeInput,
   KnowledgeDocument,
   KnowledgeIngestResult,
+  RunIndexingJobResult,
   KnowledgeSearchResult,
   KnowledgeStore,
   RetrieveKnowledgeInput,
@@ -85,7 +86,6 @@ export class RagService {
       },
     });
 
-    void this.runReindexJob(job);
     return job;
   }
 
@@ -100,7 +100,7 @@ export class RagService {
     return this.indexingJobs.get(tenantId, jobId);
   }
 
-  private async runReindexJob(job: IndexingJob): Promise<void> {
+  async runReindexJob(job: IndexingJob): Promise<RunIndexingJobResult> {
     const metadata = this.indexingMetadata(job);
     try {
       if (!this.vectorStore.isEnabled()) {
@@ -113,7 +113,11 @@ export class RagService {
           processedChunks: 0,
           totalChunks: 0,
         });
-        return;
+        return {
+          status: "skipped",
+          processedChunks: 0,
+          totalChunks: 0,
+        };
       }
 
       const chunks = await this.store.listChunks(job.tenantId);
@@ -142,6 +146,11 @@ export class RagService {
         processedChunks,
         totalChunks: chunks.length,
       });
+      return {
+        status: "completed",
+        processedChunks,
+        totalChunks: chunks.length,
+      };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown indexing error";
@@ -164,6 +173,12 @@ export class RagService {
         totalChunks: current?.totalChunks ?? 0,
         errorMessage,
       });
+      return {
+        status: "failed",
+        processedChunks,
+        totalChunks: current?.totalChunks ?? 0,
+        error: errorMessage,
+      };
     }
   }
 

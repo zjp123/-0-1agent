@@ -91,6 +91,9 @@ POSTGRES_PORT=5432
 
 REDIS_URL=redis://localhost:6379
 REDIS_PORT=6379
+INDEXING_QUEUE_NAME=enterprise-agent:indexing-jobs
+INDEXING_WORKER_ENABLED=true
+INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS=5
 
 QDRANT_URL=http://localhost:6333
 QDRANT_ENABLED=false
@@ -157,6 +160,7 @@ npm run db:push
 - Docker Compose
 - PostgreSQL 服务
 - Redis 服务
+- Redis indexing queue
 - Qdrant 服务
 - Drizzle config
 - schema 初版
@@ -174,7 +178,7 @@ npm run db:push
 
 - 实际 migrations 生成
 - Redis rate limiter
-- Redis queue / distributed workers
+- distributed worker coordination
 - 数据迁移脚本
 
 ## Database Connection

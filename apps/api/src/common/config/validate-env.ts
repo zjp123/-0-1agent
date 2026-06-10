@@ -19,6 +19,7 @@ export function validateEnv(env: RawEnv): RawEnv {
     "EMBEDDING_DIMENSION",
     "EMBEDDING_TIMEOUT_MS",
     "EMBEDDING_MAX_RETRIES",
+    "INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS",
   ]) {
     const value = asString(env, key);
     if (value && !/^\d+$/.test(value)) {
@@ -41,6 +42,16 @@ export function validateEnv(env: RawEnv): RawEnv {
     )
   ) {
     throw new Error("QDRANT_ENABLED must be a boolean");
+  }
+
+  const indexingWorkerEnabled = asString(env, "INDEXING_WORKER_ENABLED");
+  if (
+    indexingWorkerEnabled &&
+    !["1", "0", "true", "false", "yes", "no", "on", "off"].includes(
+      indexingWorkerEnabled.toLowerCase(),
+    )
+  ) {
+    throw new Error("INDEXING_WORKER_ENABLED must be a boolean");
   }
 
   const nodeEnv = asString(env, "NODE_ENV") ?? "development";

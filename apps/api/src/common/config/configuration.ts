@@ -42,6 +42,13 @@ export const configuration = registerAs("app", () => ({
   },
   redis: {
     url: process.env.REDIS_URL ?? "redis://localhost:6379",
+    indexingQueue:
+      process.env.INDEXING_QUEUE_NAME ?? "enterprise-agent:indexing-jobs",
+    workerEnabled: parseBoolean(process.env.INDEXING_WORKER_ENABLED, true),
+    brpopTimeoutSeconds: parsePositiveInt(
+      process.env.INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS,
+      5,
+    ),
   },
   qdrant: {
     url: process.env.QDRANT_URL ?? "http://localhost:6333",

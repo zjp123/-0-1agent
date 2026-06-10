@@ -8,8 +8,10 @@ import {
   KNOWLEDGE_STORE,
 } from "./knowledge.constants.js";
 import { KnowledgeChunkerService } from "./knowledge-chunker.service.js";
+import { IndexingWorkerService } from "./indexing-worker.service.js";
 import { PostgresIndexingJobStore } from "./postgres-indexing-job.store.js";
 import { PostgresKnowledgeStore } from "./postgres-knowledge.store.js";
+import { RedisIndexingQueue } from "./redis-indexing-queue.js";
 import { RagController } from "./rag.controller.js";
 import { RagService } from "./rag.service.js";
 
@@ -18,6 +20,8 @@ import { RagService } from "./rag.service.js";
   controllers: [RagController],
   providers: [
     KnowledgeChunkerService,
+    RedisIndexingQueue,
+    IndexingWorkerService,
     PostgresKnowledgeStore,
     PostgresIndexingJobStore,
     {

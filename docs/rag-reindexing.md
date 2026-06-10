@@ -12,6 +12,8 @@ RAG Re-indexing 提供知识库向量索引重建能力。
 
 ```text
 apps/api/src/rag/
+  indexing-worker.service.ts
+  redis-indexing-queue.ts
   rag.types.ts
   rag.service.ts
   rag.controller.ts
@@ -82,15 +84,19 @@ GET /api/knowledge/reindex/jobs/:jobId
 
 1. 从认证上下文读取当前 tenantId
 2. 创建 `indexing_jobs` 记录，状态为 `pending`
-3. API 立即返回 job
-4. 进程内后台 worker 将 job 标记为 `running`
-5. 调用 `KnowledgeStore.listChunks(tenantId)`
-6. 调用 `VectorStore.ensureCollection()`
-7. 调用 `VectorStore.ensurePayloadIndexes()`
-8. 按批次生成 embeddings 并 upsert 到 Qdrant
-9. 更新 `processedChunks`
-10. 成功时标记 `completed`
-11. 失败时标记 `failed` 并记录 error
+3. 将 jobId/tenantId 写入 Redis queue
+4. API 立即返回 job
+5. worker 使用 `BRPOP` 消费 queue
+6. worker 将 job 标记为 `running`
+7. 调用 `KnowledgeStore.listChunks(tenantId)`
+8. 调用 `VectorStore.ensureCollection()`
+9. 调用 `VectorStore.ensurePayloadIndexes()`
+10. 按批次生成 embeddings 并 upsert 到 Qdrant
+11. 更新 `processedChunks`
+12. 成功时标记 `completed`
+13. 失败时标记 `failed` 并记录 error
+
+如果 Redis enqueue 失败，当前会 fallback 到本进程后台执行。
 
 ## Payload Index
 
@@ -170,7 +176,9 @@ indexing_jobs
 - Qdrant collection ensure
 - Qdrant payload index ensure
 - 使用当前 EmbeddingProvider 重建 vectors
-- 后台执行
+- Redis queue enqueue
+- Redis queue worker
+- 进程内 fallback
 - job 状态查询
 - processed chunks 进度更新
 - indexing completed / failed trace
@@ -181,7 +189,6 @@ indexing_jobs
 - 按 documentId 局部 re-index
 - Qdrant delete/update 同步
 - provider/dimension 切换检测
-- Redis queue
 - 多实例 worker 协调
 
 ## 运维注意
@@ -199,8 +206,8 @@ QDRANT_VECTOR_SIZE=1536
 
 建议下一步实现 `Redis Queue Worker`：
 
-1. 将进程内后台执行迁移到 Redis queue
-2. 支持多实例 worker 消费
-3. 增加失败重试和 dead-letter
-4. 增加 job cancel API
-5. 增加 worker heartbeat
+1. 增加失败重试和 dead-letter
+2. 增加 job cancel API
+3. 增加 worker heartbeat
+4. 增加并发控制
+5. 后续迁移到 Redis Streams 或 BullMQ

@@ -95,6 +95,13 @@ export type IndexingJob = {
   updatedAt: string;
 };
 
+export type RunIndexingJobResult = {
+  status: "completed" | "failed" | "skipped";
+  processedChunks: number;
+  totalChunks: number;
+  error?: string;
+};
+
 export type CreateIndexingJobInput = {
   tenantId: string;
   userId: string;
