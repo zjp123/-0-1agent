@@ -45,6 +45,7 @@ type TraceEvent = {
 
 - `agent.run.started`
 - `rag.retrieved`
+- `rag.vector.failed`
 - `agent.context.built`
 - `model.completed`
 - `model.failed`
@@ -57,11 +58,12 @@ type TraceEvent = {
 
 1. Agent run 开始
 2. RAG 检索完成
-3. Memory & Context 构造完成
-4. 每次模型调用成功
-5. 模型调用失败
-6. 每次工具调用完成
-7. Agent run 完成
+3. RAG vector search 失败并 fallback
+4. Memory & Context 构造完成
+5. 每次模型调用成功
+6. 模型调用失败
+7. 每次工具调用完成
+8. Agent run 完成
 
 这些事件可以通过同一个 `requestId` 串起来。
 
@@ -96,10 +98,10 @@ GET /api/observability/traces?requestId=00000000-0000-4000-8000-000000000000
 - Trace 查询 API
 - Agent Runtime trace 接入
 - RAG/context/model/tool/run summary 事件
+- RAG vector fallback trace
 
 未完成：
 
-- 持久化 trace store
 - OpenTelemetry span
 - Pino structured logger
 - Prometheus metrics
@@ -109,10 +111,10 @@ GET /api/observability/traces?requestId=00000000-0000-4000-8000-000000000000
 
 ## 下一步
 
-建议下一步实现 `Auth & Governance` 基础版：
+建议下一步实现 `trace failure logging / metrics`：
 
-1. 定义用户、租户、角色、权限类型
-2. 建立 request context
-3. 让 Agent Runtime 和 Tool Registry 使用真实权限
-4. 提供开发期 API key guard 或 mock auth
-5. 后续再接 JWT / Refresh Token / RBAC 持久化
+1. trace 写入失败日志
+2. RAG fallback 计数
+3. model/tool/error metrics
+4. retention policy
+5. trace viewer

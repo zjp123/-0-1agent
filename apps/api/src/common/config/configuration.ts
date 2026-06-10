@@ -49,9 +49,27 @@ export const configuration = registerAs("app", () => ({
     enabled: parseBoolean(process.env.QDRANT_ENABLED, false),
     collection:
       process.env.QDRANT_COLLECTION ?? "enterprise_agent_knowledge_chunks",
-    vectorSize: parsePositiveInt(process.env.QDRANT_VECTOR_SIZE, 384),
+    vectorSize: parsePositiveInt(
+      process.env.QDRANT_VECTOR_SIZE ?? process.env.EMBEDDING_DIMENSION,
+      384,
+    ),
     distance: process.env.QDRANT_DISTANCE ?? "Cosine",
     timeoutMs: parsePositiveInt(process.env.QDRANT_TIMEOUT_MS, 10_000),
+  },
+  embedding: {
+    provider: process.env.EMBEDDING_PROVIDER ?? "local-hash",
+    model: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",
+    baseUrl:
+      process.env.EMBEDDING_BASE_URL ??
+      process.env.LLM_BASE_URL ??
+      "https://api.openai.com/v1",
+    apiKey:
+      process.env.EMBEDDING_API_KEY ??
+      process.env.LLM_API_KEY ??
+      process.env.OPENAI_API_KEY,
+    dimensions: parsePositiveInt(process.env.EMBEDDING_DIMENSION, 384),
+    timeoutMs: parsePositiveInt(process.env.EMBEDDING_TIMEOUT_MS, 30_000),
+    maxRetries: parsePositiveInt(process.env.EMBEDDING_MAX_RETRIES, 2),
   },
   model: {
     provider: process.env.LLM_PROVIDER ?? "deepseek",

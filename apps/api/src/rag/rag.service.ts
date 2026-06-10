@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import type { ModelMessage } from "../model-gateway/model-gateway.types.js";
+import { ObservabilityService } from "../observability/observability.service.js";
 import {
   EMBEDDING_PROVIDER,
   VECTOR_STORE,
@@ -44,6 +45,7 @@ export class RagService {
     @Inject(EMBEDDING_PROVIDER)
     private readonly embeddingProvider: EmbeddingProvider,
     @Inject(VECTOR_STORE) private readonly vectorStore: VectorStore,
+    private readonly observability: ObservabilityService,
   ) {}
 
   async ingest(input: IngestKnowledgeInput): Promise<KnowledgeIngestResult> {
@@ -71,7 +73,7 @@ export class RagService {
       }));
     }
 
-    const vectorResults = await this.retrieveVector(input);
+    const vectorResults = await this.retrieveVectorWithFallback(input);
     if (vectorResults.length === 0) {
       return keywordResults.map((result) => ({
         ...result,
@@ -273,6 +275,42 @@ export class RagService {
     }
 
     return { must };
+  }
+
+  private async retrieveVectorWithFallback(
+    input: RetrieveKnowledgeInput,
+  ): Promise<KnowledgeSearchResult[]> {
+    try {
+      return await this.retrieveVector(input);
+    } catch (error) {
+      this.recordVectorFallback(input, error);
+      return [];
+    }
+  }
+
+  private recordVectorFallback(
+    input: RetrieveKnowledgeInput,
+    error: unknown,
+  ): void {
+    const event: Parameters<ObservabilityService["record"]>[0] = {
+      requestId: input.requestId ?? `rag-${crypto.randomUUID()}`,
+      type: "rag.vector.failed",
+      tenantId: input.tenantId,
+      attributes: {
+        queryLength: input.query.length,
+        requestedLimit: input.limit ?? 5,
+        tagCount: input.tags?.length ?? 0,
+        vectorStore: this.vectorStore.getCollectionName(),
+        embeddingModel: this.embeddingProvider.getModel(),
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        fallbackMode: "keyword",
+      },
+    };
+    if (input.userId) {
+      event.userId = input.userId;
+    }
+    this.observability.record(event);
   }
 
   private formatResults(results: KnowledgeSearchResult[]): string {

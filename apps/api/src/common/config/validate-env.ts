@@ -16,11 +16,21 @@ export function validateEnv(env: RawEnv): RawEnv {
     "LLM_MAX_RETRIES",
     "QDRANT_VECTOR_SIZE",
     "QDRANT_TIMEOUT_MS",
+    "EMBEDDING_DIMENSION",
+    "EMBEDDING_TIMEOUT_MS",
+    "EMBEDDING_MAX_RETRIES",
   ]) {
     const value = asString(env, key);
     if (value && !/^\d+$/.test(value)) {
       throw new Error(`${key} must be a positive integer`);
     }
+  }
+
+  const embeddingProvider = asString(env, "EMBEDDING_PROVIDER") ?? "local-hash";
+  if (!["local-hash", "openai-compatible"].includes(embeddingProvider)) {
+    throw new Error(
+      "EMBEDDING_PROVIDER must be local-hash or openai-compatible",
+    );
   }
 
   const qdrantEnabled = asString(env, "QDRANT_ENABLED");
@@ -42,6 +52,20 @@ export function validateEnv(env: RawEnv): RawEnv {
 
   if (nodeEnv === "production" && !asString(env, "API_KEY")) {
     throw new Error("API_KEY is required in production");
+  }
+
+  const embeddingApiKey =
+    asString(env, "EMBEDDING_API_KEY") ??
+    asString(env, "LLM_API_KEY") ??
+    asString(env, "OPENAI_API_KEY");
+  if (
+    nodeEnv === "production" &&
+    embeddingProvider === "openai-compatible" &&
+    !embeddingApiKey
+  ) {
+    throw new Error(
+      "EMBEDDING_API_KEY is required in production when EMBEDDING_PROVIDER=openai-compatible",
+    );
   }
 
   return env;

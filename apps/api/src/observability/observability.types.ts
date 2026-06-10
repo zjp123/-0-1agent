@@ -6,6 +6,7 @@ export type TraceEventType =
   | "agent.run.started"
   | "agent.context.built"
   | "rag.retrieved"
+  | "rag.vector.failed"
   | "model.completed"
   | "model.failed"
   | "tool.completed"

@@ -12,6 +12,7 @@ import type {
 import { ModelGatewayService } from "../model-gateway/model-gateway.service.js";
 import { ObservabilityService } from "../observability/observability.service.js";
 import { RagService } from "../rag/rag.service.js";
+import type { RetrieveKnowledgeInput } from "../rag/rag.types.js";
 import { ToolRegistryService } from "../tools/tool-registry.service.js";
 import type {
   ToolDefinition,
@@ -91,11 +92,18 @@ export class AgentRuntimeService {
     };
     let retrievedKnowledgeCount = 0;
     if (options.tenantId) {
-      const retrievedKnowledge = await this.rag.retrieveAsContextMessages({
+      const retrievalInput: RetrieveKnowledgeInput = {
         tenantId: options.tenantId,
+        requestId: options.requestId,
         query: options.userMessage,
         limit: 5,
-      });
+      };
+      if (options.userId) {
+        retrievalInput.userId = options.userId;
+      }
+      const retrievedKnowledge = await this.rag.retrieveAsContextMessages(
+        retrievalInput,
+      );
       retrievedKnowledgeCount = retrievedKnowledge.length;
       this.recordTrace(options, "rag.retrieved", {
         resultMessageCount: retrievedKnowledge.length,

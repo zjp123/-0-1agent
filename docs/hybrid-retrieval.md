@@ -20,6 +20,7 @@ apps/api/src/rag/
 apps/api/src/vector-store/
   vector-store.types.ts
   qdrant-vector.store.ts
+  openai-compatible-embedding.provider.ts
   local-hash-embedding.provider.ts
 ```
 
@@ -85,11 +86,10 @@ scores?: {
 - `QDRANT_ENABLED=false`：只走 keyword
 - Qdrant 无结果：只走 keyword
 - Qdrant 命中但 PostgreSQL 查不到 chunk：丢弃该结果
+- Qdrant / embedding 请求失败：记录 `rag.vector.failed` 并 fallback keyword
 
 当前还没有实现：
 
-- Qdrant 请求失败自动 fallback
-- fallback trace event
 - hybrid score evaluation
 
 ## 当前边界
@@ -104,11 +104,13 @@ scores?: {
 - keyword/vector result merge
 - retrievalMode 标记
 - keyword/vector score 明细
+- OpenAI-compatible query embedding
+- local-hash dev fallback
+- Qdrant 请求失败 fallback
+- fallback trace event
 
 未完成：
 
-- 真实 embedding provider
-- Qdrant 请求失败 fallback
 - Qdrant payload index
 - rerank
 - retrieval evaluation 自动化
@@ -117,10 +119,10 @@ scores?: {
 
 ## 下一步
 
-建议下一步实现 `真实 Embedding Provider`：
+建议下一步实现 `Qdrant payload index + re-index job`：
 
-1. 增加 embedding provider 配置
-2. 接入 OpenAI-compatible embeddings endpoint
-3. 保留 LocalHashEmbeddingProvider 作为 dev fallback
-4. 增加 embedding timeout/retry
-5. 制定已入库 chunks 的 re-index 策略
+1. 为 tenantId / tags 建 payload index
+2. 增加 chunk re-index API
+3. provider/dimension 切换后全量重建
+4. indexing 失败重试
+5. 记录 indexing trace

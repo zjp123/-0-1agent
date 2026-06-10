@@ -41,6 +41,8 @@ export type IngestKnowledgeInput = {
 
 export type RetrieveKnowledgeInput = {
   tenantId: string;
+  userId?: string;
+  requestId?: string;
   query: string;
   limit?: number;
   tags?: string[];

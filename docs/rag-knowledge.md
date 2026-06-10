@@ -21,6 +21,7 @@ PostgresKnowledgeStore + Qdrant vector search + hybrid retrieval
 - wiki 不是核心 RAG 存储，而是知识来源 connector 之一
 - 当前已经将 knowledge documents / chunks 持久化到 PostgreSQL
 - 当前已经建立 Qdrant VectorStore 与 EmbeddingProvider 抽象
+- 当前已经支持 OpenAI-compatible EmbeddingProvider
 - 当前已经支持 keyword + vector hybrid retrieval
 
 ## 目标架构
@@ -74,6 +75,8 @@ apps/api/src/vector-store/
   vector-store.types.ts
   vector-store.module.ts
   qdrant-vector.store.ts
+  embedding-provider.factory.ts
+  openai-compatible-embedding.provider.ts
   local-hash-embedding.provider.ts
 ```
 
@@ -93,6 +96,8 @@ apps/api/src/vector-store/
 - Qdrant collection ensure
 - Qdrant vector upsert
 - EmbeddingProvider 抽象
+- OpenAI-compatible embeddings
+- local-hash dev fallback
 - vector search
 - keyword scoring
 - hybrid scoring
@@ -164,8 +169,9 @@ GET /api/knowledge/documents
 - vector 命中后按 chunk id 回 PostgreSQL hydrate 完整内容
 - keyword 与 vector 结果按 chunk id 合并
 - Qdrant 关闭时自动降级为 keyword retrieval
+- Qdrant 或 embedding 请求失败时记录 trace 并降级为 keyword retrieval
 
-当前 embedding 仍是本地 hash embedding，只用于链路验证，不代表最终生产语义检索质量。
+当前默认 embedding 仍是本地 hash embedding，生产可设置 `EMBEDDING_PROVIDER=openai-compatible` 切换真实 embedding。
 
 ## 当前边界
 
@@ -185,15 +191,18 @@ GET /api/knowledge/documents
 - QdrantVectorStore
 - EmbeddingProvider 抽象
 - LocalHashEmbeddingProvider
+- OpenAiCompatibleEmbeddingProvider
+- EmbeddingProviderFactory
 - ingestion vector indexing 扩展点
 - vector retrieval
 - hybrid retrieval
+- vector failure fallback
+- `rag.vector.failed` trace
 - Agent Runtime 接入
 - Memory & Context 注入点
 
 未完成：
 
-- 真实 embedding provider
 - PDF / docx / webpage parser
 - wiki connector
 - hybrid search
@@ -203,10 +212,10 @@ GET /api/knowledge/documents
 
 ## 下一步
 
-建议下一步实现 `真实 Embedding Provider`：
+建议下一步实现 `Qdrant payload index + indexing job`：
 
-1. 定义 embedding provider 配置
-2. 接入 OpenAI-compatible embeddings
-3. 区分 chat model 与 embedding model
-4. 增加 embedding timeout/retry
-5. 评估本地 hash embedding 到真实 embedding 的迁移方式
+1. 为 tenantId / tags 建 payload index
+2. 增加 chunk re-index API
+3. 支持 embedding provider 切换后的全量重建
+4. indexing 异步化
+5. indexing 失败重试

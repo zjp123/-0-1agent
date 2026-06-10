@@ -16,6 +16,8 @@ apps/api/src/vector-store/
   vector-store.types.ts
   vector-store.module.ts
   qdrant-vector.store.ts
+  embedding-provider.factory.ts
+  openai-compatible-embedding.provider.ts
   local-hash-embedding.provider.ts
 
 apps/api/src/rag/
@@ -41,7 +43,7 @@ VECTOR_STORE
 ```ts
 {
   provide: EMBEDDING_PROVIDER,
-  useExisting: LocalHashEmbeddingProvider
+  useFactory: EmbeddingProviderFactory
 }
 
 {
@@ -64,6 +66,14 @@ QDRANT_COLLECTION=enterprise_agent_knowledge_chunks
 QDRANT_VECTOR_SIZE=384
 QDRANT_DISTANCE=Cosine
 QDRANT_TIMEOUT_MS=10000
+
+EMBEDDING_PROVIDER=local-hash
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_BASE_URL=https://api.openai.com/v1
+EMBEDDING_API_KEY=
+EMBEDDING_DIMENSION=384
+EMBEDDING_TIMEOUT_MS=30000
+EMBEDDING_MAX_RETRIES=2
 ```
 
 `QDRANT_ENABLED` 默认关闭。
@@ -72,7 +82,8 @@ QDRANT_TIMEOUT_MS=10000
 
 - 本地没有启动 Qdrant 时，不影响 PostgreSQL knowledge ingestion
 - 生产或集成测试环境可以显式开启
-- 后续接真实 embedding provider 前，避免误认为当前 embedding 质量已达生产标准
+- 默认使用 local-hash 便于本地开发
+- 生产可设置 `EMBEDDING_PROVIDER=openai-compatible`
 
 ## QdrantVectorStore
 
@@ -103,6 +114,31 @@ QDRANT_TIMEOUT_MS=10000
 - 为真实 embedding provider 替换预留位置
 
 它不是最终生产语义检索模型。
+
+## OpenAiCompatibleEmbeddingProvider
+
+当前已经支持 OpenAI-compatible embeddings。
+
+启用方式：
+
+```bash
+EMBEDDING_PROVIDER=openai-compatible
+EMBEDDING_API_KEY=...
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSION=1536
+QDRANT_VECTOR_SIZE=1536
+```
+
+能力：
+
+- 独立 embedding base URL
+- 独立 embedding API key
+- 独立 embedding model
+- timeout
+- retry
+- dimensions 参数
+
+注意：Qdrant collection 的 vector size 必须与 embedding dimension 一致。
 
 ## Knowledge Ingestion 接入
 
@@ -183,8 +219,12 @@ Qdrant payload 当前包含：
 - EmbeddingProvider 类型抽象
 - QdrantVectorStore
 - LocalHashEmbeddingProvider
+- OpenAiCompatibleEmbeddingProvider
+- EmbeddingProviderFactory
 - Qdrant 配置项
+- embedding 配置项
 - Qdrant env 校验
+- embedding env 校验
 - collection 自动创建
 - vector upsert
 - vector search
@@ -194,7 +234,6 @@ Qdrant payload 当前包含：
 
 未完成：
 
-- 真实 embedding provider
 - Qdrant payload index
 - Qdrant delete/update 同步
 - 异步 indexing job / outbox
@@ -217,10 +256,10 @@ QDRANT_ENABLED=true npm run start:dev -w @enterprise-agent/api
 
 ## 下一步
 
-建议下一步实现 `真实 Embedding Provider`：
+建议下一步实现 `Re-index / Indexing Job`：
 
-1. 接入 OpenAI-compatible embeddings
-2. 增加 embedding model 配置
-3. 增加 embedding timeout/retry
-4. 替换 LocalHashEmbeddingProvider
-5. 制定 re-index 策略
+1. 增加知识 chunk re-index API
+2. 支持 embedding provider 切换后的全量重建
+3. 将 indexing 从同步请求迁移为异步 job
+4. 增加 indexing 失败重试
+5. 记录 indexing trace event
