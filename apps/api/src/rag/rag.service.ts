@@ -73,11 +73,13 @@ export class RagService {
   async createReindexJob(input: {
     tenantId: string;
     userId: string;
+    maxAttempts: number;
   }): Promise<IndexingJob> {
     const job = await this.indexingJobs.create({
       tenantId: input.tenantId,
       userId: input.userId,
       type: "tenant_reindex",
+      maxAttempts: input.maxAttempts,
       metadata: {
         collection: this.vectorStore.getCollectionName(),
         embeddingModel: this.embeddingProvider.getModel(),
@@ -100,9 +102,45 @@ export class RagService {
     return this.indexingJobs.get(tenantId, jobId);
   }
 
+  incrementIndexingJobAttempts(job: IndexingJob): Promise<IndexingJob | undefined> {
+    return this.indexingJobs.incrementAttempts(job.tenantId, job.id);
+  }
+
+  heartbeatIndexingJob(job: IndexingJob): Promise<void> {
+    return this.indexingJobs.heartbeat(job.tenantId, job.id);
+  }
+
+  cancelIndexingJob(
+    tenantId: string,
+    jobId: string,
+  ): Promise<IndexingJob | undefined> {
+    return this.indexingJobs.cancel(tenantId, jobId);
+  }
+
+  async deadLetterIndexingJob(job: IndexingJob, error: string): Promise<void> {
+    await this.indexingJobs.markDeadLettered(
+      job.tenantId,
+      job.id,
+      error,
+      {
+        ...this.indexingMetadata(job),
+        deadLettered: true,
+      },
+    );
+  }
+
   async runReindexJob(job: IndexingJob): Promise<RunIndexingJobResult> {
     const metadata = this.indexingMetadata(job);
     try {
+      const latest = await this.indexingJobs.get(job.tenantId, job.id);
+      if (latest?.status === "cancelled") {
+        return {
+          status: "skipped",
+          processedChunks: latest.processedChunks,
+          totalChunks: latest.totalChunks,
+        };
+      }
+
       if (!this.vectorStore.isEnabled()) {
         await this.indexingJobs.markCompleted(job.tenantId, job.id, 0, {
           ...metadata,
@@ -127,6 +165,14 @@ export class RagService {
 
       let processedChunks = 0;
       for (let index = 0; index < chunks.length; index += INDEXING_BATCH_SIZE) {
+        const current = await this.indexingJobs.get(job.tenantId, job.id);
+        if (current?.status === "cancelled") {
+          return {
+            status: "skipped",
+            processedChunks: current.processedChunks,
+            totalChunks: current.totalChunks,
+          };
+        }
         const batch = chunks.slice(index, index + INDEXING_BATCH_SIZE);
         await this.indexChunks(batch);
         processedChunks += batch.length;

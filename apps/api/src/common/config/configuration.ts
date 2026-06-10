@@ -49,6 +49,11 @@ export const configuration = registerAs("app", () => ({
       process.env.INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS,
       5,
     ),
+    maxAttempts: parsePositiveInt(process.env.INDEXING_JOB_MAX_ATTEMPTS, 3),
+    heartbeatIntervalMs: parsePositiveInt(
+      process.env.INDEXING_WORKER_HEARTBEAT_INTERVAL_MS,
+      10_000,
+    ),
   },
   qdrant: {
     url: process.env.QDRANT_URL ?? "http://localhost:6333",

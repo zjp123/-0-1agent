@@ -11,6 +11,7 @@ export type IndexingQueueMessage = {
 export class RedisIndexingQueue implements OnModuleDestroy {
   private readonly redisUrl: URL;
   private readonly queueName: string;
+  private readonly deadLetterQueueName: string;
   private readonly brpopTimeoutSeconds: number;
   private closed = false;
 
@@ -22,6 +23,7 @@ export class RedisIndexingQueue implements OnModuleDestroy {
       "app.redis.indexingQueue",
       "enterprise-agent:indexing-jobs",
     );
+    this.deadLetterQueueName = `${this.queueName}:dead-letter`;
     this.brpopTimeoutSeconds = config.get<number>(
       "app.redis.brpopTimeoutSeconds",
       5,
@@ -36,6 +38,10 @@ export class RedisIndexingQueue implements OnModuleDestroy {
     return this.queueName;
   }
 
+  getDeadLetterQueueName(): string {
+    return this.deadLetterQueueName;
+  }
+
   isClosed(): boolean {
     return this.closed;
   }
@@ -44,6 +50,14 @@ export class RedisIndexingQueue implements OnModuleDestroy {
     await this.command(
       "LPUSH",
       this.queueName,
+      JSON.stringify(message),
+    );
+  }
+
+  async deadLetter(message: IndexingQueueMessage): Promise<void> {
+    await this.command(
+      "LPUSH",
+      this.deadLetterQueueName,
       JSON.stringify(message),
     );
   }

@@ -20,6 +20,8 @@ export function validateEnv(env: RawEnv): RawEnv {
     "EMBEDDING_TIMEOUT_MS",
     "EMBEDDING_MAX_RETRIES",
     "INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS",
+    "INDEXING_JOB_MAX_ATTEMPTS",
+    "INDEXING_WORKER_HEARTBEAT_INTERVAL_MS",
   ]) {
     const value = asString(env, key);
     if (value && !/^\d+$/.test(value)) {

@@ -15,6 +15,13 @@
       "when": 1781063967267,
       "tag": "0001_regular_vertigo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781076177075,
+      "tag": "0002_milky_smiling_tiger",
+      "breakpoints": true
     }
   ]
 }

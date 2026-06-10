@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { DRIZZLE_DB } from "../db/database.constants.js";
 import type { Database } from "../db/database.types.js";
@@ -33,6 +33,7 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
         createdBy: identity.userId,
         type: input.type,
         status: "pending",
+        maxAttempts: input.maxAttempts,
         metadata: {
           ...input.metadata,
           externalTenantId: input.tenantId,
@@ -87,6 +88,35 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
     });
   }
 
+  async incrementAttempts(
+    tenantId: string,
+    jobId: string,
+  ): Promise<IndexingJob | undefined> {
+    const resolvedTenantId = await this.identity.ensureTenant(tenantId);
+    const [updated] = await this.db
+      .update(indexingJobs)
+      .set({
+        attempts: sql`${indexingJobs.attempts} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(indexingJobs.tenantId, resolvedTenantId),
+          eq(indexingJobs.id, jobId),
+        ),
+      )
+      .returning();
+
+    return updated ? this.toIndexingJob(updated, tenantId) : undefined;
+  }
+
+  async heartbeat(tenantId: string, jobId: string): Promise<void> {
+    await this.updateByTenantAndJob(tenantId, jobId, {
+      heartbeatAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
   async markCompleted(
     tenantId: string,
     jobId: string,
@@ -133,6 +163,46 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
     });
   }
 
+  async markDeadLettered(
+    tenantId: string,
+    jobId: string,
+    error: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.updateByTenantAndJob(tenantId, jobId, {
+      status: "failed" as const,
+      error,
+      metadata,
+      completedAt: new Date(),
+      deadLetteredAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  async cancel(
+    tenantId: string,
+    jobId: string,
+  ): Promise<IndexingJob | undefined> {
+    const resolvedTenantId = await this.identity.ensureTenant(tenantId);
+    const [updated] = await this.db
+      .update(indexingJobs)
+      .set({
+        status: "cancelled" as const,
+        cancelledAt: new Date(),
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(indexingJobs.tenantId, resolvedTenantId),
+          eq(indexingJobs.id, jobId),
+        ),
+      )
+      .returning();
+
+    return updated ? this.toIndexingJob(updated, tenantId) : undefined;
+  }
+
   private async updateByTenantAndJob(
     tenantId: string,
     jobId: string,
@@ -160,6 +230,8 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
       tenantId: externalTenantId,
       type: row.type as IndexingJobType,
       status: row.status as IndexingJobStatus,
+      attempts: row.attempts,
+      maxAttempts: row.maxAttempts,
       totalChunks: row.totalChunks,
       processedChunks: row.processedChunks,
       failedChunks: row.failedChunks,
@@ -179,8 +251,17 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
     if (row.startedAt) {
       job.startedAt = row.startedAt.toISOString();
     }
+    if (row.heartbeatAt) {
+      job.heartbeatAt = row.heartbeatAt.toISOString();
+    }
     if (row.completedAt) {
       job.completedAt = row.completedAt.toISOString();
+    }
+    if (row.cancelledAt) {
+      job.cancelledAt = row.cancelledAt.toISOString();
+    }
+    if (row.deadLetteredAt) {
+      job.deadLetteredAt = row.deadLetteredAt.toISOString();
     }
     return job;
   }

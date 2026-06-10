@@ -106,6 +106,20 @@ export class RagController {
     return job;
   }
 
+  @Post("reindex/jobs/:jobId/cancel")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:write")
+  async cancelIndexingJob(
+    @Param("jobId") jobId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<IndexingJob> {
+    const job = await this.rag.cancelIndexingJob(user.tenantId, jobId);
+    if (!job) {
+      throw new NotFoundException("Indexing job not found");
+    }
+    return job;
+  }
+
   private toRetrieveInput(
     body: RetrieveKnowledgeDto,
     user: RequestUser,

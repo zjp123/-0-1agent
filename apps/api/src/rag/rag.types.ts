@@ -74,7 +74,12 @@ export type KnowledgeReindexResult = {
   dimensions: number;
 };
 
-export type IndexingJobStatus = "pending" | "running" | "completed" | "failed";
+export type IndexingJobStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export type IndexingJobType = "tenant_reindex";
 
@@ -84,13 +89,18 @@ export type IndexingJob = {
   createdBy?: string;
   type: IndexingJobType;
   status: IndexingJobStatus;
+  attempts: number;
+  maxAttempts: number;
   totalChunks: number;
   processedChunks: number;
   failedChunks: number;
   error?: string;
   metadata: Record<string, unknown>;
   startedAt?: string;
+  heartbeatAt?: string;
   completedAt?: string;
+  cancelledAt?: string;
+  deadLetteredAt?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -106,6 +116,7 @@ export type CreateIndexingJobInput = {
   tenantId: string;
   userId: string;
   type: IndexingJobType;
+  maxAttempts: number;
   metadata: Record<string, unknown>;
 };
 
@@ -113,7 +124,9 @@ export interface IndexingJobStore {
   create(input: CreateIndexingJobInput): Promise<IndexingJob>;
   get(tenantId: string, jobId: string): Promise<IndexingJob | undefined>;
   list(tenantId: string): Promise<IndexingJob[]>;
+  incrementAttempts(tenantId: string, jobId: string): Promise<IndexingJob | undefined>;
   markRunning(tenantId: string, jobId: string, totalChunks: number): Promise<void>;
+  heartbeat(tenantId: string, jobId: string): Promise<void>;
   markProgress(
     tenantId: string,
     jobId: string,
@@ -133,6 +146,13 @@ export interface IndexingJobStore {
     error: string,
     metadata: Record<string, unknown>,
   ): Promise<void>;
+  markDeadLettered(
+    tenantId: string,
+    jobId: string,
+    error: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void>;
+  cancel(tenantId: string, jobId: string): Promise<IndexingJob | undefined>;
 }
 
 export interface KnowledgeStore {

@@ -27,6 +27,8 @@ REDIS_URL=redis://localhost:6379
 INDEXING_QUEUE_NAME=enterprise-agent:indexing-jobs
 INDEXING_WORKER_ENABLED=true
 INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS=5
+INDEXING_JOB_MAX_ATTEMPTS=3
+INDEXING_WORKER_HEARTBEAT_INTERVAL_MS=10000
 ```
 
 ## Queue 协议
@@ -35,6 +37,7 @@ INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS=5
 
 - enqueue: `LPUSH`
 - consume: `BRPOP`
+- dead-letter: `LPUSH enterprise-agent:indexing-jobs:dead-letter`
 
 消息格式：
 
@@ -61,14 +64,36 @@ INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS=5
 4. API 返回 job
 5. `IndexingWorkerService` 在模块启动后循环 `BRPOP`
 6. worker 读取 job
-7. worker 调用 `RagService.runReindexJob(job)`
-8. job 状态写回 PostgreSQL
+7. worker 增加 attempts
+8. worker 定期写入 heartbeat
+9. worker 调用 `RagService.runReindexJob(job)`
+10. job 状态写回 PostgreSQL
+11. 失败且未超出 maxAttempts 时重新入队
+12. 超出 maxAttempts 时标记 dead-letter
 
 如果 Redis enqueue 失败：
 
 - 当前 fallback 到 `void rag.runReindexJob(job)`
 - job 仍会继续执行
 - 适合开发环境或 Redis 短暂不可用
+
+## Reliability
+
+当前支持：
+
+- attempts
+- maxAttempts
+- dead-letter queue
+- heartbeatAt
+- cancel API
+- Redis enqueue fallback
+- PostgreSQL job 状态作为 source of truth
+
+取消 API：
+
+```http
+POST /api/knowledge/reindex/jobs/:jobId/cancel
+```
 
 ## 当前边界
 
@@ -81,23 +106,23 @@ INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS=5
 - worker consume
 - Redis 不可用时进程内 fallback
 - job 状态仍由 PostgreSQL 持久化
-
-未完成：
-
-- retry count
+- retry attempts
 - dead-letter queue
 - worker heartbeat
 - job cancel
+
+未完成：
+
 - job lease / visibility timeout
 - 多 worker 并发控制
 - Redis Streams / BullMQ
 
 ## 下一步
 
-建议下一步实现 `Indexing Job Reliability`：
+建议下一步实现 `Worker Lease / Concurrency`：
 
-1. 增加 retry count
-2. 增加 dead-letter queue
-3. 增加 worker heartbeat
-4. 增加 job cancel API
-5. 增加并发控制
+1. 增加 workerId
+2. 增加 job lease / visibility timeout
+3. 增加并发控制
+4. 增加 stuck job recovery
+5. 后续迁移到 Redis Streams 或 BullMQ

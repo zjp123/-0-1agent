@@ -52,6 +52,8 @@ knowledge:write
   "createdBy": "dev-user",
   "type": "tenant_reindex",
   "status": "pending",
+  "attempts": 0,
+  "maxAttempts": 3,
   "totalChunks": 0,
   "processedChunks": 0,
   "failedChunks": 0,
@@ -137,6 +139,7 @@ indexing_jobs
 - `running`
 - `completed`
 - `failed`
+- `cancelled`
 
 当前字段：
 
@@ -144,13 +147,18 @@ indexing_jobs
 - createdBy
 - type
 - status
+- attempts
+- maxAttempts
 - totalChunks
 - processedChunks
 - failedChunks
 - error
 - metadata
 - startedAt
+- heartbeatAt
 - completedAt
+- cancelledAt
+- deadLetteredAt
 - createdAt
 - updatedAt
 
@@ -180,16 +188,20 @@ indexing_jobs
 - Redis queue worker
 - 进程内 fallback
 - job 状态查询
+- job cancel API
+- retry attempts
+- dead-letter
+- heartbeat
 - processed chunks 进度更新
 - indexing completed / failed trace
 
 未完成：
 
-- indexing 失败重试
 - 按 documentId 局部 re-index
 - Qdrant delete/update 同步
 - provider/dimension 切换检测
 - 多实例 worker 协调
+- job lease / visibility timeout
 
 ## 运维注意
 
@@ -204,10 +216,10 @@ QDRANT_VECTOR_SIZE=1536
 
 ## 下一步
 
-建议下一步实现 `Redis Queue Worker`：
+建议下一步实现 `Worker Lease / Concurrency`：
 
-1. 增加失败重试和 dead-letter
-2. 增加 job cancel API
-3. 增加 worker heartbeat
+1. 增加 workerId
+2. 增加 job lease / visibility timeout
+3. 增加 stuck job recovery
 4. 增加并发控制
 5. 后续迁移到 Redis Streams 或 BullMQ

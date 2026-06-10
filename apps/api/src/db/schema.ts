@@ -46,6 +46,7 @@ export const indexingJobStatusEnum = pgEnum("indexing_job_status", [
   "running",
   "completed",
   "failed",
+  "cancelled",
 ]);
 
 export const tenants = pgTable("tenants", {
@@ -154,13 +155,18 @@ export const indexingJobs = pgTable(
     createdBy: uuid("created_by").references(() => users.id),
     type: varchar("type", { length: 80 }).notNull(),
     status: indexingJobStatusEnum("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
     totalChunks: integer("total_chunks").notNull().default(0),
     processedChunks: integer("processed_chunks").notNull().default(0),
     failedChunks: integer("failed_chunks").notNull().default(0),
     error: text("error"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     startedAt: timestamp("started_at", { withTimezone: true }),
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    deadLetteredAt: timestamp("dead_lettered_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
