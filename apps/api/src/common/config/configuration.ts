@@ -33,6 +33,16 @@ export const configuration = registerAs("app", () => ({
   allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS),
   auth: {
     apiKey: process.env.API_KEY,
+    jwtSecret: process.env.JWT_SECRET,
+    jwtIssuer: process.env.JWT_ISSUER,
+    jwtAudience: process.env.JWT_AUDIENCE,
+    serviceToken: process.env.SERVICE_TOKEN,
+    serviceTokenUserId:
+      process.env.SERVICE_TOKEN_USER_ID ?? "service-token-user",
+    serviceTokenTenantId:
+      process.env.SERVICE_TOKEN_TENANT_ID ?? "default",
+    serviceTokenRoles: parseCsv(process.env.SERVICE_TOKEN_ROLES),
+    serviceTokenPermissions: parseCsv(process.env.SERVICE_TOKEN_PERMISSIONS),
   },
   database: {
     url:

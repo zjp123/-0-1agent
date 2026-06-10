@@ -4,7 +4,7 @@
 
 Auth & Governance 模块负责生产级 Agent 平台的身份、租户、权限和治理边界。
 
-当前阶段实现开发期可用的 API Key Guard 和权限框架，为后续 JWT、Refresh Token、RBAC 持久化、多租户隔离和审计系统预留结构。
+当前阶段已经从开发期 API Key Guard 升级为多认证入口，支持 JWT、service token、API key 和 development fallback。
 
 ## 当前实现
 
@@ -31,7 +31,8 @@ type RequestUser = {
   tenantId: string;
   roles: Role[];
   permissions: Permission[];
-  authType: "api_key" | "dev";
+  authType: "api_key" | "dev" | "jwt" | "service_token";
+  tokenId?: string;
 };
 ```
 
@@ -44,12 +45,56 @@ type RequestUser = {
 - `observability:read`
 - `workflow:manage`
 - `evaluation:manage`
+- `auth:manage`
 
 当前角色：
 
+- `viewer`
 - `developer`
 - `operator`
 - `admin`
+- `service`
+
+## JWT
+
+请求头：
+
+```http
+Authorization: Bearer <jwt>
+```
+
+配置项：
+
+```bash
+JWT_SECRET=
+JWT_ISSUER=
+JWT_AUDIENCE=
+```
+
+当前支持 HS256，并校验 `sub`、`tenantId/tid`、`exp`、`iss`、`aud`。
+
+如果请求同时携带 `x-tenant-id`，必须与 JWT 中的 tenant claim 一致。
+
+## Service Token
+
+请求头：
+
+```http
+x-service-token: token
+x-tenant-id: optional-tenant
+```
+
+配置项：
+
+```bash
+SERVICE_TOKEN=
+SERVICE_TOKEN_USER_ID=service-token-user
+SERVICE_TOKEN_TENANT_ID=default
+SERVICE_TOKEN_ROLES=service
+SERVICE_TOKEN_PERMISSIONS=
+```
+
+service token 使用 constant-time comparison 校验，默认角色为 `service`。
 
 ## API Key Guard
 
@@ -126,31 +171,36 @@ Tool Registry 执行上下文同样使用认证上下文里的权限。
 - RequestUser 类型
 - Permission 类型
 - Role 类型
-- API Key Guard
+- JWT Bearer token 认证
+- service token 认证
+- API Key Guard 兼容
+- development fallback
 - Permission Guard
 - CurrentUser decorator
 - RequirePermissions decorator
-- 生产环境 API_KEY 校验
+- 生产环境至少一种认证方式校验
+- role -> permission 集中映射
+- JWT issuer / audience / exp 校验
+- tenant header 与 JWT claim 一致性校验
 - Agent/Tools/Knowledge/Observability 接口权限接入
 - Knowledge tenantId 改由认证上下文注入
 
 未完成：
 
-- JWT 登录
-- Refresh Token
-- 用户/租户/角色持久化
+- Refresh Token / session
+- RBAC role / permission 持久化
 - 细粒度 RBAC 管理接口
-- API key 轮换
+- service token hash 持久化与轮换
 - 租户级配额
 - 审计持久化
 - 与数据库权限模型联动
 
 ## 下一步
 
-建议下一步实现 `Workflow Engine` 基础版：
+建议下一步实现 `Persistent RBAC / Service Token Store`：
 
-1. 定义 workflow、task、step 状态类型
-2. 提供 in-memory workflow store
-3. 支持创建任务计划
-4. 支持 step 状态更新
-5. 为后续 Plan/Execute 和可恢复任务做准备
+1. 增加 roles / permissions / service_tokens 表
+2. service token 只存 hash
+3. 增加 token enabled / expiresAt / lastUsedAt
+4. 用户角色从数据库解析
+5. 增加 auth admin API

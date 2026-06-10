@@ -220,10 +220,10 @@ QDRANT_VECTOR_SIZE=1536
 
 ## 下一步
 
-建议下一步实现 `Auth / RBAC Enterprise Upgrade`：
+建议下一步实现 `Persistent RBAC / Service Token Store`：
 
-1. JWT / service token 双模式认证
-2. RBAC role / permission 持久化
-3. tenant isolation 强化
-4. admin 操作 reason/comment
-5. 审计日志查询增强
+1. 增加 roles / permissions / service_tokens 表
+2. service token 只存 hash
+3. 增加 token enabled / expiresAt / lastUsedAt
+4. 用户角色从数据库解析
+5. 增加 auth admin API
