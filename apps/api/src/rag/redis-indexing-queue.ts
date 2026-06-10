@@ -7,6 +7,12 @@ export type IndexingQueueMessage = {
   tenantId: string;
 };
 
+export type QueueDepth = {
+  queue: string;
+  pending: number;
+  deadLetter: number;
+};
+
 @Injectable()
 export class RedisIndexingQueue implements OnModuleDestroy {
   private readonly redisUrl: URL;
@@ -62,6 +68,34 @@ export class RedisIndexingQueue implements OnModuleDestroy {
     );
   }
 
+  async depth(): Promise<QueueDepth> {
+    const [pending, deadLetter] = await Promise.all([
+      this.length(this.queueName),
+      this.length(this.deadLetterQueueName),
+    ]);
+    return {
+      queue: this.queueName,
+      pending,
+      deadLetter,
+    };
+  }
+
+  async listDeadLetters(limit: number): Promise<IndexingQueueMessage[]> {
+    const end = Math.max(0, limit - 1);
+    const response = await this.command(
+      "LRANGE",
+      this.deadLetterQueueName,
+      "0",
+      String(end),
+    );
+    if (!Array.isArray(response)) {
+      return [];
+    }
+    return response
+      .map((item) => (typeof item === "string" ? this.parseMessage(item) : undefined))
+      .filter((item): item is IndexingQueueMessage => Boolean(item));
+  }
+
   async dequeue(): Promise<IndexingQueueMessage | undefined> {
     const response = await this.command(
       "BRPOP",
@@ -77,6 +111,19 @@ export class RedisIndexingQueue implements OnModuleDestroy {
       return undefined;
     }
 
+    const parsed = this.parseMessage(payload);
+    if (!parsed) {
+      return undefined;
+    }
+    return parsed;
+  }
+
+  private async length(queueName: string): Promise<number> {
+    const response = await this.command("LLEN", queueName);
+    return typeof response === "number" ? response : 0;
+  }
+
+  private parseMessage(payload: string): IndexingQueueMessage | undefined {
     const parsed = JSON.parse(payload) as Partial<IndexingQueueMessage>;
     if (typeof parsed.jobId !== "string" || typeof parsed.tenantId !== "string") {
       return undefined;

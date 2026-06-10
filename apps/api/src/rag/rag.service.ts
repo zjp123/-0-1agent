@@ -162,6 +162,27 @@ export class RagService {
     return this.indexingJobs.replayDeadLetter(tenantId, jobId);
   }
 
+  recordIndexingAdminAction(input: {
+    tenantId: string;
+    userId: string;
+    action: string;
+    jobId?: string;
+    result: string;
+  }): void {
+    const event: Parameters<ObservabilityService["record"]>[0] = {
+      requestId: `indexing-admin-${crypto.randomUUID()}`,
+      type: "rag.indexing.admin",
+      tenantId: input.tenantId,
+      userId: input.userId,
+      attributes: {
+        action: input.action,
+        jobId: input.jobId ?? null,
+        result: input.result,
+      },
+    };
+    this.observability.record(event);
+  }
+
   async runReindexJob(job: IndexingJob): Promise<RunIndexingJobResult> {
     const metadata = this.indexingMetadata(job);
     try {

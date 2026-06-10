@@ -104,18 +104,14 @@ POST /api/knowledge/reindex/jobs/:jobId/replay
 
 未完成：
 
-- worker 状态 API
-- queue depth 指标
-- stuck job 告警
-- dead-letter 列表 API
 - Redis Streams / BullMQ
 
 ## 下一步
 
-建议下一步实现 `Worker Metrics / Admin Ops`：
+建议下一步实现 `Redis Streams / BullMQ Migration`：
 
-1. worker 状态 API
-2. queue depth 指标
-3. stuck job 告警
-4. dead-letter 列表 API
-5. job 操作审计
+1. 替换轻量 RESP client
+2. 使用更可靠的 ack / retry 语义
+3. 增加 delayed retry
+4. 增加 queue dashboard
+5. 保留当前 PostgreSQL job 状态作为 source of truth

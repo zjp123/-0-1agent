@@ -9,6 +9,7 @@ export type TraceEventType =
   | "rag.vector.failed"
   | "rag.indexing.completed"
   | "rag.indexing.failed"
+  | "rag.indexing.admin"
   | "model.completed"
   | "model.failed"
   | "tool.completed"

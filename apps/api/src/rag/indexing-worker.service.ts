@@ -1,8 +1,15 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
-import { RedisIndexingQueue } from "./redis-indexing-queue.js";
+import {
+  RedisIndexingQueue,
+  type IndexingQueueMessage,
+} from "./redis-indexing-queue.js";
 import { RagService } from "./rag.service.js";
+import type {
+  IndexingJob,
+  IndexingWorkerStatus,
+} from "./rag.types.js";
 
 @Injectable()
 export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -74,11 +81,19 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     } catch {
       void this.processJob(job);
     }
+    this.rag.recordIndexingAdminAction({
+      tenantId: input.tenantId,
+      userId: input.userId,
+      action: "enqueue_reindex",
+      jobId: job.id,
+      result: "accepted",
+    });
     return job;
   }
 
   async replayDeadLetterJob(input: {
     tenantId: string;
+    userId: string;
     jobId: string;
   }): Promise<Awaited<ReturnType<RagService["replayDeadLetterIndexingJob"]>>> {
     const job = await this.rag.replayDeadLetterIndexingJob(
@@ -92,7 +107,77 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       tenantId: job.tenantId,
       jobId: job.id,
     });
+    this.rag.recordIndexingAdminAction({
+      tenantId: input.tenantId,
+      userId: input.userId,
+      action: "replay_dead_letter",
+      jobId: job.id,
+      result: "accepted",
+    });
     return job;
+  }
+
+  async getStatus(): Promise<IndexingWorkerStatus> {
+    const baseStatus = {
+      workerId: this.workerId,
+      enabled: this.config.get<boolean>("app.redis.workerEnabled", true),
+      stopped: this.stopped,
+      concurrency: this.concurrency,
+      queueName: this.queue.getQueueName(),
+      deadLetterQueueName: this.queue.getDeadLetterQueueName(),
+      leaseMs: this.leaseMs,
+      heartbeatIntervalMs: this.heartbeatIntervalMs,
+      recoveryIntervalMs: this.recoveryIntervalMs,
+    };
+
+    try {
+      const depth = await this.queue.depth();
+      return {
+        ...baseStatus,
+        queueAvailable: true,
+        queueDepth: {
+          pending: depth.pending,
+          deadLetter: depth.deadLetter,
+        },
+      };
+    } catch (error) {
+      const status: IndexingWorkerStatus = {
+        ...baseStatus,
+        queueAvailable: false,
+        queueDepth: {
+          pending: 0,
+          deadLetter: 0,
+        },
+      };
+      if (error instanceof Error) {
+        status.queueError = error.message;
+      }
+      return status;
+    }
+  }
+
+  async listDeadLetters(limit: number): Promise<IndexingQueueMessage[]> {
+    try {
+      return await this.queue.listDeadLetters(limit);
+    } catch {
+      return [];
+    }
+  }
+
+  listStuckJobs(): Promise<IndexingJob[]> {
+    return this.rag.findExpiredIndexingJobs(new Date());
+  }
+
+  recordCancel(input: {
+    tenantId: string;
+    userId: string;
+    jobId: string;
+    result: string;
+  }): void {
+    this.rag.recordIndexingAdminAction({
+      ...input,
+      action: "cancel",
+    });
   }
 
   private async workLoop(): Promise<void> {

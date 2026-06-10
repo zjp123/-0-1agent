@@ -92,6 +92,10 @@ worker 启动后会定期扫描 lease 过期的 running jobs，并重新入队�
 - maxAttempts
 - dead-letter queue
 - heartbeatAt
+- worker status API
+- queue depth
+- stuck job list
+- dead-letter list
 - cancel API
 - Redis enqueue fallback
 - PostgreSQL job 状态作为 source of truth
@@ -121,18 +125,22 @@ POST /api/knowledge/reindex/jobs/:jobId/cancel
 - stuck job recovery
 - worker concurrency
 - dead-letter replay API
+- worker status API
+- queue depth
+- stuck job query
+- dead-letter list API
+- admin audit trace
 
 未完成：
 
-- worker metrics
 - Redis Streams / BullMQ
 
 ## 下一步
 
-建议下一步实现 `Worker Metrics / Admin Ops`：
+建议下一步实现 `Redis Streams / BullMQ Migration`：
 
-1. 增加 worker 状态 API
-2. 增加 queue depth 指标
-3. 增加 stuck job 告警
-4. 增加 dead-letter 列表 API
-5. 后续迁移到 Redis Streams 或 BullMQ
+1. 替换轻量 RESP client
+2. 使用更可靠的 ack / retry 语义
+3. 增加 delayed retry
+4. 增加 queue dashboard
+5. 保留当前 PostgreSQL job 状态作为 source of truth

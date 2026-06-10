@@ -19,12 +19,14 @@ import { RetrieveKnowledgeDto } from "./dto/retrieve-knowledge.dto.js";
 import { RagService } from "./rag.service.js";
 import type {
   IndexingJob,
+  IndexingWorkerStatus,
   KnowledgeDocument,
   KnowledgeIngestResult,
   KnowledgeSearchResult,
   IngestKnowledgeInput,
   RetrieveKnowledgeInput,
 } from "./rag.types.js";
+import type { IndexingQueueMessage } from "./redis-indexing-queue.js";
 
 @Controller("knowledge")
 export class RagController {
@@ -92,6 +94,33 @@ export class RagController {
     return this.rag.listIndexingJobs(user.tenantId);
   }
 
+  @Get("reindex/worker/status")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  getIndexingWorkerStatus(): Promise<IndexingWorkerStatus> {
+    return this.indexingWorker.getStatus();
+  }
+
+  @Get("reindex/jobs/stuck")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  async listStuckIndexingJobs(
+    @CurrentUser() user: RequestUser,
+  ): Promise<IndexingJob[]> {
+    const jobs = await this.indexingWorker.listStuckJobs();
+    return jobs.filter((job) => job.tenantId === user.tenantId);
+  }
+
+  @Get("reindex/dead-letter")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  async listDeadLetters(
+    @CurrentUser() user: RequestUser,
+  ): Promise<IndexingQueueMessage[]> {
+    const messages = await this.indexingWorker.listDeadLetters(50);
+    return messages.filter((message) => message.tenantId === user.tenantId);
+  }
+
   @Get("reindex/jobs/:jobId")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("knowledge:read")
@@ -117,6 +146,12 @@ export class RagController {
     if (!job) {
       throw new NotFoundException("Indexing job not found");
     }
+    this.indexingWorker.recordCancel({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      jobId,
+      result: "accepted",
+    });
     return job;
   }
 
@@ -129,6 +164,7 @@ export class RagController {
   ): Promise<IndexingJob> {
     const job = await this.indexingWorker.replayDeadLetterJob({
       tenantId: user.tenantId,
+      userId: user.userId,
       jobId,
     });
     if (!job) {

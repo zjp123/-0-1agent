@@ -114,6 +114,24 @@ export type RunIndexingJobResult = {
   error?: string;
 };
 
+export type IndexingWorkerStatus = {
+  workerId: string;
+  enabled: boolean;
+  stopped: boolean;
+  concurrency: number;
+  queueName: string;
+  deadLetterQueueName: string;
+  queueDepth: {
+    pending: number;
+    deadLetter: number;
+  };
+  queueAvailable: boolean;
+  queueError?: string;
+  leaseMs: number;
+  heartbeatIntervalMs: number;
+  recoveryIntervalMs: number;
+};
+
 export type CreateIndexingJobInput = {
   tenantId: string;
   userId: string;
