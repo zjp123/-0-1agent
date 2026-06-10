@@ -195,6 +195,8 @@ indexing_jobs
 - worker lease / concurrency
 - Redis Streams consumer group
 - XACK 消费确认
+- delayed retry
+- Redis pending entry recovery
 - processed chunks 进度更新
 - indexing completed / failed trace
 
@@ -203,8 +205,6 @@ indexing_jobs
 - 按 documentId 局部 re-index
 - Qdrant delete/update 同步
 - provider/dimension 切换检测
-- delayed retry
-- Redis pending entry recovery
 - queue dashboard
 
 ## 运维注意
@@ -220,10 +220,10 @@ QDRANT_VECTOR_SIZE=1536
 
 ## 下一步
 
-建议下一步实现 `Delayed Retry / Pending Recovery`：
+建议下一步实现 `Queue Metrics / Dashboard`：
 
-1. 失败重试不要立即入队，增加延迟
-2. 使用 XPENDING 查看 pending messages
-3. 使用 XCLAIM / XAUTOCLAIM 恢复超时 pending
-4. 增加 queue dashboard
+1. 增加 queue metrics endpoint
+2. 增加 pending / delayed / dead-letter 分布指标
+3. 增加 worker active heartbeat 指标
+4. 增加 recovery action trace
 5. 后续评估 BullMQ 替换

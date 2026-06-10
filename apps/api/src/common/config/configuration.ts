@@ -64,6 +64,26 @@ export const configuration = registerAs("app", () => ({
       process.env.INDEXING_WORKER_RECOVERY_INTERVAL_MS,
       30_000,
     ),
+    retryDelayBaseMs: parsePositiveInt(
+      process.env.INDEXING_RETRY_DELAY_BASE_MS,
+      5_000,
+    ),
+    retryDelayMaxMs: parsePositiveInt(
+      process.env.INDEXING_RETRY_DELAY_MAX_MS,
+      60_000,
+    ),
+    retryPromotionBatchSize: parsePositiveInt(
+      process.env.INDEXING_RETRY_PROMOTION_BATCH_SIZE,
+      50,
+    ),
+    pendingClaimMinIdleMs: parsePositiveInt(
+      process.env.INDEXING_PENDING_CLAIM_MIN_IDLE_MS,
+      60_000,
+    ),
+    pendingClaimBatchSize: parsePositiveInt(
+      process.env.INDEXING_PENDING_CLAIM_BATCH_SIZE,
+      10,
+    ),
   },
   qdrant: {
     url: process.env.QDRANT_URL ?? "http://localhost:6333",

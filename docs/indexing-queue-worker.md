@@ -34,6 +34,11 @@ INDEXING_WORKER_ID=
 INDEXING_WORKER_CONCURRENCY=1
 INDEXING_WORKER_LEASE_MS=60000
 INDEXING_WORKER_RECOVERY_INTERVAL_MS=30000
+INDEXING_RETRY_DELAY_BASE_MS=5000
+INDEXING_RETRY_DELAY_MAX_MS=60000
+INDEXING_RETRY_PROMOTION_BATCH_SIZE=50
+INDEXING_PENDING_CLAIM_MIN_IDLE_MS=60000
+INDEXING_PENDING_CLAIM_BATCH_SIZE=10
 ```
 
 ## Queue 协议
@@ -44,6 +49,8 @@ INDEXING_WORKER_RECOVERY_INTERVAL_MS=30000
 - consumer group: `XGROUP CREATE`
 - consume: `XREADGROUP`
 - ack: `XACK`
+- pending recovery: `XPENDING` / `XAUTOCLAIM`
+- delayed retry: `ZADD` / `ZRANGEBYSCORE` / `ZREM`
 - dead-letter: `XADD enterprise-agent:indexing-jobs:dead-letter`
 
 消息格式：
@@ -76,10 +83,14 @@ INDEXING_WORKER_RECOVERY_INTERVAL_MS=30000
 9. worker 定期写入 heartbeat 并延长 lease
 10. worker 调用 `RagService.runReindexJob(job)`
 11. job 状态写回 PostgreSQL
-12. 失败且未超出 maxAttempts 时重新入队
+12. 失败且未超出 maxAttempts 时写入 retry sorted set
 13. 超出 maxAttempts 时标记 dead-letter
 
-worker 启动后会定期扫描 lease 过期的 running jobs，并重新入队。
+worker 启动后会定期执行 recovery loop：
+
+1. 将到期 delayed retry 提升回主 stream
+2. 认领超时 pending messages
+3. 扫描 lease 过期的 running jobs，并重新入队
 
 如果 Redis enqueue 失败：
 
@@ -97,6 +108,8 @@ worker 启动后会定期扫描 lease 过期的 running jobs，并重新入队�
 - heartbeatAt
 - worker status API
 - queue depth
+- delayed retry
+- pending message recovery
 - stuck job list
 - dead-letter list
 - cancel API
@@ -132,22 +145,25 @@ POST /api/knowledge/reindex/jobs/:jobId/cancel
 - dead-letter replay API
 - worker status API
 - queue depth
+- delayed retry sorted set
+- retry promotion
+- XPENDING / XAUTOCLAIM recovery
 - stuck job query
 - dead-letter list API
 - admin audit trace
 
 未完成：
 
-- delayed retry
-- Redis pending entry recovery
+- queue dashboard
+- worker metrics endpoint
 - BullMQ
 
 ## 下一步
 
-建议下一步实现 `Delayed Retry / Pending Recovery`：
+建议下一步实现 `Queue Metrics / Dashboard`：
 
-1. 增加 delayed retry
-2. 使用 XPENDING / XCLAIM 恢复 pending messages
-3. 增加 queue dashboard
-4. 增加 admin operation reason
+1. 增加 queue metrics endpoint
+2. 增加 pending / delayed / dead-letter 分布指标
+3. 增加 worker active heartbeat 指标
+4. 增加 recovery action trace
 5. 后续可替换 BullMQ

@@ -26,6 +26,11 @@ export function validateEnv(env: RawEnv): RawEnv {
     "INDEXING_WORKER_CONCURRENCY",
     "INDEXING_WORKER_LEASE_MS",
     "INDEXING_WORKER_RECOVERY_INTERVAL_MS",
+    "INDEXING_RETRY_DELAY_BASE_MS",
+    "INDEXING_RETRY_DELAY_MAX_MS",
+    "INDEXING_RETRY_PROMOTION_BATCH_SIZE",
+    "INDEXING_PENDING_CLAIM_MIN_IDLE_MS",
+    "INDEXING_PENDING_CLAIM_BATCH_SIZE",
   ]) {
     const value = asString(env, key);
     if (value && !/^\d+$/.test(value)) {

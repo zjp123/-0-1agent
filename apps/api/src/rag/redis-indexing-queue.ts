@@ -11,6 +11,8 @@ export type IndexingQueueMessage = {
 export type QueueDepth = {
   queue: string;
   pending: number;
+  consumerPending: number;
+  delayed: number;
   deadLetter: number;
 };
 
@@ -18,6 +20,7 @@ export type QueueDepth = {
 export class RedisIndexingQueue implements OnModuleDestroy {
   private readonly redisUrl: URL;
   private readonly queueName: string;
+  private readonly retryQueueName: string;
   private readonly deadLetterQueueName: string;
   private readonly consumerGroup: string;
   private readonly blockMs: number;
@@ -31,6 +34,7 @@ export class RedisIndexingQueue implements OnModuleDestroy {
       "app.redis.indexingQueue",
       "enterprise-agent:indexing-jobs",
     );
+    this.retryQueueName = `${this.queueName}:retry`;
     this.deadLetterQueueName = `${this.queueName}:dead-letter`;
     this.consumerGroup = config.get<string>(
       "app.redis.indexingConsumerGroup",
@@ -52,6 +56,10 @@ export class RedisIndexingQueue implements OnModuleDestroy {
     return this.deadLetterQueueName;
   }
 
+  getRetryQueueName(): string {
+    return this.retryQueueName;
+  }
+
   getConsumerGroup(): string {
     return this.consumerGroup;
   }
@@ -66,6 +74,19 @@ export class RedisIndexingQueue implements OnModuleDestroy {
       this.queueName,
       "*",
       "payload",
+      this.serializeMessage(message),
+    );
+  }
+
+  async enqueueDelayed(
+    message: IndexingQueueMessage,
+    delayMs: number,
+  ): Promise<void> {
+    const score = Date.now() + delayMs;
+    await this.command(
+      "ZADD",
+      this.retryQueueName,
+      String(score),
       this.serializeMessage(message),
     );
   }
@@ -102,13 +123,17 @@ export class RedisIndexingQueue implements OnModuleDestroy {
   }
 
   async depth(): Promise<QueueDepth> {
-    const [pending, deadLetter] = await Promise.all([
+    const [pending, consumerPending, delayed, deadLetter] = await Promise.all([
       this.length(this.queueName),
+      this.pendingCount(),
+      this.sortedSetLength(this.retryQueueName),
       this.length(this.deadLetterQueueName),
     ]);
     return {
       queue: this.queueName,
       pending,
+      consumerPending,
+      delayed,
       deadLetter,
     };
   }
@@ -149,6 +174,56 @@ export class RedisIndexingQueue implements OnModuleDestroy {
     return message;
   }
 
+  async promoteDueDelayed(limit: number): Promise<number> {
+    const response = await this.command(
+      "ZRANGEBYSCORE",
+      this.retryQueueName,
+      "-inf",
+      String(Date.now()),
+      "LIMIT",
+      "0",
+      String(limit),
+    );
+    if (!Array.isArray(response) || response.length === 0) {
+      return 0;
+    }
+
+    let promoted = 0;
+    for (const payload of response) {
+      if (typeof payload !== "string") {
+        continue;
+      }
+      const message = this.parseMessage(payload);
+      if (!message) {
+        await this.command("ZREM", this.retryQueueName, payload);
+        continue;
+      }
+      await this.enqueue(message);
+      await this.command("ZREM", this.retryQueueName, payload);
+      promoted += 1;
+    }
+    return promoted;
+  }
+
+  async claimPending(
+    consumerName: string,
+    minIdleMs: number,
+    count: number,
+  ): Promise<IndexingQueueMessage[]> {
+    await this.ensureConsumerGroup();
+    const response = await this.command(
+      "XAUTOCLAIM",
+      this.queueName,
+      this.consumerGroup,
+      consumerName,
+      String(minIdleMs),
+      "0-0",
+      "COUNT",
+      String(count),
+    );
+    return this.parseAutoClaimResponse(response);
+  }
+
   async ack(message: IndexingQueueMessage): Promise<void> {
     if (!message.messageId) {
       return;
@@ -159,6 +234,21 @@ export class RedisIndexingQueue implements OnModuleDestroy {
       this.consumerGroup,
       message.messageId,
     );
+  }
+
+  private parseAutoClaimResponse(response: unknown): IndexingQueueMessage[] {
+    if (!Array.isArray(response) || response.length < 2) {
+      return [];
+    }
+
+    const entries = response[1];
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return [];
+    }
+
+    return entries
+      .map((item) => this.parseStreamEntry(item))
+      .filter((item): item is IndexingQueueMessage => Boolean(item));
   }
 
   private parseReadGroupResponse(response: unknown): IndexingQueueMessage | undefined {
@@ -182,6 +272,24 @@ export class RedisIndexingQueue implements OnModuleDestroy {
   private async length(queueName: string): Promise<number> {
     const response = await this.command("XLEN", queueName);
     return typeof response === "number" ? response : 0;
+  }
+
+  private async sortedSetLength(queueName: string): Promise<number> {
+    const response = await this.command("ZCARD", queueName);
+    return typeof response === "number" ? response : 0;
+  }
+
+  private async pendingCount(): Promise<number> {
+    await this.ensureConsumerGroup();
+    const response = await this.command(
+      "XPENDING",
+      this.queueName,
+      this.consumerGroup,
+    );
+    if (!Array.isArray(response) || typeof response[0] !== "number") {
+      return 0;
+    }
+    return response[0];
   }
 
   private parseStreamEntry(entry: unknown): IndexingQueueMessage | undefined {

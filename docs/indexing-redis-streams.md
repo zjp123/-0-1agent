@@ -23,6 +23,11 @@ INDEXING_QUEUE_NAME=enterprise-agent:indexing-jobs
 INDEXING_CONSUMER_GROUP=enterprise-agent-indexers
 INDEXING_WORKER_ID=
 INDEXING_WORKER_BLOCK_TIMEOUT_SECONDS=5
+INDEXING_RETRY_DELAY_BASE_MS=5000
+INDEXING_RETRY_DELAY_MAX_MS=60000
+INDEXING_RETRY_PROMOTION_BATCH_SIZE=50
+INDEXING_PENDING_CLAIM_MIN_IDLE_MS=60000
+INDEXING_PENDING_CLAIM_BATCH_SIZE=10
 ```
 
 兼容说明：旧的 `INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS` 仍可作为 fallback，但新配置统一使用 `INDEXING_WORKER_BLOCK_TIMEOUT_SECONDS`。
@@ -41,14 +46,23 @@ enterprise-agent:indexing-jobs
 enterprise-agent:indexing-jobs:dead-letter
 ```
 
+当前 retry sorted set：
+
+```text
+enterprise-agent:indexing-jobs:retry
+```
+
 命令：
 
 - `XADD`：写入 job message
 - `XGROUP CREATE ... MKSTREAM`：初始化 consumer group
 - `XREADGROUP GROUP ... STREAMS ... >`：消费新消息
 - `XACK`：确认已处理消息
+- `XPENDING`：查看 consumer group pending messages
+- `XAUTOCLAIM`：恢复超时 pending messages
 - `XREVRANGE`：查看 dead-letter stream
 - `XLEN`：统计 stream depth
+- `ZADD / ZRANGEBYSCORE / ZREM / ZCARD`：延迟重试队列
 
 ## 消息格式
 
@@ -92,22 +106,22 @@ PostgreSQL `indexing_jobs` 仍是 job 状态 source of truth：
 - XACK 确认
 - dead-letter stream
 - queue depth
+- delayed retry
+- pending entry recovery
 - dead-letter list
 
 未完成：
 
-- delayed retry
-- pending entry recovery
-- XCLAIM
-- XAUTOCLAIM
+- queue dashboard
+- recovery audit trace
 - BullMQ migration
 
 ## 下一步
 
-建议下一步实现 `Delayed Retry / Pending Recovery`：
+建议下一步实现 `Queue Metrics / Dashboard`：
 
-1. 失败重试不要立即入队，增加延迟
-2. 使用 XPENDING 查看 pending messages
-3. 使用 XCLAIM / XAUTOCLAIM 恢复超时 pending
-4. 增加 queue dashboard
+1. 增加 queue metrics endpoint
+2. 增加 pending / delayed / dead-letter 分布指标
+3. 增加 worker active heartbeat 指标
+4. 增加 recovery action trace
 5. 后续评估 BullMQ 替换

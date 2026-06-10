@@ -20,7 +20,13 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly concurrency: number;
   private readonly leaseMs: number;
   private readonly recoveryIntervalMs: number;
+  private readonly retryDelayBaseMs: number;
+  private readonly retryDelayMaxMs: number;
+  private readonly retryPromotionBatchSize: number;
+  private readonly pendingClaimMinIdleMs: number;
+  private readonly pendingClaimBatchSize: number;
   private recoveryTimer: ReturnType<typeof setInterval> | undefined;
+  private recoveryRunning = false;
 
   constructor(
     private readonly config: ConfigService,
@@ -42,6 +48,26 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       "app.redis.recoveryIntervalMs",
       30_000,
     );
+    this.retryDelayBaseMs = this.config.get<number>(
+      "app.redis.retryDelayBaseMs",
+      5_000,
+    );
+    this.retryDelayMaxMs = this.config.get<number>(
+      "app.redis.retryDelayMaxMs",
+      60_000,
+    );
+    this.retryPromotionBatchSize = this.config.get<number>(
+      "app.redis.retryPromotionBatchSize",
+      50,
+    );
+    this.pendingClaimMinIdleMs = this.config.get<number>(
+      "app.redis.pendingClaimMinIdleMs",
+      60_000,
+    );
+    this.pendingClaimBatchSize = this.config.get<number>(
+      "app.redis.pendingClaimBatchSize",
+      10,
+    );
   }
 
   onModuleInit(): void {
@@ -49,9 +75,9 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     if (!enabled) {
       return;
     }
-    void this.recoverExpiredJobs();
+    void this.recoverQueueState();
     this.recoveryTimer = setInterval(() => {
-      void this.recoverExpiredJobs();
+      void this.recoverQueueState();
     }, this.recoveryIntervalMs);
     for (let index = 0; index < this.concurrency; index += 1) {
       void this.workLoop();
@@ -124,11 +150,15 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       stopped: this.stopped,
       concurrency: this.concurrency,
       queueName: this.queue.getQueueName(),
+      retryQueueName: this.queue.getRetryQueueName(),
       deadLetterQueueName: this.queue.getDeadLetterQueueName(),
       consumerGroup: this.queue.getConsumerGroup(),
       leaseMs: this.leaseMs,
       heartbeatIntervalMs: this.heartbeatIntervalMs,
       recoveryIntervalMs: this.recoveryIntervalMs,
+      retryDelayBaseMs: this.retryDelayBaseMs,
+      retryDelayMaxMs: this.retryDelayMaxMs,
+      pendingClaimMinIdleMs: this.pendingClaimMinIdleMs,
     };
 
     try {
@@ -138,6 +168,8 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
         queueAvailable: true,
         queueDepth: {
           pending: depth.pending,
+          consumerPending: depth.consumerPending,
+          delayed: depth.delayed,
           deadLetter: depth.deadLetter,
         },
       };
@@ -147,6 +179,8 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
         queueAvailable: false,
         queueDepth: {
           pending: 0,
+          consumerPending: 0,
+          delayed: 0,
           deadLetter: 0,
         },
       };
@@ -245,10 +279,13 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       }
 
       if (attempted.attempts < attempted.maxAttempts) {
-        await this.queue.enqueue({
-          tenantId: attempted.tenantId,
-          jobId: attempted.id,
-        });
+        await this.queue.enqueueDelayed(
+          {
+            tenantId: attempted.tenantId,
+            jobId: attempted.id,
+          },
+          this.retryDelayForAttempt(attempted.attempts),
+        );
         return;
       }
 
@@ -267,6 +304,41 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     } finally {
       clearInterval(heartbeat);
       await this.rag.releaseIndexingJobLease(attempted);
+    }
+  }
+
+  private async recoverQueueState(): Promise<void> {
+    if (this.stopped || this.recoveryRunning) {
+      return;
+    }
+
+    this.recoveryRunning = true;
+    try {
+      await this.queue.promoteDueDelayed(this.retryPromotionBatchSize);
+      await this.recoverPendingMessages();
+      await this.recoverExpiredJobs();
+    } catch {
+      // Recovery is best effort; the next interval will retry.
+    } finally {
+      this.recoveryRunning = false;
+    }
+  }
+
+  private async recoverPendingMessages(): Promise<void> {
+    const messages = await this.queue.claimPending(
+      this.workerId,
+      this.pendingClaimMinIdleMs,
+      this.pendingClaimBatchSize,
+    );
+    for (const message of messages) {
+      if (this.stopped) {
+        return;
+      }
+      const job = await this.rag.getIndexingJob(message.tenantId, message.jobId);
+      if (job) {
+        await this.processJob(job);
+      }
+      await this.queue.ack(message);
     }
   }
 
@@ -289,6 +361,11 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     } catch {
       // Recovery is best effort; the next interval will retry.
     }
+  }
+
+  private retryDelayForAttempt(attempt: number): number {
+    const multiplier = 2 ** Math.max(attempt - 1, 0);
+    return Math.min(this.retryDelayBaseMs * multiplier, this.retryDelayMaxMs);
   }
 
   private nextLeaseUntil(): Date {

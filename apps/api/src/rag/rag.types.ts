@@ -120,10 +120,13 @@ export type IndexingWorkerStatus = {
   stopped: boolean;
   concurrency: number;
   queueName: string;
+  retryQueueName: string;
   deadLetterQueueName: string;
   consumerGroup: string;
   queueDepth: {
     pending: number;
+    consumerPending: number;
+    delayed: number;
     deadLetter: number;
   };
   queueAvailable: boolean;
@@ -131,6 +134,9 @@ export type IndexingWorkerStatus = {
   leaseMs: number;
   heartbeatIntervalMs: number;
   recoveryIntervalMs: number;
+  retryDelayBaseMs: number;
+  retryDelayMaxMs: number;
+  pendingClaimMinIdleMs: number;
 };
 
 export type CreateIndexingJobInput = {

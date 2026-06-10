@@ -37,15 +37,21 @@ GET /api/knowledge/reindex/worker/status
 - stopped
 - concurrency
 - queueName
+- retryQueueName
 - deadLetterQueueName
 - consumerGroup
 - queueDepth.pending
+- queueDepth.consumerPending
+- queueDepth.delayed
 - queueDepth.deadLetter
 - queueAvailable
 - queueError
 - leaseMs
 - heartbeatIntervalMs
 - recoveryIntervalMs
+- retryDelayBaseMs
+- retryDelayMaxMs
+- pendingClaimMinIdleMs
 
 ### Stuck Jobs
 
@@ -114,6 +120,8 @@ attributes：
 
 - worker status API
 - queue depth
+- delayed queue depth
+- consumer pending depth
 - Redis unavailable status fallback
 - stuck job query
 - dead-letter list API
@@ -121,6 +129,8 @@ attributes：
 - replay audit trace
 - enqueue audit trace
 - tenant filter
+- delayed retry status fields
+- pending recovery status fields
 
 未完成：
 
@@ -132,10 +142,10 @@ attributes：
 
 ## 下一步
 
-建议下一步实现 `Delayed Retry / Pending Recovery`：
+建议下一步实现 `Queue Metrics / Dashboard`：
 
-1. 增加 delayed retry
-2. 使用 XPENDING / XCLAIM 恢复 pending messages
-3. 增加 queue dashboard
-4. 增加 admin operation reason
-5. 后续可替换 BullMQ
+1. 增加 queue metrics endpoint
+2. 增加 pending / delayed / dead-letter 分布指标
+3. 增加 worker active heartbeat 指标
+4. 增加 recovery action trace
+5. 增加 admin operation reason

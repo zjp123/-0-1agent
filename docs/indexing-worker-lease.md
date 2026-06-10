@@ -102,19 +102,19 @@ POST /api/knowledge/reindex/jobs/:jobId/replay
 - dead-letter replay API
 - lease migration
 - Redis Streams consumer group
+- delayed retry
+- Redis pending entry recovery
 
 未完成：
 
-- delayed retry
-- Redis pending entry recovery
 - queue dashboard
 
 ## 下一步
 
-建议下一步实现 `Delayed Retry / Pending Recovery`：
+建议下一步实现 `Queue Metrics / Dashboard`：
 
-1. 失败重试不要立即入队，增加延迟
-2. 使用 XPENDING 查看 pending messages
-3. 使用 XCLAIM / XAUTOCLAIM 恢复超时 pending
-4. 增加 queue dashboard
+1. 增加 queue metrics endpoint
+2. 增加 pending / delayed / dead-letter 分布指标
+3. 增加 worker active heartbeat 指标
+4. 增加 recovery action trace
 5. 后续评估 BullMQ 替换
