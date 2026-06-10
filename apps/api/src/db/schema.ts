@@ -161,6 +161,8 @@ export const indexingJobs = pgTable(
     processedChunks: integer("processed_chunks").notNull().default(0),
     failedChunks: integer("failed_chunks").notNull().default(0),
     error: text("error"),
+    workerId: varchar("worker_id", { length: 160 }),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     startedAt: timestamp("started_at", { withTimezone: true }),
     heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),

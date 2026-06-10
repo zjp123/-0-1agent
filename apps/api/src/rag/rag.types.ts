@@ -95,6 +95,8 @@ export type IndexingJob = {
   processedChunks: number;
   failedChunks: number;
   error?: string;
+  workerId?: string;
+  leaseUntil?: string;
   metadata: Record<string, unknown>;
   startedAt?: string;
   heartbeatAt?: string;
@@ -124,9 +126,22 @@ export interface IndexingJobStore {
   create(input: CreateIndexingJobInput): Promise<IndexingJob>;
   get(tenantId: string, jobId: string): Promise<IndexingJob | undefined>;
   list(tenantId: string): Promise<IndexingJob[]>;
+  findExpiredRunningJobs(now: Date): Promise<IndexingJob[]>;
+  acquireLease(input: {
+    tenantId: string;
+    jobId: string;
+    workerId: string;
+    leaseUntil: Date;
+  }): Promise<IndexingJob | undefined>;
+  releaseLease(tenantId: string, jobId: string): Promise<void>;
   incrementAttempts(tenantId: string, jobId: string): Promise<IndexingJob | undefined>;
   markRunning(tenantId: string, jobId: string, totalChunks: number): Promise<void>;
-  heartbeat(tenantId: string, jobId: string): Promise<void>;
+  heartbeat(input: {
+    tenantId: string;
+    jobId: string;
+    workerId: string;
+    leaseUntil: Date;
+  }): Promise<void>;
   markProgress(
     tenantId: string,
     jobId: string,
@@ -152,6 +167,7 @@ export interface IndexingJobStore {
     error: string,
     metadata: Record<string, unknown>,
   ): Promise<void>;
+  replayDeadLetter(tenantId: string, jobId: string): Promise<IndexingJob | undefined>;
   cancel(tenantId: string, jobId: string): Promise<IndexingJob | undefined>;
 }
 

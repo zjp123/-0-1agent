@@ -22,6 +22,13 @@
       "when": 1781076177075,
       "tag": "0002_milky_smiling_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781076944763,
+      "tag": "0003_grey_gunslinger",
+      "breakpoints": true
     }
   ]
 }

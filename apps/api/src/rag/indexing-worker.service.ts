@@ -9,6 +9,11 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
   private stopped = false;
   private readonly maxAttempts: number;
   private readonly heartbeatIntervalMs: number;
+  private readonly workerId: string;
+  private readonly concurrency: number;
+  private readonly leaseMs: number;
+  private readonly recoveryIntervalMs: number;
+  private recoveryTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     private readonly config: ConfigService,
@@ -20,6 +25,16 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       "app.redis.heartbeatIntervalMs",
       10_000,
     );
+    this.workerId = this.config.get<string>(
+      "app.redis.workerId",
+      crypto.randomUUID(),
+    );
+    this.concurrency = this.config.get<number>("app.redis.concurrency", 1);
+    this.leaseMs = this.config.get<number>("app.redis.leaseMs", 60_000);
+    this.recoveryIntervalMs = this.config.get<number>(
+      "app.redis.recoveryIntervalMs",
+      30_000,
+    );
   }
 
   onModuleInit(): void {
@@ -27,11 +42,20 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     if (!enabled) {
       return;
     }
-    void this.workLoop();
+    void this.recoverExpiredJobs();
+    this.recoveryTimer = setInterval(() => {
+      void this.recoverExpiredJobs();
+    }, this.recoveryIntervalMs);
+    for (let index = 0; index < this.concurrency; index += 1) {
+      void this.workLoop();
+    }
   }
 
   onModuleDestroy(): void {
     this.stopped = true;
+    if (this.recoveryTimer) {
+      clearInterval(this.recoveryTimer);
+    }
   }
 
   async enqueueReindexJob(input: {
@@ -48,8 +72,26 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
         jobId: job.id,
       });
     } catch {
-      void this.rag.runReindexJob(job);
+      void this.processJob(job);
     }
+    return job;
+  }
+
+  async replayDeadLetterJob(input: {
+    tenantId: string;
+    jobId: string;
+  }): Promise<Awaited<ReturnType<RagService["replayDeadLetterIndexingJob"]>>> {
+    const job = await this.rag.replayDeadLetterIndexingJob(
+      input.tenantId,
+      input.jobId,
+    );
+    if (!job) {
+      return undefined;
+    }
+    await this.queue.enqueue({
+      tenantId: job.tenantId,
+      jobId: job.id,
+    });
     return job;
   }
 
@@ -82,7 +124,17 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const attempted = await this.rag.incrementIndexingJobAttempts(job);
+    const leased = await this.rag.acquireIndexingJobLease({
+      tenantId: job.tenantId,
+      jobId: job.id,
+      workerId: this.workerId,
+      leaseUntil: this.nextLeaseUntil(),
+    });
+    if (!leased) {
+      return;
+    }
+
+    const attempted = await this.rag.incrementIndexingJobAttempts(leased);
     if (!attempted) {
       return;
     }
@@ -91,7 +143,11 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     }
 
     const heartbeat = setInterval(() => {
-      void this.rag.heartbeatIndexingJob(attempted);
+      void this.rag.heartbeatIndexingJob({
+        job: attempted,
+        workerId: this.workerId,
+        leaseUntil: this.nextLeaseUntil(),
+      });
     }, this.heartbeatIntervalMs);
 
     try {
@@ -122,7 +178,33 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       }
     } finally {
       clearInterval(heartbeat);
+      await this.rag.releaseIndexingJobLease(attempted);
     }
+  }
+
+  private async recoverExpiredJobs(): Promise<void> {
+    if (this.stopped) {
+      return;
+    }
+
+    try {
+      const expiredJobs = await this.rag.findExpiredIndexingJobs(new Date());
+      for (const job of expiredJobs) {
+        if (this.stopped) {
+          return;
+        }
+        await this.queue.enqueue({
+          tenantId: job.tenantId,
+          jobId: job.id,
+        });
+      }
+    } catch {
+      // Recovery is best effort; the next interval will retry.
+    }
+  }
+
+  private nextLeaseUntil(): Date {
+    return new Date(Date.now() + this.leaseMs);
   }
 
   private async sleep(ms: number): Promise<void> {

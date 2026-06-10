@@ -120,6 +120,23 @@ export class RagController {
     return job;
   }
 
+  @Post("reindex/jobs/:jobId/replay")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:write")
+  async replayDeadLetterJob(
+    @Param("jobId") jobId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<IndexingJob> {
+    const job = await this.indexingWorker.replayDeadLetterJob({
+      tenantId: user.tenantId,
+      jobId,
+    });
+    if (!job) {
+      throw new NotFoundException("Dead-letter indexing job not found");
+    }
+    return job;
+  }
+
   private toRetrieveInput(
     body: RetrieveKnowledgeDto,
     user: RequestUser,

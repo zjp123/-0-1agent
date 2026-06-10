@@ -29,6 +29,10 @@ INDEXING_WORKER_ENABLED=true
 INDEXING_WORKER_BRPOP_TIMEOUT_SECONDS=5
 INDEXING_JOB_MAX_ATTEMPTS=3
 INDEXING_WORKER_HEARTBEAT_INTERVAL_MS=10000
+INDEXING_WORKER_ID=
+INDEXING_WORKER_CONCURRENCY=1
+INDEXING_WORKER_LEASE_MS=60000
+INDEXING_WORKER_RECOVERY_INTERVAL_MS=30000
 ```
 
 ## Queue 协议
@@ -64,12 +68,15 @@ INDEXING_WORKER_HEARTBEAT_INTERVAL_MS=10000
 4. API 返回 job
 5. `IndexingWorkerService` 在模块启动后循环 `BRPOP`
 6. worker 读取 job
-7. worker 增加 attempts
-8. worker 定期写入 heartbeat
-9. worker 调用 `RagService.runReindexJob(job)`
-10. job 状态写回 PostgreSQL
-11. 失败且未超出 maxAttempts 时重新入队
-12. 超出 maxAttempts 时标记 dead-letter
+7. worker acquire lease
+8. worker 增加 attempts
+9. worker 定期写入 heartbeat 并延长 lease
+10. worker 调用 `RagService.runReindexJob(job)`
+11. job 状态写回 PostgreSQL
+12. 失败且未超出 maxAttempts 时重新入队
+13. 超出 maxAttempts 时标记 dead-letter
+
+worker 启动后会定期扫描 lease 过期的 running jobs，并重新入队。
 
 如果 Redis enqueue 失败：
 
@@ -110,19 +117,22 @@ POST /api/knowledge/reindex/jobs/:jobId/cancel
 - dead-letter queue
 - worker heartbeat
 - job cancel
+- worker lease
+- stuck job recovery
+- worker concurrency
+- dead-letter replay API
 
 未完成：
 
-- job lease / visibility timeout
-- 多 worker 并发控制
+- worker metrics
 - Redis Streams / BullMQ
 
 ## 下一步
 
-建议下一步实现 `Worker Lease / Concurrency`：
+建议下一步实现 `Worker Metrics / Admin Ops`：
 
-1. 增加 workerId
-2. 增加 job lease / visibility timeout
-3. 增加并发控制
-4. 增加 stuck job recovery
+1. 增加 worker 状态 API
+2. 增加 queue depth 指标
+3. 增加 stuck job 告警
+4. 增加 dead-letter 列表 API
 5. 后续迁移到 Redis Streams 或 BullMQ

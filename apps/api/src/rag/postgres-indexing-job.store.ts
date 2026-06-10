@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lte, or, sql } from "drizzle-orm";
 
 import { DRIZZLE_DB } from "../db/database.constants.js";
 import type { Database } from "../db/database.types.js";
@@ -75,6 +75,73 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
     return rows.map((row) => this.toIndexingJob(row, tenantId));
   }
 
+  async findExpiredRunningJobs(now: Date): Promise<IndexingJob[]> {
+    const rows = await this.db
+      .select()
+      .from(indexingJobs)
+      .where(
+        and(
+          eq(indexingJobs.status, "running"),
+          or(
+            lte(indexingJobs.leaseUntil, now),
+            sql`${indexingJobs.leaseUntil} is null`,
+          ),
+        ),
+      )
+      .orderBy(desc(indexingJobs.updatedAt));
+
+    return rows.map((row) => this.toIndexingJob(row, this.externalTenantId(row)));
+  }
+
+  async acquireLease(input: {
+    tenantId: string;
+    jobId: string;
+    workerId: string;
+    leaseUntil: Date;
+  }): Promise<IndexingJob | undefined> {
+    const resolvedTenantId = await this.identity.ensureTenant(input.tenantId);
+    const now = new Date();
+    const [updated] = await this.db
+      .update(indexingJobs)
+      .set({
+        workerId: input.workerId,
+        leaseUntil: input.leaseUntil,
+        heartbeatAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(indexingJobs.tenantId, resolvedTenantId),
+          eq(indexingJobs.id, input.jobId),
+          or(
+            eq(indexingJobs.status, "pending"),
+            and(
+              eq(indexingJobs.status, "failed"),
+              sql`${indexingJobs.deadLetteredAt} is null`,
+            ),
+            and(
+              eq(indexingJobs.status, "running"),
+              or(
+                lte(indexingJobs.leaseUntil, now),
+                sql`${indexingJobs.leaseUntil} is null`,
+              ),
+            ),
+          ),
+        ),
+      )
+      .returning();
+
+    return updated ? this.toIndexingJob(updated, input.tenantId) : undefined;
+  }
+
+  async releaseLease(tenantId: string, jobId: string): Promise<void> {
+    await this.updateByTenantAndJob(tenantId, jobId, {
+      workerId: null,
+      leaseUntil: null,
+      updatedAt: new Date(),
+    });
+  }
+
   async markRunning(
     tenantId: string,
     jobId: string,
@@ -83,6 +150,9 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
     await this.updateByTenantAndJob(tenantId, jobId, {
       status: "running" as const,
       totalChunks,
+      error: null,
+      completedAt: null,
+      deadLetteredAt: null,
       startedAt: new Date(),
       updatedAt: new Date(),
     });
@@ -110,11 +180,27 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
     return updated ? this.toIndexingJob(updated, tenantId) : undefined;
   }
 
-  async heartbeat(tenantId: string, jobId: string): Promise<void> {
-    await this.updateByTenantAndJob(tenantId, jobId, {
-      heartbeatAt: new Date(),
-      updatedAt: new Date(),
-    });
+  async heartbeat(input: {
+    tenantId: string;
+    jobId: string;
+    workerId: string;
+    leaseUntil: Date;
+  }): Promise<void> {
+    const resolvedTenantId = await this.identity.ensureTenant(input.tenantId);
+    await this.db
+      .update(indexingJobs)
+      .set({
+        heartbeatAt: new Date(),
+        leaseUntil: input.leaseUntil,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(indexingJobs.tenantId, resolvedTenantId),
+          eq(indexingJobs.id, input.jobId),
+          eq(indexingJobs.workerId, input.workerId),
+        ),
+      );
   }
 
   async markCompleted(
@@ -179,6 +265,40 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
     });
   }
 
+  async replayDeadLetter(
+    tenantId: string,
+    jobId: string,
+  ): Promise<IndexingJob | undefined> {
+    const resolvedTenantId = await this.identity.ensureTenant(tenantId);
+    const [updated] = await this.db
+      .update(indexingJobs)
+      .set({
+        status: "pending" as const,
+        attempts: 0,
+        processedChunks: 0,
+        failedChunks: 0,
+        error: null,
+        workerId: null,
+        leaseUntil: null,
+        heartbeatAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        deadLetteredAt: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(indexingJobs.tenantId, resolvedTenantId),
+          eq(indexingJobs.id, jobId),
+          eq(indexingJobs.status, "failed"),
+          sql`${indexingJobs.deadLetteredAt} is not null`,
+        ),
+      )
+      .returning();
+
+    return updated ? this.toIndexingJob(updated, tenantId) : undefined;
+  }
+
   async cancel(
     tenantId: string,
     jobId: string,
@@ -239,6 +359,12 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+    if (row.workerId) {
+      job.workerId = row.workerId;
+    }
+    if (row.leaseUntil) {
+      job.leaseUntil = row.leaseUntil.toISOString();
+    }
     const createdBy = metadata.externalUserId;
     if (typeof createdBy === "string") {
       job.createdBy = createdBy;
@@ -264,5 +390,11 @@ export class PostgresIndexingJobStore implements IndexingJobStore {
       job.deadLetteredAt = row.deadLetteredAt.toISOString();
     }
     return job;
+  }
+
+  private externalTenantId(row: typeof indexingJobs.$inferSelect): string {
+    const metadata = row.metadata;
+    const tenantId = metadata.externalTenantId;
+    return typeof tenantId === "string" ? tenantId : row.tenantId;
   }
 }

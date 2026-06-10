@@ -102,12 +102,38 @@ export class RagService {
     return this.indexingJobs.get(tenantId, jobId);
   }
 
+  findExpiredIndexingJobs(now: Date): Promise<IndexingJob[]> {
+    return this.indexingJobs.findExpiredRunningJobs(now);
+  }
+
+  acquireIndexingJobLease(input: {
+    tenantId: string;
+    jobId: string;
+    workerId: string;
+    leaseUntil: Date;
+  }): Promise<IndexingJob | undefined> {
+    return this.indexingJobs.acquireLease(input);
+  }
+
+  releaseIndexingJobLease(job: IndexingJob): Promise<void> {
+    return this.indexingJobs.releaseLease(job.tenantId, job.id);
+  }
+
   incrementIndexingJobAttempts(job: IndexingJob): Promise<IndexingJob | undefined> {
     return this.indexingJobs.incrementAttempts(job.tenantId, job.id);
   }
 
-  heartbeatIndexingJob(job: IndexingJob): Promise<void> {
-    return this.indexingJobs.heartbeat(job.tenantId, job.id);
+  heartbeatIndexingJob(input: {
+    job: IndexingJob;
+    workerId: string;
+    leaseUntil: Date;
+  }): Promise<void> {
+    return this.indexingJobs.heartbeat({
+      tenantId: input.job.tenantId,
+      jobId: input.job.id,
+      workerId: input.workerId,
+      leaseUntil: input.leaseUntil,
+    });
   }
 
   cancelIndexingJob(
@@ -127,6 +153,13 @@ export class RagService {
         deadLettered: true,
       },
     );
+  }
+
+  replayDeadLetterIndexingJob(
+    tenantId: string,
+    jobId: string,
+  ): Promise<IndexingJob | undefined> {
+    return this.indexingJobs.replayDeadLetter(tenantId, jobId);
   }
 
   async runReindexJob(job: IndexingJob): Promise<RunIndexingJobResult> {
