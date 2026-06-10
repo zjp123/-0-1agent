@@ -135,6 +135,7 @@ npm run db:push
 - `messages`
 - `knowledge_documents`
 - `knowledge_chunks`
+- `indexing_jobs`
 - `workflows`
 - `workflow_steps`
 - `evaluation_cases`
@@ -147,6 +148,7 @@ npm run db:push
 - `workflow_status`
 - `workflow_step_status`
 - `evaluation_case_type`
+- `indexing_job_status`
 
 ## 当前边界
 
@@ -158,6 +160,7 @@ npm run db:push
 - Qdrant 服务
 - Drizzle config
 - schema 初版
+- indexing_jobs migration
 - package scripts
 - env 示例
 - Qdrant HTTP client 基础实现
@@ -171,7 +174,7 @@ npm run db:push
 
 - 实际 migrations 生成
 - Redis rate limiter
-- Redis queue / async jobs
+- Redis queue / distributed workers
 - 数据迁移脚本
 
 ## Database Connection

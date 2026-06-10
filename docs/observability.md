@@ -46,6 +46,8 @@ type TraceEvent = {
 - `agent.run.started`
 - `rag.retrieved`
 - `rag.vector.failed`
+- `rag.indexing.completed`
+- `rag.indexing.failed`
 - `agent.context.built`
 - `model.completed`
 - `model.failed`
@@ -59,11 +61,12 @@ type TraceEvent = {
 1. Agent run 开始
 2. RAG 检索完成
 3. RAG vector search 失败并 fallback
-4. Memory & Context 构造完成
-5. 每次模型调用成功
-6. 模型调用失败
-7. 每次工具调用完成
-8. Agent run 完成
+4. RAG indexing job 完成或失败
+5. Memory & Context 构造完成
+6. 每次模型调用成功
+7. 模型调用失败
+8. 每次工具调用完成
+9. Agent run 完成
 
 这些事件可以通过同一个 `requestId` 串起来。
 
@@ -99,6 +102,7 @@ GET /api/observability/traces?requestId=00000000-0000-4000-8000-000000000000
 - Agent Runtime trace 接入
 - RAG/context/model/tool/run summary 事件
 - RAG vector fallback trace
+- RAG indexing trace
 
 未完成：
 

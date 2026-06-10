@@ -11,19 +11,24 @@ import type {
   VectorPoint,
   VectorStore,
 } from "../vector-store/vector-store.types.js";
-import { KNOWLEDGE_STORE } from "./knowledge.constants.js";
+import {
+  INDEXING_JOB_STORE,
+  KNOWLEDGE_STORE,
+} from "./knowledge.constants.js";
 import { KnowledgeChunkerService } from "./knowledge-chunker.service.js";
 import type {
+  IndexingJob,
+  IndexingJobStore,
   IngestKnowledgeInput,
   KnowledgeDocument,
   KnowledgeIngestResult,
-  KnowledgeReindexResult,
   KnowledgeSearchResult,
   KnowledgeStore,
   RetrieveKnowledgeInput,
 } from "./rag.types.js";
 
 const VECTOR_CANDIDATE_MULTIPLIER = 3;
+const INDEXING_BATCH_SIZE = 64;
 
 export type RagStatus = {
   enabled: boolean;
@@ -43,6 +48,8 @@ export class RagService {
   constructor(
     private readonly chunker: KnowledgeChunkerService,
     @Inject(KNOWLEDGE_STORE) private readonly store: KnowledgeStore,
+    @Inject(INDEXING_JOB_STORE)
+    private readonly indexingJobs: IndexingJobStore,
     @Inject(EMBEDDING_PROVIDER)
     private readonly embeddingProvider: EmbeddingProvider,
     @Inject(VECTOR_STORE) private readonly vectorStore: VectorStore,
@@ -62,35 +69,102 @@ export class RagService {
     return this.store.listDocuments(tenantId);
   }
 
-  async reindexTenant(tenantId: string): Promise<KnowledgeReindexResult> {
-    if (!this.vectorStore.isEnabled()) {
-      return {
-        tenantId,
-        status: "skipped",
-        chunkCount: 0,
-        vectorStoreEnabled: false,
+  async createReindexJob(input: {
+    tenantId: string;
+    userId: string;
+  }): Promise<IndexingJob> {
+    const job = await this.indexingJobs.create({
+      tenantId: input.tenantId,
+      userId: input.userId,
+      type: "tenant_reindex",
+      metadata: {
         collection: this.vectorStore.getCollectionName(),
         embeddingModel: this.embeddingProvider.getModel(),
         dimensions: this.embeddingProvider.getDimension(),
-      };
-    }
+        vectorStoreEnabled: this.vectorStore.isEnabled(),
+      },
+    });
 
-    const chunks = await this.store.listChunks(tenantId);
-    await this.vectorStore.ensureCollection();
-    await this.vectorStore.ensurePayloadIndexes();
-    if (chunks.length > 0) {
-      await this.indexChunks(chunks);
-    }
+    void this.runReindexJob(job);
+    return job;
+  }
 
-    return {
-      tenantId,
-      status: "completed",
-      chunkCount: chunks.length,
-      vectorStoreEnabled: true,
-      collection: this.vectorStore.getCollectionName(),
-      embeddingModel: this.embeddingProvider.getModel(),
-      dimensions: this.embeddingProvider.getDimension(),
-    };
+  listIndexingJobs(tenantId: string): Promise<IndexingJob[]> {
+    return this.indexingJobs.list(tenantId);
+  }
+
+  getIndexingJob(
+    tenantId: string,
+    jobId: string,
+  ): Promise<IndexingJob | undefined> {
+    return this.indexingJobs.get(tenantId, jobId);
+  }
+
+  private async runReindexJob(job: IndexingJob): Promise<void> {
+    const metadata = this.indexingMetadata(job);
+    try {
+      if (!this.vectorStore.isEnabled()) {
+        await this.indexingJobs.markCompleted(job.tenantId, job.id, 0, {
+          ...metadata,
+          skippedReason: "vector_store_disabled",
+        });
+        this.recordIndexingTrace(job, "rag.indexing.completed", {
+          status: "skipped",
+          processedChunks: 0,
+          totalChunks: 0,
+        });
+        return;
+      }
+
+      const chunks = await this.store.listChunks(job.tenantId);
+      await this.indexingJobs.markRunning(job.tenantId, job.id, chunks.length);
+      await this.vectorStore.ensureCollection();
+      await this.vectorStore.ensurePayloadIndexes();
+
+      let processedChunks = 0;
+      for (let index = 0; index < chunks.length; index += INDEXING_BATCH_SIZE) {
+        const batch = chunks.slice(index, index + INDEXING_BATCH_SIZE);
+        await this.indexChunks(batch);
+        processedChunks += batch.length;
+        await this.indexingJobs.markProgress(
+          job.tenantId,
+          job.id,
+          processedChunks,
+        );
+      }
+
+      await this.indexingJobs.markCompleted(job.tenantId, job.id, processedChunks, {
+        ...metadata,
+        totalChunks: chunks.length,
+      });
+      this.recordIndexingTrace(job, "rag.indexing.completed", {
+        status: "completed",
+        processedChunks,
+        totalChunks: chunks.length,
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown indexing error";
+      const current = await this.indexingJobs.get(job.tenantId, job.id);
+      const processedChunks = current?.processedChunks ?? 0;
+      await this.indexingJobs.markFailed(
+        job.tenantId,
+        job.id,
+        processedChunks,
+        Math.max(1, (current?.totalChunks ?? 0) - processedChunks),
+        errorMessage,
+        {
+          ...metadata,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        },
+      );
+      this.recordIndexingTrace(job, "rag.indexing.failed", {
+        status: "failed",
+        processedChunks,
+        totalChunks: current?.totalChunks ?? 0,
+        errorMessage,
+      });
+    }
   }
 
   async retrieve(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]> {
@@ -343,6 +417,40 @@ export class RagService {
     };
     if (input.userId) {
       event.userId = input.userId;
+    }
+    this.observability.record(event);
+  }
+
+  private indexingMetadata(job: IndexingJob): Record<string, unknown> {
+    return {
+      ...job.metadata,
+      collection: this.vectorStore.getCollectionName(),
+      embeddingModel: this.embeddingProvider.getModel(),
+      dimensions: this.embeddingProvider.getDimension(),
+      vectorStoreEnabled: this.vectorStore.isEnabled(),
+    };
+  }
+
+  private recordIndexingTrace(
+    job: IndexingJob,
+    type: "rag.indexing.completed" | "rag.indexing.failed",
+    attributes: Record<string, string | number | boolean | null>,
+  ): void {
+    const event: Parameters<ObservabilityService["record"]>[0] = {
+      requestId: `indexing-${job.id}`,
+      type,
+      tenantId: job.tenantId,
+      attributes: {
+        jobId: job.id,
+        jobType: job.type,
+        collection: this.vectorStore.getCollectionName(),
+        embeddingModel: this.embeddingProvider.getModel(),
+        dimensions: this.embeddingProvider.getDimension(),
+        ...attributes,
+      },
+    };
+    if (job.createdBy) {
+      event.userId = job.createdBy;
     }
     this.observability.record(event);
   }

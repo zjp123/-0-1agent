@@ -60,6 +60,8 @@ export class ObservabilityService {
         "agent.context.built",
         "rag.retrieved",
         "rag.vector.failed",
+        "rag.indexing.completed",
+        "rag.indexing.failed",
         "model.completed",
         "model.failed",
         "tool.completed",

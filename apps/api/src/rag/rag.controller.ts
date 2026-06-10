@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -9,9 +17,9 @@ import { IngestKnowledgeDto } from "./dto/ingest-knowledge.dto.js";
 import { RetrieveKnowledgeDto } from "./dto/retrieve-knowledge.dto.js";
 import { RagService } from "./rag.service.js";
 import type {
+  IndexingJob,
   KnowledgeDocument,
   KnowledgeIngestResult,
-  KnowledgeReindexResult,
   KnowledgeSearchResult,
   IngestKnowledgeInput,
   RetrieveKnowledgeInput,
@@ -66,8 +74,32 @@ export class RagController {
   @Post("reindex")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("knowledge:write")
-  reindex(@CurrentUser() user: RequestUser): Promise<KnowledgeReindexResult> {
-    return this.rag.reindexTenant(user.tenantId);
+  reindex(@CurrentUser() user: RequestUser): Promise<IndexingJob> {
+    return this.rag.createReindexJob({
+      tenantId: user.tenantId,
+      userId: user.userId,
+    });
+  }
+
+  @Get("reindex/jobs")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  listIndexingJobs(@CurrentUser() user: RequestUser): Promise<IndexingJob[]> {
+    return this.rag.listIndexingJobs(user.tenantId);
+  }
+
+  @Get("reindex/jobs/:jobId")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  async getIndexingJob(
+    @Param("jobId") jobId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<IndexingJob> {
+    const job = await this.rag.getIndexingJob(user.tenantId, jobId);
+    if (!job) {
+      throw new NotFoundException("Indexing job not found");
+    }
+    return job;
   }
 
   private toRetrieveInput(

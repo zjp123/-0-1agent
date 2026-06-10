@@ -1,1 +1,2 @@
 export const KNOWLEDGE_STORE = Symbol("KNOWLEDGE_STORE");
+export const INDEXING_JOB_STORE = Symbol("INDEXING_JOB_STORE");

@@ -74,6 +74,60 @@ export type KnowledgeReindexResult = {
   dimensions: number;
 };
 
+export type IndexingJobStatus = "pending" | "running" | "completed" | "failed";
+
+export type IndexingJobType = "tenant_reindex";
+
+export type IndexingJob = {
+  id: string;
+  tenantId: string;
+  createdBy?: string;
+  type: IndexingJobType;
+  status: IndexingJobStatus;
+  totalChunks: number;
+  processedChunks: number;
+  failedChunks: number;
+  error?: string;
+  metadata: Record<string, unknown>;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateIndexingJobInput = {
+  tenantId: string;
+  userId: string;
+  type: IndexingJobType;
+  metadata: Record<string, unknown>;
+};
+
+export interface IndexingJobStore {
+  create(input: CreateIndexingJobInput): Promise<IndexingJob>;
+  get(tenantId: string, jobId: string): Promise<IndexingJob | undefined>;
+  list(tenantId: string): Promise<IndexingJob[]>;
+  markRunning(tenantId: string, jobId: string, totalChunks: number): Promise<void>;
+  markProgress(
+    tenantId: string,
+    jobId: string,
+    processedChunks: number,
+  ): Promise<void>;
+  markCompleted(
+    tenantId: string,
+    jobId: string,
+    processedChunks: number,
+    metadata: Record<string, unknown>,
+  ): Promise<void>;
+  markFailed(
+    tenantId: string,
+    jobId: string,
+    processedChunks: number,
+    failedChunks: number,
+    error: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void>;
+}
+
 export interface KnowledgeStore {
   saveDocument(result: KnowledgeIngestResult): Promise<void>;
   listDocuments(tenantId: string): Promise<KnowledgeDocument[]>;

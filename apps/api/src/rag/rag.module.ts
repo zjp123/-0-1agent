@@ -3,8 +3,12 @@ import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../db/database.module.js";
 import { ObservabilityModule } from "../observability/observability.module.js";
 import { VectorStoreModule } from "../vector-store/vector-store.module.js";
-import { KNOWLEDGE_STORE } from "./knowledge.constants.js";
+import {
+  INDEXING_JOB_STORE,
+  KNOWLEDGE_STORE,
+} from "./knowledge.constants.js";
 import { KnowledgeChunkerService } from "./knowledge-chunker.service.js";
+import { PostgresIndexingJobStore } from "./postgres-indexing-job.store.js";
 import { PostgresKnowledgeStore } from "./postgres-knowledge.store.js";
 import { RagController } from "./rag.controller.js";
 import { RagService } from "./rag.service.js";
@@ -15,9 +19,14 @@ import { RagService } from "./rag.service.js";
   providers: [
     KnowledgeChunkerService,
     PostgresKnowledgeStore,
+    PostgresIndexingJobStore,
     {
       provide: KNOWLEDGE_STORE,
       useExisting: PostgresKnowledgeStore,
+    },
+    {
+      provide: INDEXING_JOB_STORE,
+      useExisting: PostgresIndexingJobStore,
     },
     RagService,
   ],

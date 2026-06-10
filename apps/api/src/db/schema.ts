@@ -41,6 +41,13 @@ export const evaluationCaseTypeEnum = pgEnum("evaluation_case_type", [
   "tool_execution",
 ]);
 
+export const indexingJobStatusEnum = pgEnum("indexing_job_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
+
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 160 }).notNull(),
@@ -135,6 +142,32 @@ export const knowledgeChunks = pgTable(
     tenantDocumentIdx: index("knowledge_chunks_tenant_document_idx").on(
       table.tenantId,
       table.documentId,
+    ),
+  }),
+);
+
+export const indexingJobs = pgTable(
+  "indexing_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    createdBy: uuid("created_by").references(() => users.id),
+    type: varchar("type", { length: 80 }).notNull(),
+    status: indexingJobStatusEnum("status").notNull().default("pending"),
+    totalChunks: integer("total_chunks").notNull().default(0),
+    processedChunks: integer("processed_chunks").notNull().default(0),
+    failedChunks: integer("failed_chunks").notNull().default(0),
+    error: text("error"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantStatusIdx: index("indexing_jobs_tenant_status_idx").on(
+      table.tenantId,
+      table.status,
     ),
   }),
 );

@@ -200,6 +200,10 @@ GET /api/knowledge/documents
 - vector failure fallback
 - `rag.vector.failed` trace
 - tenant re-index API
+- async indexing job
+- indexing job status query
+- `rag.indexing.completed` trace
+- `rag.indexing.failed` trace
 - Agent Runtime 接入
 - Memory & Context 注入点
 
@@ -214,10 +218,10 @@ GET /api/knowledge/documents
 
 ## 下一步
 
-建议下一步实现 `异步 Indexing Job`：
+建议下一步实现 `Redis Queue Worker`：
 
-1. 将 re-index 从同步请求迁移为异步 job
-2. 增加 job 状态查询
+1. 将进程内 worker 迁移到 Redis queue
+2. 支持多实例 worker 消费
 3. indexing 失败重试
-4. indexing trace
-5. 后续接 Redis queue
+4. dead-letter
+5. worker heartbeat
