@@ -368,6 +368,119 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  async getPrometheusMetrics(): Promise<string> {
+    const alerts = await this.getAlerts();
+    const metrics = alerts.metrics;
+    const labels = {
+      worker_id: metrics.workerId,
+      queue: metrics.queueName,
+      consumer_group: metrics.consumerGroup,
+    };
+    const lines: string[] = [];
+
+    this.addMetricHeader(
+      lines,
+      "enterprise_agent_indexing_worker_up",
+      "gauge",
+      "Worker process is enabled and not stopped.",
+    );
+    this.addMetric(
+      lines,
+      "enterprise_agent_indexing_worker_up",
+      metrics.enabled && !metrics.stopped ? 1 : 0,
+      labels,
+    );
+    this.addMetricHeader(
+      lines,
+      "enterprise_agent_indexing_queue_available",
+      "gauge",
+      "Redis indexing queue availability.",
+    );
+    this.addMetric(
+      lines,
+      "enterprise_agent_indexing_queue_available",
+      metrics.queueAvailable ? 1 : 0,
+      labels,
+    );
+    this.addMetricHeader(
+      lines,
+      "enterprise_agent_indexing_recovery_running",
+      "gauge",
+      "Whether the recovery loop is currently running.",
+    );
+    this.addMetric(
+      lines,
+      "enterprise_agent_indexing_recovery_running",
+      metrics.recoveryRunning ? 1 : 0,
+      labels,
+    );
+    this.addMetricHeader(
+      lines,
+      "enterprise_agent_indexing_worker_uptime_ms",
+      "gauge",
+      "Worker process uptime in milliseconds.",
+    );
+    this.addMetric(
+      lines,
+      "enterprise_agent_indexing_worker_uptime_ms",
+      metrics.uptimeMs,
+      labels,
+    );
+
+    this.addMetricHeader(
+      lines,
+      "enterprise_agent_indexing_queue_depth",
+      "gauge",
+      "Indexing queue depth by queue kind.",
+    );
+    this.addMetric(lines, "enterprise_agent_indexing_queue_depth", metrics.queueDepth.pending, {
+      ...labels,
+      kind: "stream",
+    });
+    this.addMetric(lines, "enterprise_agent_indexing_queue_depth", metrics.queueDepth.consumerPending, {
+      ...labels,
+      kind: "consumer_pending",
+    });
+    this.addMetric(lines, "enterprise_agent_indexing_queue_depth", metrics.queueDepth.delayed, {
+      ...labels,
+      kind: "delayed",
+    });
+    this.addMetric(lines, "enterprise_agent_indexing_queue_depth", metrics.queueDepth.deadLetter, {
+      ...labels,
+      kind: "dead_letter",
+    });
+
+    this.addMetricHeader(
+      lines,
+      "enterprise_agent_indexing_worker_counter_total",
+      "counter",
+      "Indexing worker process-level counters.",
+    );
+    for (const [counter, value] of Object.entries(metrics.counters)) {
+      this.addMetric(lines, "enterprise_agent_indexing_worker_counter_total", value, {
+        ...labels,
+        counter,
+      });
+    }
+
+    this.addMetricHeader(
+      lines,
+      "enterprise_agent_indexing_alerts",
+      "gauge",
+      "Current indexing alert count by severity.",
+    );
+    this.addMetric(lines, "enterprise_agent_indexing_alerts", alerts.alerts.filter((alert) => alert.severity === "warning").length, {
+      ...labels,
+      severity: "warning",
+    });
+    this.addMetric(lines, "enterprise_agent_indexing_alerts", alerts.alerts.filter((alert) => alert.severity === "critical").length, {
+      ...labels,
+      severity: "critical",
+    });
+
+    return `${lines.join("\n")}\n`;
+  }
+
   async replayTenantDeadLetters(input: {
     tenantId: string;
     userId: string;
@@ -691,6 +804,32 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
       value: input.value,
       threshold: input.threshold,
     });
+  }
+
+  private addMetricHeader(
+    lines: string[],
+    name: string,
+    type: "counter" | "gauge",
+    help: string,
+  ): void {
+    lines.push(`# HELP ${name} ${help}`);
+    lines.push(`# TYPE ${name} ${type}`);
+  }
+
+  private addMetric(
+    lines: string[],
+    name: string,
+    value: number,
+    labels: Record<string, string>,
+  ): void {
+    const serializedLabels = Object.entries(labels)
+      .map(([key, labelValue]) => `${key}="${this.escapeMetricLabel(labelValue)}"`)
+      .join(",");
+    lines.push(`${name}{${serializedLabels}} ${value}`);
+  }
+
+  private escapeMetricLabel(value: string): string {
+    return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/"/g, '\\"');
   }
 
   private lastRecoveryAgeMs(

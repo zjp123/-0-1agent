@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   NotFoundException,
   Param,
   Post,
@@ -116,6 +117,14 @@ export class RagController {
   @RequirePermissions("knowledge:read")
   getIndexingWorkerAlerts(): Promise<IndexingWorkerAlerts> {
     return this.indexingWorker.getAlerts();
+  }
+
+  @Get("reindex/worker/prometheus")
+  @Header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:read")
+  getIndexingWorkerPrometheusMetrics(): Promise<string> {
+    return this.indexingWorker.getPrometheusMetrics();
   }
 
   @Get("reindex/jobs/stuck")

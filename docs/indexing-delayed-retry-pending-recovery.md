@@ -138,20 +138,21 @@ PostgreSQL `indexing_jobs` 仍是最终状态源：
 - pending recovery 审计 trace
 - worker alerts API
 - dead-letter replay all / purge
+- Prometheus-style metrics endpoint
 
 未完成：
 
 - queue dashboard UI
-- Prometheus metrics export
+- OpenTelemetry metrics
 - retry delay jitter
 - BullMQ 评估
 
 ## 下一步
 
-建议下一步实现 `Prometheus / OpenTelemetry Metrics Export`：
+建议下一步实现 `Auth / RBAC Enterprise Upgrade`：
 
-1. 增加 Prometheus-style metrics endpoint
-2. 将 worker counters 映射为 metric names
-3. 增加 queue depth gauges
-4. 增加 alert webhook 或外部告警集成
-5. 后续做多 worker 聚合 dashboard
+1. JWT / service token 双模式认证
+2. RBAC role / permission 持久化
+3. tenant isolation 强化
+4. admin 操作 reason/comment
+5. 审计日志查询增强

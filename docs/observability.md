@@ -96,6 +96,14 @@ limit=100
 GET /api/observability/traces?requestId=00000000-0000-4000-8000-000000000000
 ```
 
+### Indexing Prometheus Metrics
+
+```http
+GET /api/knowledge/reindex/worker/prometheus
+```
+
+当前提供 RAG indexing worker 的 Prometheus text exposition 指标。
+
 ## 当前边界
 
 已完成：
@@ -109,12 +117,13 @@ GET /api/observability/traces?requestId=00000000-0000-4000-8000-000000000000
 - RAG indexing trace
 - RAG indexing admin audit trace
 - RAG indexing recovery trace
+- RAG indexing Prometheus metrics endpoint
 
 未完成：
 
 - OpenTelemetry span
 - Pino structured logger
-- Prometheus metrics
+- 全局 Prometheus metrics
 - cost 持久统计
 - trace 与用户/租户权限联动
 - 前端 trace viewer
