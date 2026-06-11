@@ -11,6 +11,8 @@ Auth RBAC Enterprise Upgrade 将认证入口从开发期 API key 模式升级为
 - 集中式 role -> permission 映射
 - tenant claim 校验
 - 生产环境认证配置校验
+- 持久化 RBAC role / permission 解析
+- service token hash-only 持久化存储
 
 ## 当前实现
 
@@ -19,12 +21,16 @@ Auth RBAC Enterprise Upgrade 将认证入口从开发期 API key 模式升级为
 ```text
 apps/api/src/auth/
   api-key.guard.ts
+  auth-rbac.service.ts
   auth.service.ts
   auth.types.ts
 
 apps/api/src/common/config/
   configuration.ts
   validate-env.ts
+
+apps/api/src/db/schema.ts
+apps/api/drizzle/0004_eager_wallflower.sql
 ```
 
 ## 认证优先级
@@ -32,9 +38,10 @@ apps/api/src/common/config/
 `ApiKeyGuard` 当前按以下顺序认证：
 
 1. `Authorization: Bearer <jwt>`
-2. `x-service-token`
-3. `x-api-key`
-4. development 环境 dev fallback
+2. DB `x-service-token`
+3. env `x-service-token`
+4. `x-api-key`
+5. development 环境 dev fallback
 
 如果请求带了 Bearer token 但服务端没有配置 `JWT_SECRET`，请求会被拒绝。
 
@@ -175,6 +182,31 @@ permissionsForRoles(roles) + explicitPermissions
 
 无效 role / permission 会被忽略。
 
+JWT 通过签名、issuer、audience、tenant 校验后，会叠加数据库授权：
+
+1. 通过 `tenantId + sub` 解析本地 tenant/user
+2. 读取 `users.roles`
+3. 读取 `auth_user_roles -> auth_roles`
+4. 合并 token roles / token permissions / database roles / database permissions
+
+## Persistent RBAC
+
+新增表：
+
+- `auth_roles`
+- `auth_user_roles`
+- `auth_service_tokens`
+
+service token 明文不入库，只保存：
+
+```text
+sha256(token)
+```
+
+如果 DB 命中 token hash，但 token 已禁用、已过期或 tenant 不匹配，请求会被拒绝，不会继续回退到 env token。
+
+详细文档见 [auth-persistent-rbac-service-token-store.md](./auth-persistent-rbac-service-token-store.md)。
+
 ## Tenant Isolation
 
 当前业务接口继续从 `CurrentUser` 获取：
@@ -197,22 +229,25 @@ JWT 模式下，如果 `x-tenant-id` 与 token claim 不一致，请求会被拒
 - JWT issuer / audience / exp 校验
 - tenant header 与 JWT claim 一致性校验
 - production 至少一种认证方式校验
+- RBAC role / permission 持久化表
+- 用户角色从数据库解析
+- service token hash 持久化
+- service token enabled / expiresAt / lastUsedAt
 
 未完成：
 
-- RBAC role / permission 持久化表
 - 用户角色管理 API
-- service token hash 持久化与轮换
+- service token 创建 / 吊销 / 轮换 API
 - refresh token / session
 - admin 操作 reason/comment
 - 审计日志查询增强
 
 ## 下一步
 
-建议下一步实现 `Persistent RBAC / Service Token Store`：
+建议下一步实现 `Auth Admin API / Audit Reason`：
 
-1. 增加 roles / permissions / service_tokens 表
-2. service token 只存 hash
-3. 增加 token enabled / expiresAt / lastUsedAt
-4. 用户角色从数据库解析
-5. 增加 auth admin API
+1. 增加 role 管理 API
+2. 增加用户 role assignment API
+3. 增加 service token 创建、禁用、轮换 API
+4. 管理接口要求 `auth:manage`
+5. 管理操作记录 reason/comment

@@ -8,6 +8,7 @@ import { ConfigService } from "@nestjs/config";
 import type { Request } from "express";
 import crypto from "node:crypto";
 
+import { AuthRbacService } from "./auth-rbac.service.js";
 import { AuthService } from "./auth.service.js";
 import type {
   AuthenticatedRequest,
@@ -33,20 +34,21 @@ export class ApiKeyGuard implements CanActivate {
   constructor(
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    private readonly rbac: AuthRbacService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
       .getRequest<Request & Partial<AuthenticatedRequest>>();
 
-    const jwtUser = this.authenticateJwt(request);
+    const jwtUser = await this.authenticateJwt(request);
     if (jwtUser) {
       request.user = jwtUser;
       return true;
     }
 
-    const serviceUser = this.authenticateServiceToken(request);
+    const serviceUser = await this.authenticateServiceToken(request);
     if (serviceUser) {
       request.user = serviceUser;
       return true;
@@ -61,7 +63,7 @@ export class ApiKeyGuard implements CanActivate {
     throw new UnauthorizedException("Invalid credentials");
   }
 
-  private authenticateJwt(request: Request): RequestUser | undefined {
+  private async authenticateJwt(request: Request): Promise<RequestUser | undefined> {
     const token = this.bearerToken(request);
     if (!token) {
       return undefined;
@@ -87,8 +89,20 @@ export class ApiKeyGuard implements CanActivate {
       throw new UnauthorizedException("Invalid JWT audience");
     }
 
-    const roles = this.auth.normalizeRoles(payload.roles, ["developer"]);
-    const explicitPermissions = this.auth.normalizePermissions(payload.permissions);
+    const tokenRoles = this.auth.normalizeRoles(payload.roles, []);
+    const tokenPermissions = this.auth.normalizePermissions(payload.permissions);
+    const persistent = await this.rbac.resolveUserAuthorization({
+      tenantId,
+      userId,
+    });
+    const roles = this.auth.normalizeRoles(
+      [...persistent.roles, ...tokenRoles],
+      ["developer"],
+    );
+    const explicitPermissions = this.auth.normalizePermissions([
+      ...persistent.permissions,
+      ...tokenPermissions,
+    ]);
     const user: RequestUser = {
       userId,
       tenantId,
@@ -102,10 +116,37 @@ export class ApiKeyGuard implements CanActivate {
     return user;
   }
 
-  private authenticateServiceToken(request: Request): RequestUser | undefined {
-    const configuredToken = this.config.get<string>("app.auth.serviceToken");
+  private async authenticateServiceToken(
+    request: Request,
+  ): Promise<RequestUser | undefined> {
     const requestToken = this.header(request, "x-service-token");
-    if (!configuredToken || !requestToken) {
+    if (!requestToken) {
+      return undefined;
+    }
+
+    const tenantId = this.header(request, "x-tenant-id");
+    const persistent = await this.rbac.resolveServiceToken({
+      tokenHash: this.tokenHash(requestToken),
+      ...(tenantId ? { tenantId } : {}),
+    });
+    if (persistent) {
+      const roles = this.auth.normalizeRoles(persistent.roles, ["service"]);
+      const permissions = this.auth.mergePermissions(
+        roles,
+        this.auth.normalizePermissions(persistent.permissions),
+      );
+      return {
+        userId: persistent.userId,
+        tenantId: persistent.tenantId,
+        roles,
+        permissions,
+        authType: "service_token",
+        tokenId: persistent.tokenId,
+      };
+    }
+
+    const configuredToken = this.config.get<string>("app.auth.serviceToken");
+    if (!configuredToken) {
       return undefined;
     }
     if (!this.constantTimeEquals(configuredToken, requestToken)) {
@@ -136,6 +177,10 @@ export class ApiKeyGuard implements CanActivate {
       permissions: this.auth.mergePermissions(roles, explicitPermissions),
       authType: "service_token",
     };
+  }
+
+  private tokenHash(token: string): string {
+    return crypto.createHash("sha256").update(token).digest("hex");
   }
 
   private authenticateApiKey(request: Request): RequestUser | undefined {

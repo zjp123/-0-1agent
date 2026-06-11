@@ -27,6 +27,8 @@ PostgreSQL + Redis + Qdrant
 - workflow
 - evaluation
 - trace events
+- RBAC roles / assignments
+- service token metadata
 
 ### Redis
 
@@ -173,6 +175,9 @@ npm run db:push
 - `evaluation_cases`
 - `evaluation_runs`
 - `trace_events`
+- `auth_roles`
+- `auth_user_roles`
+- `auth_service_tokens`
 
 当前定义的枚举：
 
@@ -202,10 +207,11 @@ npm run db:push
 - VectorStore health check
 - OpenAI-compatible embedding provider
 - local-hash embedding fallback
+- RBAC tables migration
+- service token hash store migration
 
 未完成：
 
-- 实际 migrations 生成
 - Redis rate limiter
 - distributed worker coordination
 - 数据迁移脚本

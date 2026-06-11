@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   jsonb,
@@ -6,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -70,6 +72,67 @@ export const users = pgTable(
       table.tenantId,
       table.externalId,
     ),
+  }),
+);
+
+export const authRoles = pgTable(
+  "auth_roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    name: varchar("name", { length: 80 }).notNull(),
+    permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantNameIdx: uniqueIndex("auth_roles_tenant_name_idx").on(
+      table.tenantId,
+      table.name,
+    ),
+  }),
+);
+
+export const authUserRoles = pgTable(
+  "auth_user_roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    roleId: uuid("role_id").notNull().references(() => authRoles.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userRoleIdx: uniqueIndex("auth_user_roles_user_role_idx").on(
+      table.userId,
+      table.roleId,
+    ),
+    tenantUserIdx: index("auth_user_roles_tenant_user_idx").on(
+      table.tenantId,
+      table.userId,
+    ),
+  }),
+);
+
+export const authServiceTokens = pgTable(
+  "auth_service_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    tokenHash: varchar("token_hash", { length: 160 }).notNull(),
+    roles: jsonb("roles").$type<string[]>().notNull().default([]),
+    permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
+    enabled: boolean("enabled").notNull().default(true),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex("auth_service_tokens_hash_idx").on(table.tokenHash),
+    tenantIdx: index("auth_service_tokens_tenant_idx").on(table.tenantId),
   }),
 );
 

@@ -4,7 +4,7 @@
 
 Auth & Governance 模块负责生产级 Agent 平台的身份、租户、权限和治理边界。
 
-当前阶段已经从开发期 API Key Guard 升级为多认证入口，支持 JWT、service token、API key 和 development fallback。
+当前阶段已经从开发期 API Key Guard 升级为多认证入口，支持 JWT、持久化 service token、API key 和 development fallback。
 
 ## 当前实现
 
@@ -14,11 +14,15 @@ Auth & Governance 模块负责生产级 Agent 平台的身份、租户、权限�
 apps/api/src/auth/
   auth.types.ts
   auth.service.ts
+  auth-rbac.service.ts
   auth.module.ts
   api-key.guard.ts
   permissions.guard.ts
   permissions.decorator.ts
   current-user.decorator.ts
+
+apps/api/src/db/schema.ts
+apps/api/drizzle/0004_eager_wallflower.sql
 ```
 
 ## 身份模型
@@ -75,6 +79,12 @@ JWT_AUDIENCE=
 
 如果请求同时携带 `x-tenant-id`，必须与 JWT 中的 tenant claim 一致。
 
+JWT 校验通过后，会叠加数据库 RBAC：
+
+- `users.roles`
+- `auth_user_roles`
+- `auth_roles.permissions`
+
 ## Service Token
 
 请求头：
@@ -94,7 +104,15 @@ SERVICE_TOKEN_ROLES=service
 SERVICE_TOKEN_PERMISSIONS=
 ```
 
-service token 使用 constant-time comparison 校验，默认角色为 `service`。
+service token 优先查询 PostgreSQL 中的 `auth_service_tokens`：
+
+- 明文 token 不入库
+- 入库字段为 `sha256(token)`
+- 支持 `enabled`
+- 支持 `expires_at`
+- 每次使用更新 `last_used_at`
+
+数据库没有命中 token hash 时，才回退到 env `SERVICE_TOKEN` 兼容模式。
 
 ## API Key Guard
 
@@ -180,6 +198,10 @@ Tool Registry 执行上下文同样使用认证上下文里的权限。
 - RequirePermissions decorator
 - 生产环境至少一种认证方式校验
 - role -> permission 集中映射
+- RBAC role / permission 持久化表
+- JWT 用户数据库授权叠加
+- service token hash-only 持久化存储
+- DB service token enabled / expiresAt / lastUsedAt
 - JWT issuer / audience / exp 校验
 - tenant header 与 JWT claim 一致性校验
 - Agent/Tools/Knowledge/Observability 接口权限接入
@@ -188,19 +210,18 @@ Tool Registry 执行上下文同样使用认证上下文里的权限。
 未完成：
 
 - Refresh Token / session
-- RBAC role / permission 持久化
 - 细粒度 RBAC 管理接口
-- service token hash 持久化与轮换
+- service token 创建 / 吊销 / 轮换接口
 - 租户级配额
 - 审计持久化
-- 与数据库权限模型联动
+- auth 操作 reason/comment
 
 ## 下一步
 
-建议下一步实现 `Persistent RBAC / Service Token Store`：
+建议下一步实现 `Auth Admin API / Audit Reason`：
 
-1. 增加 roles / permissions / service_tokens 表
-2. service token 只存 hash
-3. 增加 token enabled / expiresAt / lastUsedAt
-4. 用户角色从数据库解析
-5. 增加 auth admin API
+1. 增加 role 管理接口
+2. 增加用户角色绑定接口
+3. 增加 service token 创建、禁用、轮换接口
+4. 管理操作要求 `auth:manage`
+5. 管理操作记录 reason/comment
