@@ -29,6 +29,7 @@ PostgreSQL + Redis + Qdrant
 - trace events
 - RBAC roles / assignments
 - service token metadata
+- auth admin audit events
 
 ### Redis
 
@@ -178,6 +179,7 @@ npm run db:push
 - `auth_roles`
 - `auth_user_roles`
 - `auth_service_tokens`
+- `auth_admin_audit_events`
 
 当前定义的枚举：
 
@@ -209,6 +211,7 @@ npm run db:push
 - local-hash embedding fallback
 - RBAC tables migration
 - service token hash store migration
+- auth admin audit events migration
 
 未完成：
 

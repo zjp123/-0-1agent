@@ -36,6 +36,13 @@
       "when": 1781156933514,
       "tag": "0004_eager_wallflower",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781166310489,
+      "tag": "0005_shiny_snowbird",
+      "breakpoints": true
     }
   ]
 }

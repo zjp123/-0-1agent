@@ -14,6 +14,8 @@ Auth & Governance 模块负责生产级 Agent 平台的身份、租户、权限�
 apps/api/src/auth/
   auth.types.ts
   auth.service.ts
+  auth-admin.controller.ts
+  auth-admin.service.ts
   auth-rbac.service.ts
   auth.module.ts
   api-key.guard.ts
@@ -23,6 +25,7 @@ apps/api/src/auth/
 
 apps/api/src/db/schema.ts
 apps/api/drizzle/0004_eager_wallflower.sql
+apps/api/drizzle/0005_shiny_snowbird.sql
 ```
 
 ## 身份模型
@@ -161,6 +164,19 @@ API_KEY=dev-api-key
 - `GET /api/evaluations/cases`
 - `POST /api/evaluations/cases/:caseId/runs`
 - `GET /api/evaluations/runs`
+- `GET /api/auth/roles`
+- `POST /api/auth/roles`
+- `PATCH /api/auth/roles/:roleId`
+- `DELETE /api/auth/roles/:roleId`
+- `GET /api/auth/users/:userId/roles`
+- `POST /api/auth/users/:userId/roles`
+- `DELETE /api/auth/users/:userId/roles/:roleId`
+- `GET /api/auth/service-tokens`
+- `POST /api/auth/service-tokens`
+- `PATCH /api/auth/service-tokens/:tokenId`
+- `POST /api/auth/service-tokens/:tokenId/disable`
+- `POST /api/auth/service-tokens/:tokenId/rotate`
+- `GET /api/auth/audit-events`
 
 当前保持公开接口：
 
@@ -182,6 +198,28 @@ API_KEY=dev-api-key
 
 Tool Registry 执行上下文同样使用认证上下文里的权限。
 
+## Auth Admin API
+
+Auth 管理接口统一要求 `auth:manage`。
+
+当前支持：
+
+- role 创建 / 查询 / 更新 / 删除
+- 用户 role 查询 / 绑定 / 撤销
+- service token 查询 / 创建 / 更新 / 禁用 / 轮换
+- auth 管理审计查询
+
+所有写操作必须携带：
+
+```json
+{
+  "reason": "Why this auth change is needed",
+  "comment": "Optional operator note"
+}
+```
+
+详细文档见 [auth-admin-api-audit-reason.md](./auth-admin-api-audit-reason.md)。
+
 ## 当前边界
 
 已完成：
@@ -202,6 +240,9 @@ Tool Registry 执行上下文同样使用认证上下文里的权限。
 - JWT 用户数据库授权叠加
 - service token hash-only 持久化存储
 - DB service token enabled / expiresAt / lastUsedAt
+- Auth Admin API
+- auth 管理审计表
+- auth 操作 reason/comment
 - JWT issuer / audience / exp 校验
 - tenant header 与 JWT claim 一致性校验
 - Agent/Tools/Knowledge/Observability 接口权限接入
@@ -210,18 +251,17 @@ Tool Registry 执行上下文同样使用认证上下文里的权限。
 未完成：
 
 - Refresh Token / session
-- 细粒度 RBAC 管理接口
-- service token 创建 / 吊销 / 轮换接口
+- 更细粒度的 auth admin 分权
 - 租户级配额
-- 审计持久化
-- auth 操作 reason/comment
+- 审计事件分页和过滤
+- break-glass / emergency access
 
 ## 下一步
 
-建议下一步实现 `Auth Admin API / Audit Reason`：
+建议下一步实现 `Refresh Token / Session Governance`：
 
-1. 增加 role 管理接口
-2. 增加用户角色绑定接口
-3. 增加 service token 创建、禁用、轮换接口
-4. 管理操作要求 `auth:manage`
-5. 管理操作记录 reason/comment
+1. 增加 session / refresh token 存储模型
+2. 增加 token revoke / rotation
+3. 增加 active session 查询
+4. 接入 auth audit events
+5. 增加异常会话治理策略

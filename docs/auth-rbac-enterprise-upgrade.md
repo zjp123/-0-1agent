@@ -21,6 +21,8 @@ Auth RBAC Enterprise Upgrade 将认证入口从开发期 API key 模式升级为
 ```text
 apps/api/src/auth/
   api-key.guard.ts
+  auth-admin.controller.ts
+  auth-admin.service.ts
   auth-rbac.service.ts
   auth.service.ts
   auth.types.ts
@@ -31,6 +33,7 @@ apps/api/src/common/config/
 
 apps/api/src/db/schema.ts
 apps/api/drizzle/0004_eager_wallflower.sql
+apps/api/drizzle/0005_shiny_snowbird.sql
 ```
 
 ## 认证优先级
@@ -207,6 +210,19 @@ sha256(token)
 
 详细文档见 [auth-persistent-rbac-service-token-store.md](./auth-persistent-rbac-service-token-store.md)。
 
+## Auth Admin API
+
+新增租户内管理接口：
+
+- role 管理
+- 用户 role assignment 管理
+- service token 创建 / 禁用 / 轮换
+- auth 管理审计查询
+
+所有管理接口要求 `auth:manage`，所有写操作要求 `reason`。
+
+详细文档见 [auth-admin-api-audit-reason.md](./auth-admin-api-audit-reason.md)。
+
 ## Tenant Isolation
 
 当前业务接口继续从 `CurrentUser` 获取：
@@ -233,21 +249,23 @@ JWT 模式下，如果 `x-tenant-id` 与 token claim 不一致，请求会被拒
 - 用户角色从数据库解析
 - service token hash 持久化
 - service token enabled / expiresAt / lastUsedAt
+- 用户角色管理 API
+- service token 创建 / 禁用 / 轮换 API
+- admin 操作 reason/comment
+- auth 审计查询
 
 未完成：
 
-- 用户角色管理 API
-- service token 创建 / 吊销 / 轮换 API
 - refresh token / session
-- admin 操作 reason/comment
-- 审计日志查询增强
+- 更细粒度的 auth admin 分权
+- 审计日志分页 / 过滤 / 导出
 
 ## 下一步
 
-建议下一步实现 `Auth Admin API / Audit Reason`：
+建议下一步实现 `Refresh Token / Session Governance`：
 
-1. 增加 role 管理 API
-2. 增加用户 role assignment API
-3. 增加 service token 创建、禁用、轮换 API
-4. 管理接口要求 `auth:manage`
-5. 管理操作记录 reason/comment
+1. 增加 session / refresh token 存储模型
+2. 增加 token revoke / rotation
+3. 增加 active session 查询
+4. 接入 auth audit events
+5. 增加异常会话治理策略

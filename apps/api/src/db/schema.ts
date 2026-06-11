@@ -136,6 +136,34 @@ export const authServiceTokens = pgTable(
   }),
 );
 
+export const authAdminAuditEvents = pgTable(
+  "auth_admin_audit_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    actorUserId: varchar("actor_user_id", { length: 160 }).notNull(),
+    actorAuthType: varchar("actor_auth_type", { length: 40 }).notNull(),
+    actorTokenId: varchar("actor_token_id", { length: 160 }),
+    action: varchar("action", { length: 120 }).notNull(),
+    targetType: varchar("target_type", { length: 80 }).notNull(),
+    targetId: varchar("target_id", { length: 160 }).notNull(),
+    reason: text("reason").notNull(),
+    comment: text("comment"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantCreatedIdx: index("auth_admin_audit_events_tenant_created_idx").on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    targetIdx: index("auth_admin_audit_events_target_idx").on(
+      table.targetType,
+      table.targetId,
+    ),
+  }),
+);
+
 export const sessions = pgTable(
   "sessions",
   {

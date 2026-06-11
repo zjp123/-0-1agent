@@ -192,15 +192,15 @@ SERVICE_TOKEN_PERMISSIONS=
 - env service token fallback
 - token `enabled` / `expires_at` / `last_used_at`
 - Drizzle migration
-
-未完成：
-
 - Auth Admin API
 - role 创建 / 更新 / 删除接口
 - 用户角色绑定接口
-- service token 创建 / 吊销 / 轮换接口
+- service token 创建 / 禁用 / 轮换接口
 - auth 操作 reason/comment
 - auth 审计查询接口
+
+未完成：
+
 - refresh token / session 管理
 
 ## 验证
@@ -215,10 +215,10 @@ npm run build
 
 ## 下一步
 
-建议下一步实现 `Auth Admin API / Audit Reason`：
+建议下一步实现 `Refresh Token / Session Governance`：
 
-1. 增加 role 管理接口
-2. 增加用户 role assignment 接口
-3. 增加 service token 创建、禁用、轮换接口
-4. 所有管理操作要求 `auth:manage`
-5. 管理操作记录 reason/comment，后续接入审计查询
+1. 增加 session / refresh token 存储模型
+2. 增加 token revoke / rotation
+3. 增加 active session 查询
+4. 接入 auth audit events
+5. 增加异常会话治理策略
