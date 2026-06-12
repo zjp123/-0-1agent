@@ -9,6 +9,7 @@ import type { Request } from "express";
 import crypto from "node:crypto";
 
 import { AuthRbacService } from "./auth-rbac.service.js";
+import { AuthSessionService } from "./auth-session.service.js";
 import { AuthService } from "./auth.service.js";
 import type {
   AuthenticatedRequest,
@@ -27,6 +28,7 @@ type JwtPayload = {
   iss?: unknown;
   aud?: unknown;
   jti?: unknown;
+  sid?: unknown;
 };
 
 @Injectable()
@@ -35,6 +37,7 @@ export class ApiKeyGuard implements CanActivate {
     private readonly config: ConfigService,
     private readonly auth: AuthService,
     private readonly rbac: AuthRbacService,
+    private readonly sessions: AuthSessionService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -95,6 +98,14 @@ export class ApiKeyGuard implements CanActivate {
       tenantId,
       userId,
     });
+    const tokenId = this.optionalClaimString(payload.jti);
+    const sessionId = this.optionalClaimString(payload.sid);
+    await this.sessions.assertJwtSessionAllowed({
+      tenantId,
+      userId,
+      ...(tokenId ? { tokenId } : {}),
+      ...(sessionId ? { sessionId } : {}),
+    });
     const roles = this.auth.normalizeRoles(
       [...persistent.roles, ...tokenRoles],
       ["developer"],
@@ -110,8 +121,8 @@ export class ApiKeyGuard implements CanActivate {
       permissions: this.auth.mergePermissions(roles, explicitPermissions),
       authType: "jwt",
     };
-    if (typeof payload.jti === "string" && payload.jti.trim()) {
-      user.tokenId = payload.jti.trim();
+    if (tokenId) {
+      user.tokenId = tokenId;
     }
     return user;
   }
@@ -285,6 +296,10 @@ export class ApiKeyGuard implements CanActivate {
       throw new UnauthorizedException(`Missing JWT claim: ${name}`);
     }
     return value.trim();
+  }
+
+  private optionalClaimString(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
   }
 
   private assertTenantHeaderMatches(request: Request, tenantId: string): void {

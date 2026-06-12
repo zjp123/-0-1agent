@@ -9,6 +9,7 @@
 - 提供租户内 role 管理 API
 - 提供用户 role assignment API
 - 提供 service token 创建、禁用、轮换 API
+- 提供 auth session / refresh token 管理 API
 - 管理接口统一要求 `auth:manage`
 - 所有写操作必须携带 `reason`
 - 管理操作写入 PostgreSQL 审计表
@@ -190,6 +191,11 @@ GET /api/auth/audit-events
 - `auth.service_token.update`
 - `auth.service_token.disable`
 - `auth.service_token.rotate`
+- `auth.session.register`
+- `auth.session.revoke`
+- `auth.refresh_token.create`
+- `auth.refresh_token.rotate`
+- `auth.refresh_token.revoke`
 
 ## 当前边界
 
@@ -206,10 +212,10 @@ GET /api/auth/audit-events
 - auth 管理审计表
 - auth 审计查询
 - Drizzle migration
+- refresh token / session 管理
 
 未完成：
 
-- refresh token / session 管理
 - 更细粒度的 auth admin 分权
 - 审计事件分页和过滤
 - 审计事件导出
@@ -228,10 +234,10 @@ npm run build
 
 ## 下一步
 
-建议下一步实现 `Refresh Token / Session Governance`：
+建议下一步实现 `Rate Limiting / Quota Governance`：
 
-1. 增加 session / refresh token 存储模型
-2. 增加 token revoke / rotation
-3. 增加 active session 查询
-4. 接入 auth audit events
-5. 增加异常会话治理策略
+1. Redis rate limiter
+2. tenant/user/tool 维度限流
+3. LLM token / request quota
+4. 限流事件审计
+5. 管理端 quota 配置

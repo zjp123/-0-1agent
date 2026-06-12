@@ -164,6 +164,60 @@ export const authAdminAuditEvents = pgTable(
   }),
 );
 
+export const authSessions = pgTable(
+  "auth_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    tokenId: varchar("token_id", { length: 160 }).notNull(),
+    status: varchar("status", { length: 40 }).notNull().default("active"),
+    deviceLabel: varchar("device_label", { length: 160 }),
+    ipAddress: varchar("ip_address", { length: 80 }),
+    userAgent: text("user_agent"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokeReason: text("revoke_reason"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tokenIdx: uniqueIndex("auth_sessions_token_idx").on(table.tokenId),
+    tenantUserStatusIdx: index("auth_sessions_tenant_user_status_idx").on(
+      table.tenantId,
+      table.userId,
+      table.status,
+    ),
+  }),
+);
+
+export const authRefreshTokens = pgTable(
+  "auth_refresh_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    sessionId: uuid("session_id").notNull().references(() => authSessions.id),
+    tokenHash: varchar("token_hash", { length: 160 }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    rotatedAt: timestamp("rotated_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokeReason: text("revoke_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex("auth_refresh_tokens_hash_idx").on(table.tokenHash),
+    tenantSessionIdx: index("auth_refresh_tokens_tenant_session_idx").on(
+      table.tenantId,
+      table.sessionId,
+    ),
+  }),
+);
+
 export const sessions = pgTable(
   "sessions",
   {

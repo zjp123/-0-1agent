@@ -18,14 +18,24 @@ import {
   type ServiceTokenResponse,
   type UserRoleAssignmentResponse,
 } from "./auth-admin.service.js";
+import {
+  AuthSessionService,
+  type AuthSessionResponse,
+  type CreatedRefreshTokenResponse,
+  type RefreshTokenResponse,
+  type RefreshTokenVerificationResponse,
+} from "./auth-session.service.js";
 import type { RequestUser } from "./auth.types.js";
 import { CurrentUser } from "./current-user.decorator.js";
 import { AssignUserRoleDto } from "./dto/assign-user-role.dto.js";
 import { AuthAdminReasonDto } from "./dto/auth-admin-common.dto.js";
+import { CreateRefreshTokenDto } from "./dto/create-refresh-token.dto.js";
 import { CreateAuthRoleDto } from "./dto/create-auth-role.dto.js";
 import { CreateServiceTokenDto } from "./dto/create-service-token.dto.js";
+import { RegisterAuthSessionDto } from "./dto/register-auth-session.dto.js";
 import { UpdateAuthRoleDto } from "./dto/update-auth-role.dto.js";
 import { UpdateServiceTokenDto } from "./dto/update-service-token.dto.js";
+import { VerifyRefreshTokenDto } from "./dto/verify-refresh-token.dto.js";
 import { RequirePermissions } from "./permissions.decorator.js";
 import { PermissionsGuard } from "./permissions.guard.js";
 
@@ -33,7 +43,10 @@ import { PermissionsGuard } from "./permissions.guard.js";
 @UseGuards(ApiKeyGuard, PermissionsGuard)
 @RequirePermissions("auth:manage")
 export class AuthAdminController {
-  constructor(private readonly authAdmin: AuthAdminService) {}
+  constructor(
+    private readonly authAdmin: AuthAdminService,
+    private readonly authSessions: AuthSessionService,
+  ) {}
 
   @Get("roles")
   listRoles(@CurrentUser() user: RequestUser): Promise<AuthRoleResponse[]> {
@@ -140,5 +153,69 @@ export class AuthAdminController {
     @CurrentUser() user: RequestUser,
   ): Promise<AuthAuditEventResponse[]> {
     return this.authAdmin.listAuditEvents(user);
+  }
+
+  @Get("sessions")
+  listSessions(@CurrentUser() user: RequestUser): Promise<AuthSessionResponse[]> {
+    return this.authSessions.listSessions(user);
+  }
+
+  @Post("sessions")
+  registerSession(
+    @Body() body: RegisterAuthSessionDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<AuthSessionResponse> {
+    return this.authSessions.registerSession(body, user);
+  }
+
+  @Post("sessions/:sessionId/revoke")
+  revokeSession(
+    @Param("sessionId") sessionId: string,
+    @Body() body: AuthAdminReasonDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<AuthSessionResponse> {
+    return this.authSessions.revokeSession(sessionId, body, user);
+  }
+
+  @Get("refresh-tokens")
+  listRefreshTokens(
+    @CurrentUser() user: RequestUser,
+  ): Promise<RefreshTokenResponse[]> {
+    return this.authSessions.listRefreshTokens(user);
+  }
+
+  @Post("sessions/:sessionId/refresh-tokens")
+  createRefreshToken(
+    @Param("sessionId") sessionId: string,
+    @Body() body: CreateRefreshTokenDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<CreatedRefreshTokenResponse> {
+    return this.authSessions.createRefreshToken(sessionId, body, user);
+  }
+
+  @Post("refresh-tokens/verify")
+  verifyRefreshToken(
+    @Body() body: VerifyRefreshTokenDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<RefreshTokenVerificationResponse> {
+    return this.authSessions.verifyRefreshToken(body.token, user);
+  }
+
+  @Post("refresh-tokens/:refreshTokenId/rotate")
+  rotateRefreshToken(
+    @Param("refreshTokenId") refreshTokenId: string,
+    @Body() body: CreateRefreshTokenDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<CreatedRefreshTokenResponse> {
+    return this.authSessions.rotateRefreshToken(refreshTokenId, body, user);
+  }
+
+  @Post("refresh-tokens/:refreshTokenId/revoke")
+  revokeRefreshToken(
+    @Param("refreshTokenId") refreshTokenId: string,
+    @Body() body: AuthAdminReasonDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<RefreshTokenResponse> {
+    return this.authSessions.revokeRefreshToken(refreshTokenId, body, user);
   }
 }

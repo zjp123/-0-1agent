@@ -17,6 +17,7 @@ apps/api/src/auth/
   auth-admin.controller.ts
   auth-admin.service.ts
   auth-rbac.service.ts
+  auth-session.service.ts
   auth.module.ts
   api-key.guard.ts
   permissions.guard.ts
@@ -26,6 +27,7 @@ apps/api/src/auth/
 apps/api/src/db/schema.ts
 apps/api/drizzle/0004_eager_wallflower.sql
 apps/api/drizzle/0005_shiny_snowbird.sql
+apps/api/drizzle/0006_whole_the_phantom.sql
 ```
 
 ## 身份模型
@@ -78,7 +80,7 @@ JWT_ISSUER=
 JWT_AUDIENCE=
 ```
 
-当前支持 HS256，并校验 `sub`、`tenantId/tid`、`exp`、`iss`、`aud`。
+当前支持 HS256，并校验 `sub`、`tenantId/tid`、`exp`、`iss`、`aud`、`jti`、`sid`。
 
 如果请求同时携带 `x-tenant-id`，必须与 JWT 中的 tenant claim 一致。
 
@@ -87,6 +89,8 @@ JWT 校验通过后，会叠加数据库 RBAC：
 - `users.roles`
 - `auth_user_roles`
 - `auth_roles.permissions`
+
+如果 JWT 的 `jti` 或 `sid` 已登记到 `auth_sessions`，认证时会检查 session 是否撤销或过期。
 
 ## Service Token
 
@@ -177,6 +181,14 @@ API_KEY=dev-api-key
 - `POST /api/auth/service-tokens/:tokenId/disable`
 - `POST /api/auth/service-tokens/:tokenId/rotate`
 - `GET /api/auth/audit-events`
+- `GET /api/auth/sessions`
+- `POST /api/auth/sessions`
+- `POST /api/auth/sessions/:sessionId/revoke`
+- `GET /api/auth/refresh-tokens`
+- `POST /api/auth/sessions/:sessionId/refresh-tokens`
+- `POST /api/auth/refresh-tokens/verify`
+- `POST /api/auth/refresh-tokens/:refreshTokenId/rotate`
+- `POST /api/auth/refresh-tokens/:refreshTokenId/revoke`
 
 当前保持公开接口：
 
@@ -207,6 +219,8 @@ Auth 管理接口统一要求 `auth:manage`。
 - role 创建 / 查询 / 更新 / 删除
 - 用户 role 查询 / 绑定 / 撤销
 - service token 查询 / 创建 / 更新 / 禁用 / 轮换
+- auth session 查询 / 登记 / 撤销
+- refresh token 查询 / 创建 / 校验 / 轮换 / 撤销
 - auth 管理审计查询
 
 所有写操作必须携带：
@@ -219,6 +233,20 @@ Auth 管理接口统一要求 `auth:manage`。
 ```
 
 详细文档见 [auth-admin-api-audit-reason.md](./auth-admin-api-audit-reason.md)。
+
+## Session Governance
+
+Auth Session Governance 提供平台内可撤销的认证会话控制面。
+
+当前支持：
+
+- auth session 持久化
+- refresh token hash-only 持久化
+- refresh token 创建 / 校验 / 轮换 / 撤销
+- session 撤销联动禁用 refresh tokens
+- JWT `jti` / `sid` 已登记时的撤销检查
+
+详细文档见 [auth-session-governance.md](./auth-session-governance.md)。
 
 ## 当前边界
 
@@ -243,6 +271,9 @@ Auth 管理接口统一要求 `auth:manage`。
 - Auth Admin API
 - auth 管理审计表
 - auth 操作 reason/comment
+- auth session 持久化
+- refresh token hash-only 持久化
+- JWT session revocation 检查
 - JWT issuer / audience / exp 校验
 - tenant header 与 JWT claim 一致性校验
 - Agent/Tools/Knowledge/Observability 接口权限接入
@@ -250,7 +281,6 @@ Auth 管理接口统一要求 `auth:manage`。
 
 未完成：
 
-- Refresh Token / session
 - 更细粒度的 auth admin 分权
 - 租户级配额
 - 审计事件分页和过滤
@@ -258,10 +288,10 @@ Auth 管理接口统一要求 `auth:manage`。
 
 ## 下一步
 
-建议下一步实现 `Refresh Token / Session Governance`：
+建议下一步实现 `Rate Limiting / Quota Governance`：
 
-1. 增加 session / refresh token 存储模型
-2. 增加 token revoke / rotation
-3. 增加 active session 查询
-4. 接入 auth audit events
-5. 增加异常会话治理策略
+1. Redis rate limiter
+2. tenant/user/tool 维度限流
+3. LLM token / request quota
+4. 限流事件审计
+5. 管理端 quota 配置

@@ -4,6 +4,7 @@ import { ApiKeyGuard } from "./api-key.guard.js";
 import { AuthAdminController } from "./auth-admin.controller.js";
 import { AuthAdminService } from "./auth-admin.service.js";
 import { AuthRbacService } from "./auth-rbac.service.js";
+import { AuthSessionService } from "./auth-session.service.js";
 import { AuthService } from "./auth.service.js";
 import { PermissionsGuard } from "./permissions.guard.js";
 
@@ -13,6 +14,7 @@ import { PermissionsGuard } from "./permissions.guard.js";
     AuthService,
     AuthAdminService,
     AuthRbacService,
+    AuthSessionService,
     ApiKeyGuard,
     PermissionsGuard,
   ],
@@ -20,6 +22,7 @@ import { PermissionsGuard } from "./permissions.guard.js";
     AuthService,
     AuthAdminService,
     AuthRbacService,
+    AuthSessionService,
     ApiKeyGuard,
     PermissionsGuard,
   ],

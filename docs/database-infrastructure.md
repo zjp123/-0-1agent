@@ -30,6 +30,8 @@ PostgreSQL + Redis + Qdrant
 - RBAC roles / assignments
 - service token metadata
 - auth admin audit events
+- auth sessions
+- auth refresh tokens
 
 ### Redis
 
@@ -180,6 +182,8 @@ npm run db:push
 - `auth_user_roles`
 - `auth_service_tokens`
 - `auth_admin_audit_events`
+- `auth_sessions`
+- `auth_refresh_tokens`
 
 当前定义的枚举：
 
@@ -212,6 +216,8 @@ npm run db:push
 - RBAC tables migration
 - service token hash store migration
 - auth admin audit events migration
+- auth sessions migration
+- auth refresh tokens migration
 
 未完成：
 

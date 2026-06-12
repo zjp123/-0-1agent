@@ -24,6 +24,7 @@ apps/api/src/auth/
   auth-admin.controller.ts
   auth-admin.service.ts
   auth-rbac.service.ts
+  auth-session.service.ts
   auth.service.ts
   auth.types.ts
 
@@ -34,6 +35,7 @@ apps/api/src/common/config/
 apps/api/src/db/schema.ts
 apps/api/drizzle/0004_eager_wallflower.sql
 apps/api/drizzle/0005_shiny_snowbird.sql
+apps/api/drizzle/0006_whole_the_phantom.sql
 ```
 
 ## 认证优先级
@@ -67,6 +69,7 @@ Authorization: Bearer <jwt>
 - `iss`
 - `aud`
 - `jti`
+- `sid`
 
 配置：
 
@@ -192,6 +195,8 @@ JWT 通过签名、issuer、audience、tenant 校验后，会叠加数据库授�
 3. 读取 `auth_user_roles -> auth_roles`
 4. 合并 token roles / token permissions / database roles / database permissions
 
+如果 JWT 的 `jti` 或 `sid` 已登记到 `auth_sessions`，还会检查 session 是否撤销或过期。
+
 ## Persistent RBAC
 
 新增表：
@@ -223,6 +228,18 @@ sha256(token)
 
 详细文档见 [auth-admin-api-audit-reason.md](./auth-admin-api-audit-reason.md)。
 
+## Session Governance
+
+新增认证会话治理：
+
+- auth session 持久化
+- refresh token hash-only 持久化
+- session revoke
+- refresh token verify / rotate / revoke
+- JWT `jti` / `sid` 撤销检查
+
+详细文档见 [auth-session-governance.md](./auth-session-governance.md)。
+
 ## Tenant Isolation
 
 当前业务接口继续从 `CurrentUser` 获取：
@@ -253,19 +270,20 @@ JWT 模式下，如果 `x-tenant-id` 与 token claim 不一致，请求会被拒
 - service token 创建 / 禁用 / 轮换 API
 - admin 操作 reason/comment
 - auth 审计查询
+- refresh token / session 管理
+- JWT session revocation 检查
 
 未完成：
 
-- refresh token / session
 - 更细粒度的 auth admin 分权
 - 审计日志分页 / 过滤 / 导出
 
 ## 下一步
 
-建议下一步实现 `Refresh Token / Session Governance`：
+建议下一步实现 `Rate Limiting / Quota Governance`：
 
-1. 增加 session / refresh token 存储模型
-2. 增加 token revoke / rotation
-3. 增加 active session 查询
-4. 接入 auth audit events
-5. 增加异常会话治理策略
+1. Redis rate limiter
+2. tenant/user/tool 维度限流
+3. LLM token / request quota
+4. 限流事件审计
+5. 管理端 quota 配置
