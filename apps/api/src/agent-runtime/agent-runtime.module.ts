@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { AuthModule } from "../auth/auth.module.js";
+import { GovernanceModule } from "../governance/governance.module.js";
 import { MemoryContextModule } from "../memory-context/memory-context.module.js";
 import { ModelGatewayModule } from "../model-gateway/model-gateway.module.js";
 import { ObservabilityModule } from "../observability/observability.module.js";
@@ -18,6 +19,7 @@ import { AgentRuntimeService } from "./agent-runtime.service.js";
     RagModule,
     WorkflowModule,
     AuthModule,
+    GovernanceModule,
     ObservabilityModule,
   ],
   controllers: [AgentRuntimeController],

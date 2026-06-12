@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { DatabaseModule } from "../db/database.module.js";
+import { GovernanceModule } from "../governance/governance.module.js";
 import { ObservabilityModule } from "../observability/observability.module.js";
 import { VectorStoreModule } from "../vector-store/vector-store.module.js";
 import {
@@ -16,7 +17,12 @@ import { RagController } from "./rag.controller.js";
 import { RagService } from "./rag.service.js";
 
 @Module({
-  imports: [DatabaseModule, VectorStoreModule, ObservabilityModule],
+  imports: [
+    DatabaseModule,
+    VectorStoreModule,
+    ObservabilityModule,
+    GovernanceModule,
+  ],
   controllers: [RagController],
   providers: [
     KnowledgeChunkerService,

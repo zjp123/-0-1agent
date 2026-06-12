@@ -38,6 +38,9 @@ export function validateEnv(env: RawEnv): RawEnv {
     "INDEXING_ALERT_RECOVERY_FAILURES_THRESHOLD",
     "INDEXING_ALERT_STALE_RECOVERY_MS",
     "INDEXING_DEAD_LETTER_ADMIN_BATCH_SIZE",
+    "QUOTA_DEFAULT_WINDOW_SECONDS",
+    "QUOTA_DEFAULT_REQUEST_LIMIT",
+    "QUOTA_DEFAULT_TOKEN_LIMIT",
   ]) {
     const value = asString(env, key);
     if (value && !/^\d+$/.test(value)) {

@@ -5,6 +5,7 @@ import { CurrentUser } from "../auth/current-user.decorator.js";
 import { RequirePermissions } from "../auth/permissions.decorator.js";
 import { PermissionsGuard } from "../auth/permissions.guard.js";
 import type { RequestUser } from "../auth/auth.types.js";
+import { QuotaService } from "../governance/quota.service.js";
 import {
   AgentCapabilitySnapshot,
   AgentRuntimeService,
@@ -14,7 +15,10 @@ import type { AgentRunOptions, AgentRunResult } from "./agent-runtime.types.js";
 
 @Controller("agent")
 export class AgentRuntimeController {
-  constructor(private readonly agentRuntime: AgentRuntimeService) {}
+  constructor(
+    private readonly agentRuntime: AgentRuntimeService,
+    private readonly quota: QuotaService,
+  ) {}
 
   @Get("capabilities")
   getCapabilities(): AgentCapabilitySnapshot {
@@ -24,10 +28,16 @@ export class AgentRuntimeController {
   @Post("run")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("agent:run")
-  runAgent(
+  async runAgent(
     @Body() body: RunAgentDto,
     @CurrentUser() user: RequestUser,
   ): Promise<AgentRunResult> {
+    await this.quota.enforce({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      action: "agent.run",
+      metadata: { requestId: body.requestId, model: body.model ?? null },
+    });
     const options: AgentRunOptions = {
       requestId: body.requestId,
       userMessage: body.message,
@@ -58,6 +68,22 @@ export class AgentRuntimeController {
       options.model = body.model;
     }
 
-    return this.agentRuntime.run(options);
+    const result = await this.agentRuntime.run(options);
+    if (result.usage.totalTokens > 0) {
+      await this.quota.enforce({
+        tenantId: user.tenantId,
+        userId: user.userId,
+        action: "agent.run",
+        requestCost: 0,
+        tokenCost: result.usage.totalTokens,
+        metadata: {
+          requestId: body.requestId,
+          model: body.model ?? null,
+          promptTokens: result.usage.promptTokens,
+          completionTokens: result.usage.completionTokens,
+        },
+      });
+    }
+    return result;
   }
 }

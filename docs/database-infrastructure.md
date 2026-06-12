@@ -32,6 +32,8 @@ PostgreSQL + Redis + Qdrant
 - auth admin audit events
 - auth sessions
 - auth refresh tokens
+- quota policies
+- quota usage events
 
 ### Redis
 
@@ -118,6 +120,10 @@ INDEXING_ALERT_QUEUE_ERRORS_THRESHOLD=10
 INDEXING_ALERT_RECOVERY_FAILURES_THRESHOLD=1
 INDEXING_ALERT_STALE_RECOVERY_MS=120000
 INDEXING_DEAD_LETTER_ADMIN_BATCH_SIZE=100
+QUOTA_DEFAULT_WINDOW_SECONDS=60
+QUOTA_DEFAULT_REQUEST_LIMIT=120
+QUOTA_DEFAULT_TOKEN_LIMIT=200000
+RATE_LIMIT_KEY_PREFIX=enterprise-agent:rate-limit
 
 API_KEY=
 JWT_SECRET=
@@ -184,6 +190,8 @@ npm run db:push
 - `auth_admin_audit_events`
 - `auth_sessions`
 - `auth_refresh_tokens`
+- `quota_policies`
+- `quota_usage_events`
 
 当前定义的枚举：
 
@@ -218,10 +226,11 @@ npm run db:push
 - auth admin audit events migration
 - auth sessions migration
 - auth refresh tokens migration
+- quota policies migration
+- quota usage events migration
 
 未完成：
 
-- Redis rate limiter
 - distributed worker coordination
 - 数据迁移脚本
 

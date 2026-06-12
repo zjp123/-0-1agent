@@ -218,6 +218,64 @@ export const authRefreshTokens = pgTable(
   }),
 );
 
+export const quotaPolicies = pgTable(
+  "quota_policies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    action: varchar("action", { length: 120 }).notNull(),
+    subjectType: varchar("subject_type", { length: 40 }).notNull(),
+    subjectId: varchar("subject_id", { length: 160 }),
+    windowSeconds: integer("window_seconds").notNull(),
+    requestLimit: integer("request_limit"),
+    tokenLimit: integer("token_limit"),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantActionIdx: index("quota_policies_tenant_action_idx").on(
+      table.tenantId,
+      table.action,
+    ),
+    subjectIdx: index("quota_policies_subject_idx").on(
+      table.subjectType,
+      table.subjectId,
+    ),
+  }),
+);
+
+export const quotaUsageEvents = pgTable(
+  "quota_usage_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").references(() => tenants.id),
+    userId: varchar("user_id", { length: 160 }),
+    action: varchar("action", { length: 120 }).notNull(),
+    subjectType: varchar("subject_type", { length: 40 }).notNull(),
+    subjectId: varchar("subject_id", { length: 160 }),
+    unit: varchar("unit", { length: 40 }).notNull(),
+    amount: integer("amount").notNull(),
+    limit: integer("limit"),
+    windowKey: varchar("window_key", { length: 240 }),
+    allowed: boolean("allowed").notNull(),
+    reason: varchar("reason", { length: 160 }).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantCreatedIdx: index("quota_usage_events_tenant_created_idx").on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    actionCreatedIdx: index("quota_usage_events_action_created_idx").on(
+      table.action,
+      table.createdAt,
+    ),
+  }),
+);
+
 export const sessions = pgTable(
   "sessions",
   {

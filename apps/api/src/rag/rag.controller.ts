@@ -14,6 +14,7 @@ import { CurrentUser } from "../auth/current-user.decorator.js";
 import { RequirePermissions } from "../auth/permissions.decorator.js";
 import { PermissionsGuard } from "../auth/permissions.guard.js";
 import type { RequestUser } from "../auth/auth.types.js";
+import { QuotaService } from "../governance/quota.service.js";
 import { IndexingWorkerService } from "./indexing-worker.service.js";
 import { IngestKnowledgeDto } from "./dto/ingest-knowledge.dto.js";
 import { RetrieveKnowledgeDto } from "./dto/retrieve-knowledge.dto.js";
@@ -37,15 +38,23 @@ export class RagController {
   constructor(
     private readonly rag: RagService,
     private readonly indexingWorker: IndexingWorkerService,
+    private readonly quota: QuotaService,
   ) {}
 
   @Post("ingest")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("knowledge:write")
-  ingest(
+  async ingest(
     @Body() body: IngestKnowledgeDto,
     @CurrentUser() user: RequestUser,
   ): Promise<KnowledgeIngestResult> {
+    await this.quota.enforce({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      action: "knowledge.ingest",
+      tokenCost: Math.ceil(body.content.length / 4),
+      metadata: { title: body.title, sourceType: body.sourceType ?? null },
+    });
     const input: IngestKnowledgeInput = {
       tenantId: user.tenantId,
       title: body.title,
@@ -67,10 +76,16 @@ export class RagController {
   @Post("retrieve")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("knowledge:read")
-  retrieve(
+  async retrieve(
     @Body() body: RetrieveKnowledgeDto,
     @CurrentUser() user: RequestUser,
   ): Promise<KnowledgeSearchResult[]> {
+    await this.quota.enforce({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      action: "knowledge.retrieve",
+      metadata: { limit: body.limit ?? null, tagCount: body.tags?.length ?? 0 },
+    });
     return this.rag.retrieve(this.toRetrieveInput(body, user));
   }
 
@@ -84,7 +99,12 @@ export class RagController {
   @Post("reindex")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("knowledge:write")
-  reindex(@CurrentUser() user: RequestUser): Promise<IndexingJob> {
+  async reindex(@CurrentUser() user: RequestUser): Promise<IndexingJob> {
+    await this.quota.enforce({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      action: "knowledge.reindex",
+    });
     return this.indexingWorker.enqueueReindexJob({
       tenantId: user.tenantId,
       userId: user.userId,

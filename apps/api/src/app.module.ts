@@ -8,6 +8,7 @@ import { configuration } from "./common/config/configuration.js";
 import { validateEnv } from "./common/config/validate-env.js";
 import { DatabaseModule } from "./db/database.module.js";
 import { EvaluationModule } from "./evaluation/evaluation.module.js";
+import { GovernanceModule } from "./governance/governance.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { MemoryContextModule } from "./memory-context/memory-context.module.js";
 import { ModelGatewayModule } from "./model-gateway/model-gateway.module.js";
@@ -32,6 +33,7 @@ import { WorkflowModule } from "./workflow/workflow.module.js";
     RagModule,
     WorkflowModule,
     AuthModule,
+    GovernanceModule,
     ObservabilityModule,
     EvaluationModule,
   ],

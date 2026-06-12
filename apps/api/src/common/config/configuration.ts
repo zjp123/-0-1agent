@@ -123,6 +123,22 @@ export const configuration = registerAs("app", () => ({
       100,
     ),
   },
+  governance: {
+    defaultWindowSeconds: parsePositiveInt(
+      process.env.QUOTA_DEFAULT_WINDOW_SECONDS,
+      60,
+    ),
+    defaultRequestLimit: parsePositiveInt(
+      process.env.QUOTA_DEFAULT_REQUEST_LIMIT,
+      120,
+    ),
+    defaultTokenLimit: parsePositiveInt(
+      process.env.QUOTA_DEFAULT_TOKEN_LIMIT,
+      200_000,
+    ),
+    rateLimitKeyPrefix:
+      process.env.RATE_LIMIT_KEY_PREFIX ?? "enterprise-agent:rate-limit",
+  },
   qdrant: {
     url: process.env.QDRANT_URL ?? "http://localhost:6333",
     apiKey: process.env.QDRANT_API_KEY,
