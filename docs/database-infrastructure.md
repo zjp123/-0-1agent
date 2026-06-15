@@ -34,6 +34,8 @@ PostgreSQL + Redis + Qdrant
 - auth refresh tokens
 - quota policies
 - quota usage events
+- secret values
+- provider credentials
 
 ### Redis
 
@@ -124,6 +126,8 @@ QUOTA_DEFAULT_WINDOW_SECONDS=60
 QUOTA_DEFAULT_REQUEST_LIMIT=120
 QUOTA_DEFAULT_TOKEN_LIMIT=200000
 RATE_LIMIT_KEY_PREFIX=enterprise-agent:rate-limit
+SECRETS_MASTER_KEY=
+SECRETS_MASTER_KEY_ID=local-dev
 
 API_KEY=
 JWT_SECRET=
@@ -192,6 +196,8 @@ npm run db:push
 - `auth_refresh_tokens`
 - `quota_policies`
 - `quota_usage_events`
+- `secret_values`
+- `provider_credentials`
 
 当前定义的枚举：
 
@@ -228,6 +234,8 @@ npm run db:push
 - auth refresh tokens migration
 - quota policies migration
 - quota usage events migration
+- secret values migration
+- provider credentials migration
 
 未完成：
 

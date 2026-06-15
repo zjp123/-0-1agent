@@ -139,6 +139,12 @@ export const configuration = registerAs("app", () => ({
     rateLimitKeyPrefix:
       process.env.RATE_LIMIT_KEY_PREFIX ?? "enterprise-agent:rate-limit",
   },
+  secrets: {
+    masterKey:
+      process.env.SECRETS_MASTER_KEY ??
+      "development-only-secret-master-key-change-me",
+    keyId: process.env.SECRETS_MASTER_KEY_ID ?? "local-dev",
+  },
   qdrant: {
     url: process.env.QDRANT_URL ?? "http://localhost:6333",
     apiKey: process.env.QDRANT_API_KEY,

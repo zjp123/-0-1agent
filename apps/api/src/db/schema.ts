@@ -276,6 +276,65 @@ export const quotaUsageEvents = pgTable(
   }),
 );
 
+export const secretValues = pgTable(
+  "secret_values",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    provider: varchar("provider", { length: 80 }).notNull(),
+    purpose: varchar("purpose", { length: 120 }).notNull(),
+    encryptedValue: text("encrypted_value").notNull(),
+    valueHash: varchar("value_hash", { length: 160 }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    rotationRequired: boolean("rotation_required").notNull().default(false),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    lastRotatedAt: timestamp("last_rotated_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantNameIdx: uniqueIndex("secret_values_tenant_name_idx").on(
+      table.tenantId,
+      table.name,
+    ),
+    providerPurposeIdx: index("secret_values_provider_purpose_idx").on(
+      table.provider,
+      table.purpose,
+    ),
+  }),
+);
+
+export const providerCredentials = pgTable(
+  "provider_credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    provider: varchar("provider", { length: 80 }).notNull(),
+    credentialType: varchar("credential_type", { length: 80 }).notNull(),
+    secretValueId: uuid("secret_value_id").references(() => secretValues.id),
+    alias: varchar("alias", { length: 160 }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantProviderAliasIdx: uniqueIndex("provider_credentials_tenant_provider_alias_idx").on(
+      table.tenantId,
+      table.provider,
+      table.alias,
+    ),
+    providerTypeIdx: index("provider_credentials_provider_type_idx").on(
+      table.provider,
+      table.credentialType,
+    ),
+  }),
+);
+
 export const sessions = pgTable(
   "sessions",
   {

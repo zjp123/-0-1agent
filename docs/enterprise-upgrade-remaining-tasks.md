@@ -39,10 +39,10 @@
 - [x] Auth Admin API / Audit Reason
 - [x] Refresh Token / Session Governance
 - [x] Rate Limiting / Quota Governance
+- [x] Secrets / KMS / Credential Governance
 
 ## 未完成
 
-- [ ] Secrets / KMS / Credential Governance
 - [ ] Policy / Approval / Human-in-the-loop Governance
 - [ ] Multi-agent Orchestration Enhancement
 - [ ] Workflow Production Scheduling Enhancement
@@ -54,14 +54,14 @@
 
 ## 当前进行中
 
-- [ ] Secrets / KMS / Credential Governance
+- [ ] Policy / Approval / Human-in-the-loop Governance
 
 ## 下一步说明
 
-Secrets / KMS / Credential Governance 目标：
+Policy / Approval / Human-in-the-loop Governance 目标：
 
-1. secret metadata store
-2. secret value encryption interface
-3. provider credential registry
-4. 工具 / 模型凭证按权限读取
-5. secret rotation audit
+1. approval request store
+2. approval policy registry
+3. workflow / tool / secret 高风险动作审批
+4. approve / reject API
+5. approval audit events

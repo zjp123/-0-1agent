@@ -93,6 +93,10 @@ export function validateEnv(env: RawEnv): RawEnv {
     );
   }
 
+  if (nodeEnv === "production" && !asString(env, "SECRETS_MASTER_KEY")) {
+    throw new Error("SECRETS_MASTER_KEY is required in production");
+  }
+
   const embeddingApiKey =
     asString(env, "EMBEDDING_API_KEY") ??
     asString(env, "LLM_API_KEY") ??

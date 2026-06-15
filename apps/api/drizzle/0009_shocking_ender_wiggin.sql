@@ -1,0 +1,1 @@
+ALTER TABLE "provider_credentials" ALTER COLUMN "tenant_id" SET NOT NULL;
