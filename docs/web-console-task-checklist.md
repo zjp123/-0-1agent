@@ -11,16 +11,34 @@
 - 每完成一个任务，在本文件中将对应条目从 `[ ]` 改为 `[x]`。
 - 每完成一个重要功能，新增或更新对应 `docs/` 留痕文档。
 - 前端默认连接本地 API：`http://127.0.0.1:3000/api`。
+- Web 技术栈采用 Next.js App Router，用于建设企业级生产应用并沉淀 Next.js 实践。
 - Web 启动命令完成后应提供本地访问地址。
 - 每个阶段至少执行一次构建或类型检查。
+
+## 技术栈决策
+
+- Next.js App Router
+- React
+- TypeScript
+- Tailwind CSS
+- Server Components / Client Components 分层
+- Route Handlers 或 Server Actions 作为后续 BFF 扩展点
+- lucide-react 图标
+- Recharts 图表
+- Zod 用于 API 响应和表单数据校验
+- Markdown 渲染：GitHub Flavored Markdown、代码高亮、表格、任务列表、安全过滤
+- Streaming：首版支持 SSE 流式输出，用于 Agent Chat / LLM 调用体验
 
 ## Phase 1 - Web 基础工程
 
 - [ ] 创建 `apps/web` 前端工程。
 - [ ] 接入根 workspace 脚本：`dev:web`、`build:web`、`check:web`。
-- [ ] 配置 TypeScript、Vite、React 基础结构。
+- [ ] 配置 Next.js App Router、TypeScript、React 基础结构。
+- [ ] 配置 Tailwind CSS 和全局样式。
 - [ ] 配置企业控制台基础布局：侧边导航、顶部状态栏、主内容区。
-- [ ] 建立 API client，支持配置 `VITE_API_BASE_URL`。
+- [ ] 建立 API client，支持配置 `NEXT_PUBLIC_API_BASE_URL`。
+- [ ] 建立 Server Component 与 Client Component 的使用规范。
+- [ ] 建立 Markdown renderer 基础组件。
 - [ ] 新增 Web 工程留痕文档。
 
 ## Phase 2 - Dashboard / 系统健康
@@ -38,13 +56,19 @@
 - [ ] 展示安全相关接口入口。
 - [ ] 新增 API Docs 页面留痕文档。
 
-## Phase 4 - Agent Run
+## Phase 4 - Agent Chat / Streaming / LLM Entry
 
-- [ ] 增加任务输入页面。
+- [ ] 增加 Agent Chat 页面，作为平台 Web 调用大模型的主入口。
+- [ ] 增加任务输入和多轮消息列表。
 - [ ] 调用 `/agent/run`。
+- [ ] 增加首版 SSE streaming 接口规划和 API 对接，优先实现 `POST /api/agent/run/stream`。
+- [ ] Web 支持消费 SSE stream 并增量渲染消息。
+- [ ] 流式消息支持 Markdown 渲染。
 - [ ] 展示 agent 执行结果、步骤、工具调用摘要。
+- [ ] 展示 RAG 引用、工具调用事件和最终答案。
+- [ ] 支持取消生成、失败重试和错误状态。
 - [ ] 支持本地 API key 或 service token 配置。
-- [ ] 新增 Agent Run 留痕文档。
+- [ ] 新增 Agent Chat / Streaming 留痕文档。
 
 ## Phase 5 - Tools
 
@@ -111,6 +135,7 @@
 - [ ] 增加统一错误边界。
 - [ ] 增加统一 toast/notification。
 - [ ] 增加请求超时与重试策略。
+- [ ] 增加 streaming 断线处理和超时保护。
 - [ ] 增加前端权限视图控制。
 - [ ] 增加环境配置说明。
 - [ ] 增加部署说明。
@@ -122,12 +147,14 @@
 
 1. Phase 1 - Web 基础工程
 2. Phase 2 - Dashboard / 系统健康
-3. Phase 5 - Tools
-4. Phase 8 - Security / Auth Governance
+3. Phase 4 - Agent Chat / Streaming / LLM Entry
+4. Phase 5 - Tools
+5. Phase 8 - Security / Auth Governance
 
 原因：
 
 - 先让 Web 能启动和访问。
 - 先验证本地 API、数据库和基础设施状态。
+- 首版就要具备平台 Web 入口和大模型流式调用体验。
 - 再覆盖最容易自测的 tools。
 - 最后接入刚完成的企业级安全治理能力。
