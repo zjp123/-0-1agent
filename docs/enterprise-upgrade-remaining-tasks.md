@@ -40,10 +40,10 @@
 - [x] Refresh Token / Session Governance
 - [x] Rate Limiting / Quota Governance
 - [x] Secrets / KMS / Credential Governance
+- [x] Policy / Approval / Human-in-the-loop Governance
 
 ## 未完成
 
-- [ ] Policy / Approval / Human-in-the-loop Governance
 - [ ] Multi-agent Orchestration Enhancement
 - [ ] Workflow Production Scheduling Enhancement
 - [ ] Test System: unit / integration / e2e
@@ -54,14 +54,14 @@
 
 ## 当前进行中
 
-- [ ] Policy / Approval / Human-in-the-loop Governance
+- [ ] Multi-agent Orchestration Enhancement
 
 ## 下一步说明
 
-Policy / Approval / Human-in-the-loop Governance 目标：
+Multi-agent Orchestration Enhancement 目标：
 
-1. approval request store
-2. approval policy registry
-3. workflow / tool / secret 高风险动作审批
-4. approve / reject API
-5. approval audit events
+1. agent role / participant registry
+2. coordinator / worker / reviewer 编排模型
+3. 多智能体任务分解与交接记录
+4. 多智能体运行 trace
+5. 编排失败恢复与超时治理

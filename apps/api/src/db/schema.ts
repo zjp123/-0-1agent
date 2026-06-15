@@ -335,6 +335,63 @@ export const providerCredentials = pgTable(
   }),
 );
 
+export const approvalPolicies = pgTable(
+  "approval_policies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    action: varchar("action", { length: 120 }).notNull(),
+    resourceType: varchar("resource_type", { length: 80 }).notNull(),
+    requiredApprovals: integer("required_approvals").notNull().default(1),
+    enabled: boolean("enabled").notNull().default(true),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantActionIdx: index("approval_policies_tenant_action_idx").on(
+      table.tenantId,
+      table.action,
+      table.resourceType,
+    ),
+  }),
+);
+
+export const approvalRequests = pgTable(
+  "approval_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    policyId: uuid("policy_id").references(() => approvalPolicies.id),
+    requestedBy: varchar("requested_by", { length: 160 }).notNull(),
+    action: varchar("action", { length: 120 }).notNull(),
+    resourceType: varchar("resource_type", { length: 80 }).notNull(),
+    resourceId: varchar("resource_id", { length: 160 }),
+    status: varchar("status", { length: 40 }).notNull().default("pending"),
+    requiredApprovals: integer("required_approvals").notNull().default(1),
+    approvals: jsonb("approvals").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    reason: text("reason").notNull(),
+    rejectionReason: text("rejection_reason"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantStatusIdx: index("approval_requests_tenant_status_idx").on(
+      table.tenantId,
+      table.status,
+    ),
+    resourceIdx: index("approval_requests_resource_idx").on(
+      table.resourceType,
+      table.resourceId,
+    ),
+  }),
+);
+
 export const sessions = pgTable(
   "sessions",
   {

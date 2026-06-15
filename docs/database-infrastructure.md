@@ -36,6 +36,8 @@ PostgreSQL + Redis + Qdrant
 - quota usage events
 - secret values
 - provider credentials
+- approval policies
+- approval requests
 
 ### Redis
 
@@ -198,6 +200,8 @@ npm run db:push
 - `quota_usage_events`
 - `secret_values`
 - `provider_credentials`
+- `approval_policies`
+- `approval_requests`
 
 当前定义的枚举：
 
@@ -236,6 +240,8 @@ npm run db:push
 - quota usage events migration
 - secret values migration
 - provider credentials migration
+- approval policies migration
+- approval requests migration
 
 未完成：
 
@@ -248,10 +254,10 @@ npm run db:push
 
 ## 下一步
 
-建议下一步先替换 `EvaluationStore`：
+建议下一步实现 `Multi-agent Orchestration Enhancement`：
 
-1. 新增 PostgresEvaluationStore
-2. 复用现有 EvaluationStore 接口
-3. 写入 `evaluation_cases`
-4. 写入 `evaluation_runs`
-5. 保持 controller/service 不变
+1. agent role / participant registry
+2. coordinator / worker / reviewer 编排模型
+3. 多智能体任务分解与交接记录
+4. 多智能体运行 trace
+5. 编排失败恢复与超时治理

@@ -16,8 +16,10 @@ import {
 } from "../db/schema.js";
 import type { RequestUser } from "../auth/auth.types.js";
 import { AuthAdminReasonDto } from "../auth/dto/auth-admin-common.dto.js";
+import { ApprovalService } from "../governance/approval.service.js";
 import { CreateProviderCredentialDto } from "./dto/create-provider-credential.dto.js";
 import { CreateSecretDto } from "./dto/create-secret.dto.js";
+import { ReadSecretValueDto } from "./dto/read-secret-value.dto.js";
 import { RotateSecretDto } from "./dto/rotate-secret.dto.js";
 import { UpdateSecretDto } from "./dto/update-secret.dto.js";
 import { SecretCryptoService } from "./secret-crypto.service.js";
@@ -62,6 +64,7 @@ export class SecretsService {
     @Inject(DRIZZLE_DB) private readonly db: Database,
     private readonly identity: IdentityService,
     private readonly crypto: SecretCryptoService,
+    private readonly approvals: ApprovalService,
   ) {}
 
   async listSecrets(actor: RequestUser): Promise<SecretMetadataResponse[]> {
@@ -121,10 +124,19 @@ export class SecretsService {
 
   async getSecretValue(
     secretId: string,
+    body: ReadSecretValueDto,
     actor: RequestUser,
   ): Promise<SecretValueResponse> {
     const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
     const secret = await this.getTenantSecret(tenantUuid, secretId);
+    await this.approvals.requireApproval({
+      tenantId: actor.tenantId,
+      userId: actor.userId,
+      action: "secrets.secret.read_value",
+      resourceType: "secret_value",
+      resourceId: secretId,
+      ...(body.approvalId ? { approvalId: body.approvalId } : {}),
+    });
     const value = this.crypto.decrypt(secret.encryptedValue);
     await this.db
       .update(secretValues)
@@ -209,6 +221,14 @@ export class SecretsService {
   ): Promise<SecretMetadataResponse> {
     const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
     const secret = await this.getTenantSecret(tenantUuid, secretId);
+    await this.approvals.requireApproval({
+      tenantId: actor.tenantId,
+      userId: actor.userId,
+      action: "secrets.secret.rotate",
+      resourceType: "secret_value",
+      resourceId: secretId,
+      ...(body.approvalId ? { approvalId: body.approvalId } : {}),
+    });
     const now = new Date();
     const [updated] = await this.db
       .update(secretValues)

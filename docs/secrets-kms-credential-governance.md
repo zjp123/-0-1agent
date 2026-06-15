@@ -22,6 +22,7 @@ apps/api/src/secrets/
   secrets.service.ts
   secret-crypto.service.ts
   dto/create-secret.dto.ts
+  dto/read-secret-value.dto.ts
   dto/update-secret.dto.ts
   dto/rotate-secret.dto.ts
   dto/create-provider-credential.dto.ts
@@ -148,14 +149,37 @@ POST /api/secrets/:secretId/rotate
 
 读取 secret value 会更新 `last_used_at` 并写入审计事件。
 
+如果租户配置了审批策略：
+
+```text
+action=secrets.secret.read_value
+resourceType=secret_value
+```
+
+读取 secret value 必须带上已审批通过的 `approvalId`：
+
+```http
+GET /api/secrets/:secretId/value?approvalId=approval-request-id
+```
+
 轮换 secret：
 
 ```json
 {
   "value": "new-secret-value",
-  "reason": "Scheduled credential rotation"
+  "reason": "Scheduled credential rotation",
+  "approvalId": "approval-request-id"
 }
 ```
+
+如果租户配置了审批策略：
+
+```text
+action=secrets.secret.rotate
+resourceType=secret_value
+```
+
+轮换 secret 必须带上已审批通过的 `approvalId`。
 
 ### Provider Credential 管理
 
@@ -198,6 +222,8 @@ POST /api/secrets/provider-credentials
 - provider credential create / list
 - secret read audit
 - secret rotation audit
+- secret read approval hook
+- secret rotation approval hook
 - production `SECRETS_MASTER_KEY` 校验
 - Drizzle migration
 
@@ -222,10 +248,10 @@ npm run build
 
 ## 下一步
 
-建议下一步实现 `Policy / Approval / Human-in-the-loop Governance`：
+建议下一步实现 `Multi-agent Orchestration Enhancement`：
 
-1. approval request store
-2. approval policy registry
-3. workflow / tool / secret 高风险动作审批
-4. approve / reject API
-5. approval audit events
+1. agent role / participant registry
+2. coordinator / worker / reviewer 编排模型
+3. 多智能体任务分解与交接记录
+4. 多智能体运行 trace
+5. 编排失败恢复与超时治理
