@@ -632,6 +632,74 @@ export const workflowSteps = pgTable(
   }),
 );
 
+export const workflowSchedules = pgTable(
+  "workflow_schedules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    workflowId: uuid("workflow_id").notNull().references(() => workflows.id),
+    createdBy: uuid("created_by").references(() => users.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    scheduleType: varchar("schedule_type", { length: 40 }).notNull(),
+    cronExpression: varchar("cron_expression", { length: 120 }),
+    intervalSeconds: integer("interval_seconds"),
+    timezone: varchar("timezone", { length: 80 }).notNull().default("UTC"),
+    enabled: boolean("enabled").notNull().default(true),
+    maxConcurrentRuns: integer("max_concurrent_runs").notNull().default(1),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    leaseOwner: varchar("lease_owner", { length: 160 }),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantNextRunIdx: index("workflow_schedules_tenant_next_run_idx").on(
+      table.tenantId,
+      table.enabled,
+      table.nextRunAt,
+    ),
+    workflowIdx: index("workflow_schedules_workflow_idx").on(
+      table.tenantId,
+      table.workflowId,
+    ),
+    leaseIdx: index("workflow_schedules_lease_idx").on(table.leaseUntil),
+  }),
+);
+
+export const workflowScheduleRuns = pgTable(
+  "workflow_schedule_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    scheduleId: uuid("schedule_id").notNull().references(() => workflowSchedules.id),
+    workflowId: uuid("workflow_id").notNull().references(() => workflows.id),
+    triggeredBy: varchar("triggered_by", { length: 80 }).notNull(),
+    workerId: varchar("worker_id", { length: 160 }),
+    status: varchar("status", { length: 40 }).notNull().default("pending"),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    error: text("error"),
+    output: text("output"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantScheduleIdx: index("workflow_schedule_runs_tenant_schedule_idx").on(
+      table.tenantId,
+      table.scheduleId,
+      table.createdAt,
+    ),
+    statusIdx: index("workflow_schedule_runs_status_idx").on(
+      table.tenantId,
+      table.status,
+    ),
+  }),
+);
+
 export const evaluationCases = pgTable(
   "evaluation_cases",
   {

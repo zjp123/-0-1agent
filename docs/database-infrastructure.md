@@ -41,6 +41,8 @@ PostgreSQL + Redis + Qdrant
 - orchestration participants
 - orchestration runs
 - orchestration handoffs
+- workflow schedules
+- workflow schedule runs
 
 ### Redis
 
@@ -208,6 +210,8 @@ npm run db:push
 - `orchestration_participants`
 - `orchestration_runs`
 - `orchestration_handoffs`
+- `workflow_schedules`
+- `workflow_schedule_runs`
 
 当前定义的枚举：
 
@@ -251,6 +255,8 @@ npm run db:push
 - orchestration participants migration
 - orchestration runs migration
 - orchestration handoffs migration
+- workflow schedules migration
+- workflow schedule runs migration
 
 未完成：
 
@@ -263,10 +269,10 @@ npm run db:push
 
 ## 下一步
 
-建议下一步实现 `Workflow Production Scheduling Enhancement`：
+建议下一步实现 `Test System: unit / integration / e2e`：
 
-1. workflow schedule store
-2. cron / interval scheduling model
-3. workflow run history
-4. scheduler lease / concurrency control
-5. failed scheduled run recovery
+1. 测试框架与脚本
+2. unit tests for core services
+3. integration tests for persistence stores
+4. API e2e smoke tests
+5. CI test command baseline

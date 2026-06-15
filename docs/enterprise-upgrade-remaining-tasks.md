@@ -42,10 +42,10 @@
 - [x] Secrets / KMS / Credential Governance
 - [x] Policy / Approval / Human-in-the-loop Governance
 - [x] Multi-agent Orchestration Enhancement
+- [x] Workflow Production Scheduling Enhancement
 
 ## 未完成
 
-- [ ] Workflow Production Scheduling Enhancement
 - [ ] Test System: unit / integration / e2e
 - [ ] OpenAPI / SDK / API Documentation
 - [ ] CI/CD / Docker Production Build
@@ -54,14 +54,14 @@
 
 ## 当前进行中
 
-- [ ] Workflow Production Scheduling Enhancement
+- [ ] Test System: unit / integration / e2e
 
 ## 下一步说明
 
-Workflow Production Scheduling Enhancement 目标：
+Test System: unit / integration / e2e 目标：
 
-1. workflow schedule store
-2. cron / interval scheduling model
-3. workflow run history
-4. scheduler lease / concurrency control
-5. failed scheduled run recovery
+1. 测试框架与脚本
+2. unit tests for core services
+3. integration tests for persistence stores
+4. API e2e smoke tests
+5. CI test command baseline

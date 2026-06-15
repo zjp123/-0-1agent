@@ -13,12 +13,17 @@ Workflow Engine 负责承载复杂任务的计划、状态和执行历史。它�
 ```text
 apps/api/src/workflow/
   workflow.types.ts
+  workflow-schedule.types.ts
   workflow.service.ts
+  workflow-scheduler.service.ts
   workflow.controller.ts
   postgres-workflow.store.ts
   dto/
     create-workflow.dto.ts
     update-workflow-step.dto.ts
+    create-workflow-schedule.dto.ts
+    claim-workflow-schedules.dto.ts
+    complete-workflow-schedule-run.dto.ts
 ```
 
 ## 核心模型
@@ -144,6 +149,43 @@ PATCH /api/workflows/:workflowId/steps/:stepId
 }
 ```
 
+### Scheduler status
+
+```http
+GET /api/workflows/scheduler/status
+```
+
+### 创建 schedule
+
+```http
+POST /api/workflows/schedules
+```
+
+### 领取到期 schedule
+
+```http
+POST /api/workflows/schedules/claim-due
+```
+
+### 手动触发 schedule
+
+```http
+POST /api/workflows/schedules/:scheduleId/trigger
+```
+
+### 查询 schedule run
+
+```http
+GET /api/workflows/schedule-runs
+GET /api/workflows/schedules/:scheduleId/runs
+```
+
+### 完成 schedule run
+
+```http
+POST /api/workflows/schedule-runs/:runId/complete
+```
+
 ## 租户隔离
 
 Workflow 使用认证上下文中的 `tenantId`，不从 body 接收 tenantId。
@@ -165,24 +207,29 @@ Workflow 使用认证上下文中的 `tenantId`，不从 body 接收 tenantId。
 - workflow status 自动推导
 - workflow event history
 - Auth 权限接入
+- schedule registry
+- interval / cron schedule
+- schedule run history
+- lease based due schedule claim
+- max concurrent runs control
 
 未完成：
 
-- 持久化数据库
 - Agent 自动生成 plan
 - Agent 执行 workflow step
 - step 依赖关系
 - 人工确认 API
 - 暂停/恢复 API
 - 取消 API
-- workflow trace 联动
+- 内置后台 scheduler loop
+- stuck run recovery worker
 
 ## 下一步
 
-建议下一步实现 `Evaluation` 基础版：
+建议下一步实现 `Test System: unit / integration / e2e`：
 
-1. 定义 evaluation case 类型
-2. 定义 run result 评分结构
-3. 提供 in-memory eval case store
-4. 支持运行基础回归评估
-5. 为后续模型/工具/RAG 质量回归做准备
+1. 测试框架与脚本
+2. unit tests for core services
+3. integration tests for persistence stores
+4. API e2e smoke tests
+5. CI test command baseline

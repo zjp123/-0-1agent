@@ -19,7 +19,10 @@ export type TraceEventType =
   | "orchestration.handoff.started"
   | "orchestration.handoff.completed"
   | "orchestration.handoff.failed"
-  | "orchestration.run.completed";
+  | "orchestration.run.completed"
+  | "workflow.schedule.created"
+  | "workflow.schedule.run.created"
+  | "workflow.schedule.run.failed";
 
 export type TraceEvent = {
   id: string;

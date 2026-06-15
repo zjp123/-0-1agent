@@ -45,6 +45,8 @@ WORKFLOW_STORE
 - `users`
 - `workflows`
 - `workflow_steps`
+- `workflow_schedules`
+- `workflow_schedule_runs`
 
 当前还没有单独的 `workflow_events` 表。
 
@@ -85,6 +87,9 @@ Workflow 使用认证上下文中的外部字符串：
 - workflow_steps 落库
 - step 状态更新落库
 - workflow status 自动推导并落库
+- workflow_schedules 落库
+- workflow_schedule_runs 落库
+- schedule lease / claim 状态落库
 
 未完成：
 
@@ -94,13 +99,15 @@ Workflow 使用认证上下文中的外部字符串：
 - pause/resume/cancel API
 - Agent 自动执行 workflow
 - Workflow 与 Observability trace 关联
+- 内置后台 scheduler loop
+- schedule update / disable API
 
 ## 下一步
 
-建议下一步迁移 `KnowledgeStore`：
+建议下一步实现 `Test System: unit / integration / e2e`：
 
-1. 新增 PostgresKnowledgeStore
-2. 写入 `knowledge_documents`
-3. 写入 `knowledge_chunks`
-4. 保持 RagService / Controller 不变
-5. 为后续 Qdrant vector store 接入做准备
+1. 测试框架与脚本
+2. unit tests for core services
+3. integration tests for persistence stores
+4. API e2e smoke tests
+5. CI test command baseline
