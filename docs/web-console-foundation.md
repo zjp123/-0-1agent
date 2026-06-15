@@ -128,10 +128,13 @@ code signature ... not valid for use in process: mapping process and mapped file
 - `build:web` 使用 `next build --webpack`
 - 显式设置 `turbopack.root`
 - 显式安装 `lightningcss-darwin-arm64`
+- `dev:web` 使用 `next dev --webpack`
+- 当前本地开发关闭 Tailwind v4 PostCSS 插件，使用普通 CSS fallback，避免 Codex Node 加载 `lightningcss-darwin-arm64`
 
 当前结论：
 
 - `check:web` 已通过。
+- `dev:web` 可在当前环境启动，访问 `http://localhost:3001`。
 - `build:web` 需要在系统 Node.js、CI Linux 环境或容器环境中继续验证。
 - 该限制属于当前 Codex/macOS Node 原生模块加载环境问题，不是 Web 业务代码类型错误。
 

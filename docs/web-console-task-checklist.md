@@ -43,11 +43,11 @@
 
 ## Phase 2 - Dashboard / 系统健康
 
-- [ ] Dashboard 展示 API readiness。
-- [ ] 展示 database、vectorStore 依赖状态。
-- [ ] 展示本地 API 地址和环境信息。
-- [ ] 增加刷新按钮和加载、错误、空状态。
-- [ ] 新增 Dashboard 留痕文档。
+- [x] Dashboard 展示 API readiness。
+- [x] 展示 database、vectorStore 依赖状态。
+- [x] 展示本地 API 地址和环境信息。
+- [x] 增加刷新按钮和加载、错误、空状态。
+- [x] 新增 Dashboard 留痕文档。
 
 ## Phase 3 - API Docs / 能力总览
 
