@@ -9,6 +9,10 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "check": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --import tsx \"test/**/*.test.ts\"",
+    "test:unit": "node --test --import tsx \"test/unit/**/*.test.ts\"",
+    "test:integration": "node --test --import tsx \"test/integration/**/*.test.ts\"",
+    "test:e2e": "node --test --import tsx \"test/e2e/**/*.test.ts\"",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"
   },

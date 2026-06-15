@@ -43,10 +43,10 @@
 - [x] Policy / Approval / Human-in-the-loop Governance
 - [x] Multi-agent Orchestration Enhancement
 - [x] Workflow Production Scheduling Enhancement
+- [x] Test System: unit / integration / e2e
 
 ## 未完成
 
-- [ ] Test System: unit / integration / e2e
 - [ ] OpenAPI / SDK / API Documentation
 - [ ] CI/CD / Docker Production Build
 - [ ] Deployment Operations: readiness / migrations / environment profiles
@@ -54,14 +54,14 @@
 
 ## 当前进行中
 
-- [ ] Test System: unit / integration / e2e
+- [ ] OpenAPI / SDK / API Documentation
 
 ## 下一步说明
 
-Test System: unit / integration / e2e 目标：
+OpenAPI / SDK / API Documentation 目标：
 
-1. 测试框架与脚本
-2. unit tests for core services
-3. integration tests for persistence stores
-4. API e2e smoke tests
-5. CI test command baseline
+1. OpenAPI generation baseline
+2. API route grouping and tags
+3. request / response schema documentation
+4. SDK generation plan
+5. API usage examples

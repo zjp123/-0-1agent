@@ -104,10 +104,10 @@ Workflow 使用认证上下文中的外部字符串：
 
 ## 下一步
 
-建议下一步实现 `Test System: unit / integration / e2e`：
+建议下一步实现 `OpenAPI / SDK / API Documentation`：
 
-1. 测试框架与脚本
-2. unit tests for core services
-3. integration tests for persistence stores
-4. API e2e smoke tests
-5. CI test command baseline
+1. OpenAPI generation baseline
+2. API route grouping and tags
+3. request / response schema documentation
+4. SDK generation plan
+5. API usage examples
