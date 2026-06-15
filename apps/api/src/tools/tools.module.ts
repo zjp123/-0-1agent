@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { AuthModule } from "../auth/auth.module.js";
 import { GovernanceModule } from "../governance/governance.module.js";
 import { CalculatorTool } from "./builtin/calculator.tool.js";
 import { CurrentTimeTool } from "./builtin/current-time.tool.js";
@@ -7,7 +8,7 @@ import { ToolRegistryService } from "./tool-registry.service.js";
 import { ToolsController } from "./tools.controller.js";
 
 @Module({
-  imports: [GovernanceModule],
+  imports: [AuthModule, GovernanceModule],
   controllers: [ToolsController],
   providers: [CurrentTimeTool, CalculatorTool, ToolRegistryService],
   exports: [ToolRegistryService],

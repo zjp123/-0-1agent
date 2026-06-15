@@ -9,8 +9,11 @@ import type { EmbeddingProvider } from "./vector-store.types.js";
 @Injectable()
 export class EmbeddingProviderFactory {
   constructor(
+    @Inject(ConfigService)
     private readonly config: ConfigService,
+    @Inject(LocalHashEmbeddingProvider)
     private readonly localHash: LocalHashEmbeddingProvider,
+    @Inject(OpenAiCompatibleEmbeddingProvider)
     private readonly openAiCompatible: OpenAiCompatibleEmbeddingProvider,
   ) {}
 

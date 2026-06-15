@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type { EmbeddingProvider } from "./vector-store.types.js";
@@ -7,7 +7,7 @@ import type { EmbeddingProvider } from "./vector-store.types.js";
 export class LocalHashEmbeddingProvider implements EmbeddingProvider {
   private readonly dimension: number;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     this.dimension = config.get<number>("app.qdrant.vectorSize", 384);
   }
 

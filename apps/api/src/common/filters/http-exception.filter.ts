@@ -40,7 +40,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
     path: string,
   ): ErrorBody {
     if (typeof exceptionResponse === "object" && exceptionResponse !== null) {
-      const payload = exceptionResponse as Partial<ErrorBody>;
+      const payload = exceptionResponse as Partial<ErrorBody> &
+        Record<string, unknown>;
       const body: ErrorBody = {
         statusCode,
         message: payload.message ?? "Unexpected error",
@@ -49,6 +50,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
       };
       if (payload.error) {
         body.error = payload.error;
+      }
+      for (const [key, value] of Object.entries(payload)) {
+        if (!["statusCode", "message", "error", "timestamp", "path"].includes(key)) {
+          (body as ErrorBody & Record<string, unknown>)[key] = value;
+        }
       }
       return body;
     }

@@ -47,6 +47,7 @@ export type RagStatus = {
 @Injectable()
 export class RagService {
   constructor(
+    @Inject(KnowledgeChunkerService)
     private readonly chunker: KnowledgeChunkerService,
     @Inject(KNOWLEDGE_STORE) private readonly store: KnowledgeStore,
     @Inject(INDEXING_JOB_STORE)

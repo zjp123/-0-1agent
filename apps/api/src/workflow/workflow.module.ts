@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { AuthModule } from "../auth/auth.module.js";
 import { DatabaseModule } from "../db/database.module.js";
 import { ObservabilityModule } from "../observability/observability.module.js";
 import { PostgresWorkflowStore } from "./postgres-workflow.store.js";
@@ -9,7 +10,7 @@ import { WorkflowController } from "./workflow.controller.js";
 import { WorkflowService } from "./workflow.service.js";
 
 @Module({
-  imports: [DatabaseModule, ObservabilityModule],
+  imports: [AuthModule, DatabaseModule, ObservabilityModule],
   controllers: [WorkflowController],
   providers: [
     PostgresWorkflowStore,

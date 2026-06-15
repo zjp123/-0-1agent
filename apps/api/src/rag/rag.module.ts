@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { AuthModule } from "../auth/auth.module.js";
 import { DatabaseModule } from "../db/database.module.js";
 import { GovernanceModule } from "../governance/governance.module.js";
 import { ObservabilityModule } from "../observability/observability.module.js";
@@ -19,6 +20,7 @@ import { RagService } from "./rag.service.js";
 @Module({
   imports: [
     DatabaseModule,
+    AuthModule,
     VectorStoreModule,
     ObservabilityModule,
     GovernanceModule,

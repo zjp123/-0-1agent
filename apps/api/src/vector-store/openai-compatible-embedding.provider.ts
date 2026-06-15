@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import OpenAI from "openai";
 
@@ -15,7 +15,7 @@ export class OpenAiCompatibleEmbeddingProvider implements EmbeddingProvider {
   private readonly timeoutMs: number;
   private readonly maxRetries: number;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     this.model = config.get<string>(
       "app.embedding.model",
       "text-embedding-3-small",

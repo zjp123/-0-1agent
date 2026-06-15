@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type {
@@ -35,7 +35,7 @@ export class QdrantVectorStore implements VectorStore {
   private readonly distance: string;
   private readonly timeoutMs: number;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     this.enabled = config.get<boolean>("app.qdrant.enabled", false);
     this.url = config.get<string>("app.qdrant.url", "http://localhost:6333");
     this.apiKey = config.get<string>("app.qdrant.apiKey");
