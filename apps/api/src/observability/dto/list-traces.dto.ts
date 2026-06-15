@@ -10,6 +10,11 @@ const TRACE_EVENT_TYPES: TraceEventType[] = [
   "model.failed",
   "tool.completed",
   "agent.run.completed",
+  "orchestration.run.started",
+  "orchestration.handoff.started",
+  "orchestration.handoff.completed",
+  "orchestration.handoff.failed",
+  "orchestration.run.completed",
 ];
 
 export class ListTracesDto {

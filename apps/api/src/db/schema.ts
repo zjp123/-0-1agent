@@ -392,6 +392,99 @@ export const approvalRequests = pgTable(
   }),
 );
 
+export const orchestrationParticipants = pgTable(
+  "orchestration_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    role: varchar("role", { length: 80 }).notNull(),
+    systemPrompt: text("system_prompt"),
+    model: varchar("model", { length: 160 }),
+    enabled: boolean("enabled").notNull().default(true),
+    maxSteps: integer("max_steps").notNull().default(4),
+    maxDurationMs: integer("max_duration_ms").notNull().default(60_000),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantRoleIdx: index("orchestration_participants_tenant_role_idx").on(
+      table.tenantId,
+      table.role,
+    ),
+    tenantEnabledIdx: index("orchestration_participants_tenant_enabled_idx").on(
+      table.tenantId,
+      table.enabled,
+    ),
+  }),
+);
+
+export const orchestrationRuns = pgTable(
+  "orchestration_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    createdBy: varchar("created_by", { length: 160 }).notNull(),
+    requestId: varchar("request_id", { length: 160 }).notNull(),
+    objective: text("objective").notNull(),
+    strategy: varchar("strategy", { length: 80 }).notNull().default("sequential_handoff"),
+    status: varchar("status", { length: 40 }).notNull().default("pending"),
+    participantIds: jsonb("participant_ids").$type<string[]>().notNull().default([]),
+    finalAnswer: text("final_answer"),
+    error: text("error"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantStatusIdx: index("orchestration_runs_tenant_status_idx").on(
+      table.tenantId,
+      table.status,
+    ),
+    requestIdx: index("orchestration_runs_request_idx").on(table.requestId),
+  }),
+);
+
+export const orchestrationHandoffs = pgTable(
+  "orchestration_handoffs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    runId: uuid("run_id").notNull().references(() => orchestrationRuns.id),
+    fromParticipantId: uuid("from_participant_id").references(
+      () => orchestrationParticipants.id,
+    ),
+    toParticipantId: uuid("to_participant_id").notNull().references(
+      () => orchestrationParticipants.id,
+    ),
+    stepOrder: integer("step_order").notNull(),
+    status: varchar("status", { length: 40 }).notNull().default("pending"),
+    input: text("input").notNull(),
+    output: text("output"),
+    error: text("error"),
+    agentRequestId: varchar("agent_request_id", { length: 160 }),
+    usage: jsonb("usage").$type<Record<string, number>>().notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantRunIdx: index("orchestration_handoffs_tenant_run_idx").on(
+      table.tenantId,
+      table.runId,
+      table.stepOrder,
+    ),
+    participantStatusIdx: index("orchestration_handoffs_participant_status_idx").on(
+      table.toParticipantId,
+      table.status,
+    ),
+  }),
+);
+
 export const sessions = pgTable(
   "sessions",
   {

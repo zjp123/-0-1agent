@@ -14,7 +14,12 @@ export type TraceEventType =
   | "model.completed"
   | "model.failed"
   | "tool.completed"
-  | "agent.run.completed";
+  | "agent.run.completed"
+  | "orchestration.run.started"
+  | "orchestration.handoff.started"
+  | "orchestration.handoff.completed"
+  | "orchestration.handoff.failed"
+  | "orchestration.run.completed";
 
 export type TraceEvent = {
   id: string;

@@ -38,6 +38,9 @@ PostgreSQL + Redis + Qdrant
 - provider credentials
 - approval policies
 - approval requests
+- orchestration participants
+- orchestration runs
+- orchestration handoffs
 
 ### Redis
 
@@ -202,6 +205,9 @@ npm run db:push
 - `provider_credentials`
 - `approval_policies`
 - `approval_requests`
+- `orchestration_participants`
+- `orchestration_runs`
+- `orchestration_handoffs`
 
 当前定义的枚举：
 
@@ -242,6 +248,9 @@ npm run db:push
 - provider credentials migration
 - approval policies migration
 - approval requests migration
+- orchestration participants migration
+- orchestration runs migration
+- orchestration handoffs migration
 
 未完成：
 
@@ -254,10 +263,10 @@ npm run db:push
 
 ## 下一步
 
-建议下一步实现 `Multi-agent Orchestration Enhancement`：
+建议下一步实现 `Workflow Production Scheduling Enhancement`：
 
-1. agent role / participant registry
-2. coordinator / worker / reviewer 编排模型
-3. 多智能体任务分解与交接记录
-4. 多智能体运行 trace
-5. 编排失败恢复与超时治理
+1. workflow schedule store
+2. cron / interval scheduling model
+3. workflow run history
+4. scheduler lease / concurrency control
+5. failed scheduled run recovery

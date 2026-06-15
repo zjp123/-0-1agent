@@ -41,10 +41,10 @@
 - [x] Rate Limiting / Quota Governance
 - [x] Secrets / KMS / Credential Governance
 - [x] Policy / Approval / Human-in-the-loop Governance
+- [x] Multi-agent Orchestration Enhancement
 
 ## 未完成
 
-- [ ] Multi-agent Orchestration Enhancement
 - [ ] Workflow Production Scheduling Enhancement
 - [ ] Test System: unit / integration / e2e
 - [ ] OpenAPI / SDK / API Documentation
@@ -54,14 +54,14 @@
 
 ## 当前进行中
 
-- [ ] Multi-agent Orchestration Enhancement
+- [ ] Workflow Production Scheduling Enhancement
 
 ## 下一步说明
 
-Multi-agent Orchestration Enhancement 目标：
+Workflow Production Scheduling Enhancement 目标：
 
-1. agent role / participant registry
-2. coordinator / worker / reviewer 编排模型
-3. 多智能体任务分解与交接记录
-4. 多智能体运行 trace
-5. 编排失败恢复与超时治理
+1. workflow schedule store
+2. cron / interval scheduling model
+3. workflow run history
+4. scheduler lease / concurrency control
+5. failed scheduled run recovery
