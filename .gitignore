@@ -4,5 +4,6 @@ dist/
 .turbo/
 .next/
 coverage/
+*.tsbuildinfo
 .agent-memory.json
 .agent-memory/

@@ -1,0 +1,34 @@
+{
+  "name": "@enterprise-agent/web",
+  "version": "0.1.0",
+  "description": "Enterprise Agent Web Console",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build --webpack",
+    "start": "next start -p 3001",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "4.3.1",
+    "clsx": "2.1.1",
+    "lucide-react": "0.561.0",
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "react-markdown": "10.1.0",
+    "rehype-sanitize": "6.0.0",
+    "remark-gfm": "4.0.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@next/swc-wasm-nodejs": "16.2.9",
+    "@types/node": "22.19.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "lightningcss-darwin-arm64": "1.32.0",
+    "tailwindcss": "4.3.1",
+    "typescript": "5.9.3"
+  }
+}

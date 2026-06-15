@@ -31,15 +31,15 @@
 
 ## Phase 1 - Web 基础工程
 
-- [ ] 创建 `apps/web` 前端工程。
-- [ ] 接入根 workspace 脚本：`dev:web`、`build:web`、`check:web`。
-- [ ] 配置 Next.js App Router、TypeScript、React 基础结构。
-- [ ] 配置 Tailwind CSS 和全局样式。
-- [ ] 配置企业控制台基础布局：侧边导航、顶部状态栏、主内容区。
-- [ ] 建立 API client，支持配置 `NEXT_PUBLIC_API_BASE_URL`。
-- [ ] 建立 Server Component 与 Client Component 的使用规范。
-- [ ] 建立 Markdown renderer 基础组件。
-- [ ] 新增 Web 工程留痕文档。
+- [x] 创建 `apps/web` 前端工程。
+- [x] 接入根 workspace 脚本：`dev:web`、`build:web`、`check:web`。
+- [x] 配置 Next.js App Router、TypeScript、React 基础结构。
+- [x] 配置 Tailwind CSS 和全局样式。
+- [x] 配置企业控制台基础布局：侧边导航、顶部状态栏、主内容区。
+- [x] 建立 API client，支持配置 `NEXT_PUBLIC_API_BASE_URL`。
+- [x] 建立 Server Component 与 Client Component 的使用规范。
+- [x] 建立 Markdown renderer 基础组件。
+- [x] 新增 Web 工程留痕文档。
 
 ## Phase 2 - Dashboard / 系统健康
 
@@ -127,7 +127,7 @@
 - [ ] 完成 Dashboard 联调。
 - [ ] 完成 Security 持久化联调。
 - [ ] 完成 Tools 调用联调。
-- [ ] 完成至少一次 build/check。
+- [ ] 完成至少一次 build/check。当前 `check:web` 已通过，`build:web` 受 Codex macOS Node 原生模块签名限制，需要在系统 Node、CI Linux 或容器环境继续验证。
 - [ ] 新增 Web 本地自测留痕文档。
 
 ## Phase 12 - 生产化增强
