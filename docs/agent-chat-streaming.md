@@ -97,6 +97,11 @@ http://localhost:3001/agent-chat
 - 展示 stream events。
 - 展示 usage、duration、steps 摘要。
 - 支持 Stop 取消当前生成。
+- 支持 Retry 复用上一次请求。
+- 支持 Clear 清空当前对话。
+- 后续请求会把已有 user/assistant 消息作为 history 传给后端。
+- 展示 context sources，可用于查看 RAG/context 注入情况。
+- 展示 model/tool timeline。
 - 侧边栏 Agent Chat 导航可点击。
 
 ## 关键文件
@@ -187,7 +192,6 @@ GET http://localhost:3001/agent-chat -> 200 OK
 ## 后续
 
 - Model Gateway 增加真正 token-level streaming。
-- Agent Chat 支持会话历史。
-- Agent Chat 展示 tool call timeline。
-- Agent Chat 展示 RAG 引用。
+- Agent Chat 引用卡片继续细化为可点击来源。
+- Agent Chat 可持久化会话历史。
 - Auth 配置后续改为统一设置页或浏览器本地安全存储。

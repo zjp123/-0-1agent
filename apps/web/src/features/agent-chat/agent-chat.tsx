@@ -1,10 +1,16 @@
 "use client";
 
-import { Square, SendHorizonal } from "lucide-react";
-import { useRef, useState } from "react";
+import { RotateCcw, SendHorizonal, Square } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { runAgentStream, type AgentStreamEvent } from "@/lib/api/client";
+import {
+  runAgentStream,
+  type AgentMessage,
+  type AgentRunContext,
+  type AgentRunStep,
+  type AgentStreamEvent,
+} from "@/lib/api/client";
 
 type ChatStatus = "idle" | "streaming" | "done" | "error" | "cancelled";
 
@@ -12,6 +18,23 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
+};
+
+type RunSnapshot = {
+  message: string;
+  history: AgentMessage[];
+};
+
+type RunMetadata = {
+  stopReason: string;
+  durationMs: number;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  steps: AgentRunStep[];
+  context: AgentRunContext;
 };
 
 export function AgentChat() {
@@ -22,31 +45,70 @@ export function AgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [events, setEvents] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
-  const [usage, setUsage] = useState<string>("not reported");
+  const [metadata, setMetadata] = useState<RunMetadata | undefined>();
+  const [lastRun, setLastRun] = useState<RunSnapshot | undefined>();
   const abortRef = useRef<AbortController | undefined>(undefined);
 
   const canSubmit = status !== "streaming" && message.trim().length > 0;
+  const canRetry = status !== "streaming" && Boolean(lastRun);
+
+  const history = useMemo<AgentMessage[]>(
+    () =>
+      messages
+        .filter((item) => item.content.trim().length > 0)
+        .map((item) => ({
+          role: item.role,
+          content: item.content,
+        })),
+    [messages],
+  );
 
   async function submit(): Promise<void> {
     if (!canSubmit) {
       return;
     }
 
-    const requestId = crypto.randomUUID();
-    const userMessage: ChatMessage = {
-      id: `${requestId}-user`,
-      role: "user",
-      content: message.trim(),
+    const nextRun: RunSnapshot = {
+      message: message.trim(),
+      history,
     };
+    setLastRun(nextRun);
+    await startRun(nextRun, { appendUserMessage: true });
+  }
+
+  async function retry(): Promise<void> {
+    if (!lastRun) {
+      return;
+    }
+
+    await startRun(lastRun, { appendUserMessage: false });
+  }
+
+  async function startRun(
+    run: RunSnapshot,
+    options: { appendUserMessage: boolean },
+  ): Promise<void> {
+    const requestId = crypto.randomUUID();
     const assistantMessage: ChatMessage = {
       id: `${requestId}-assistant`,
       role: "assistant",
       content: "",
     };
 
-    setMessages((current) => [...current, userMessage, assistantMessage]);
+    setMessages((current) => {
+      const next = [...current];
+      if (options.appendUserMessage) {
+        next.push({
+          id: `${requestId}-user`,
+          role: "user",
+          content: run.message,
+        });
+      }
+      next.push(assistantMessage);
+      return next;
+    });
     setEvents([`started request ${requestId}`]);
-    setUsage("not reported");
+    setMetadata(undefined);
     setErrorMessage(undefined);
     setStatus("streaming");
 
@@ -56,7 +118,8 @@ export function AgentChat() {
     try {
       await runAgentStream({
         requestId,
-        message: userMessage.content,
+        message: run.message,
+        messages: run.history,
         apiKey: apiKey.trim() || undefined,
         serviceToken: serviceToken.trim() || undefined,
         signal: controller.signal,
@@ -91,9 +154,13 @@ export function AgentChat() {
     }
 
     if (event.event === "result") {
-      setUsage(
-        `${event.data.usage.totalTokens} tokens, ${event.data.durationMs} ms, ${event.data.steps.length} steps`,
-      );
+      setMetadata({
+        stopReason: event.data.stopReason,
+        durationMs: event.data.durationMs,
+        usage: event.data.usage,
+        steps: event.data.steps,
+        context: event.data.context,
+      });
       return;
     }
 
@@ -106,6 +173,15 @@ export function AgentChat() {
   function cancel(): void {
     abortRef.current?.abort();
     setStatus("cancelled");
+  }
+
+  function clearConversation(): void {
+    setMessages([]);
+    setEvents([]);
+    setMetadata(undefined);
+    setErrorMessage(undefined);
+    setStatus("idle");
+    setLastRun(undefined);
   }
 
   return (
@@ -147,9 +223,16 @@ export function AgentChat() {
                 <SendHorizonal className="icon-sm" aria-hidden="true" />
                 Send
               </button>
+              <button type="button" className="refresh-button" onClick={() => void retry()} disabled={!canRetry}>
+                <RotateCcw className="icon-sm" aria-hidden="true" />
+                Retry
+              </button>
               <button type="button" className="refresh-button" onClick={cancel} disabled={status !== "streaming"}>
                 <Square className="icon-sm" aria-hidden="true" />
                 Stop
+              </button>
+              <button type="button" className="refresh-button" onClick={clearConversation} disabled={status === "streaming"}>
+                Clear
               </button>
             </div>
           </div>
@@ -173,28 +256,82 @@ export function AgentChat() {
             </div>
           </section>
 
-          <section className="section-card">
-            <div className="section-card-header">
-              <h2 className="section-card-title">Stream Events</h2>
-              <p className="section-card-description">SSE lifecycle and run metadata.</p>
-            </div>
-            <div className="section-card-body">
-              {errorMessage ? <div className="alert alert-danger">{errorMessage}</div> : null}
-              <dl className="details-grid single">
-                <div>
-                  <dt className="label">Usage</dt>
-                  <dd className="detail-value">{usage}</dd>
-                </div>
-              </dl>
-              <ol className="event-list">
-                {events.map((event, index) => (
-                  <li key={`${event}-${index}`}>{event}</li>
-                ))}
-              </ol>
-            </div>
-          </section>
+          <RunMetadataPanel metadata={metadata} errorMessage={errorMessage} events={events} />
         </aside>
       </section>
     </div>
+  );
+}
+
+function RunMetadataPanel({
+  metadata,
+  errorMessage,
+  events,
+}: {
+  metadata: RunMetadata | undefined;
+  errorMessage: string | undefined;
+  events: string[];
+}) {
+  return (
+    <section className="section-card">
+      <div className="section-card-header">
+        <h2 className="section-card-title">Run Details</h2>
+        <p className="section-card-description">SSE lifecycle, context, usage, and tool/model timeline.</p>
+      </div>
+      <div className="section-card-body">
+        {errorMessage ? <div className="alert alert-danger">{errorMessage}</div> : null}
+        <dl className="details-grid single">
+          <div>
+            <dt className="label">Usage</dt>
+            <dd className="detail-value">
+              {metadata
+                ? `${metadata.usage.totalTokens} tokens, ${metadata.durationMs} ms`
+                : "not reported"}
+            </dd>
+          </div>
+          <div>
+            <dt className="label">Stop reason</dt>
+            <dd className="detail-value">{metadata?.stopReason ?? "not reported"}</dd>
+          </div>
+          <div>
+            <dt className="label">Context</dt>
+            <dd className="detail-value">
+              {metadata
+                ? `${metadata.context.estimatedInputTokens} estimated tokens, ${metadata.context.droppedMessages} dropped`
+                : "not reported"}
+            </dd>
+          </div>
+        </dl>
+
+        <h3 className="subsection-title">Context Sources</h3>
+        <ul className="compact-list">
+          {metadata?.context.sources.map((source) => (
+            <li key={`${source.layer}-${source.id}`}>
+              <span>{source.layer}</span>
+              <span>{source.included ? "included" : "dropped"}</span>
+              <span>{source.tokens} tokens</span>
+            </li>
+          )) ?? <li>No sources yet.</li>}
+        </ul>
+
+        <h3 className="subsection-title">Timeline</h3>
+        <ol className="event-list">
+          {metadata?.steps.map((step, index) => (
+            <li key={`${step.type}-${step.step}-${index}`}>
+              {step.type === "model"
+                ? `model step ${step.step}: ${step.response.model}, ${step.response.latencyMs} ms, ${step.response.toolCalls.length} tool calls`
+                : `tool step ${step.step}: ${step.toolName}, ${step.status}, ${step.latencyMs} ms`}
+            </li>
+          )) ?? <li>No steps yet.</li>}
+        </ol>
+
+        <h3 className="subsection-title">Stream Events</h3>
+        <ol className="event-list">
+          {events.map((event, index) => (
+            <li key={`${event}-${index}`}>{event}</li>
+          ))}
+        </ol>
+      </div>
+    </section>
   );
 }

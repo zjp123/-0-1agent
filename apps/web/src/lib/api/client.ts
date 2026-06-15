@@ -43,8 +43,8 @@ export type AgentStreamEvent =
       data: {
         requestId: string;
         stopReason: string;
-        steps: unknown[];
-        context: unknown;
+        steps: AgentRunStep[];
+        context: AgentRunContext;
         usage: {
           promptTokens: number;
           completionTokens: number;
@@ -65,10 +65,56 @@ export type AgentStreamEvent =
 export type RunAgentStreamInput = {
   requestId: string;
   message: string;
+  messages?: AgentMessage[];
   apiKey?: string;
   serviceToken?: string;
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
+};
+
+export type AgentMessage = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+};
+
+export type AgentRunStep =
+  | {
+      type: "model";
+      step: number;
+      response: {
+        provider: string;
+        model: string;
+        finishReason: string | null;
+        latencyMs: number;
+        attempts: number;
+        contentPreview: string;
+        toolCalls: Array<{ id: string; name: string; arguments: string }>;
+      };
+    }
+  | {
+      type: "tool";
+      step: number;
+      toolName: string;
+      status: string;
+      contentPreview: string;
+      latencyMs: number;
+    };
+
+export type AgentRunContext = {
+  budget: {
+    maxTokens: number;
+    reservedResponseTokens: number;
+    availableInputTokens: number;
+  };
+  estimatedInputTokens: number;
+  sources: Array<{
+    layer: string;
+    id: string;
+    tokens: number;
+    included: boolean;
+    reason: string;
+  }>;
+  droppedMessages: number;
 };
 
 export async function getReadiness(): Promise<HealthResponse> {
@@ -106,6 +152,7 @@ export async function runAgentStream(input: RunAgentStreamInput): Promise<void> 
     body: JSON.stringify({
       requestId: input.requestId,
       message: input.message,
+      messages: input.messages,
     }),
     signal: input.signal,
   });
