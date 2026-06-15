@@ -58,17 +58,17 @@
 
 ## Phase 4 - Agent Chat / Streaming / LLM Entry
 
-- [ ] 增加 Agent Chat 页面，作为平台 Web 调用大模型的主入口。
-- [ ] 增加任务输入和多轮消息列表。
-- [ ] 调用 `/agent/run`。
-- [ ] 增加首版 SSE streaming 接口规划和 API 对接，优先实现 `POST /api/agent/run/stream`。
-- [ ] Web 支持消费 SSE stream 并增量渲染消息。
-- [ ] 流式消息支持 Markdown 渲染。
-- [ ] 展示 agent 执行结果、步骤、工具调用摘要。
+- [x] 增加 Agent Chat 页面，作为平台 Web 调用大模型的主入口。
+- [ ] 增加任务输入和多轮消息列表。当前已支持单轮输入和消息列表，多轮会话历史后续继续完善。
+- [x] 调用 `/agent/run`。首版通过 `POST /api/agent/run/stream` 复用 Agent run 链路。
+- [x] 增加首版 SSE streaming 接口规划和 API 对接，优先实现 `POST /api/agent/run/stream`。
+- [x] Web 支持消费 SSE stream 并增量渲染消息。
+- [x] 流式消息支持 Markdown 渲染。
+- [x] 展示 agent 执行结果、步骤、工具调用摘要。
 - [ ] 展示 RAG 引用、工具调用事件和最终答案。
-- [ ] 支持取消生成、失败重试和错误状态。
-- [ ] 支持本地 API key 或 service token 配置。
-- [ ] 新增 Agent Chat / Streaming 留痕文档。
+- [ ] 支持取消生成、失败重试和错误状态。当前已支持取消生成和错误状态，失败重试后续完善。
+- [x] 支持本地 API key 或 service token 配置。
+- [x] 新增 Agent Chat / Streaming 留痕文档。
 
 ## Phase 5 - Tools
 

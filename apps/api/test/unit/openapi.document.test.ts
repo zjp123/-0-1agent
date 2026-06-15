@@ -17,6 +17,7 @@ test("openApiDocument includes core production API paths", () => {
   const paths = openApiDocument.paths;
 
   assert.ok(paths["/agent/run"]?.post);
+  assert.ok(paths["/agent/run/stream"]?.post);
   assert.ok(paths["/knowledge/ingest"]?.post);
   assert.ok(paths["/workflows/schedules/claim-due"]?.post);
   assert.ok(paths["/orchestration/runs"]?.post);

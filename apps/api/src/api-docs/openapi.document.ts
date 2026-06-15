@@ -20,6 +20,7 @@ const routes: ApiRoute[] = [
   { method: "get", path: "/docs/openapi.json", tag: "Documentation", summary: "Get OpenAPI document", operationId: "getOpenApiDocument", responseSchema: "OpenApiDocument" },
   { method: "get", path: "/agent/capabilities", tag: "Agent Runtime", summary: "Get agent capability snapshot", operationId: "getAgentCapabilities" },
   { method: "post", path: "/agent/run", tag: "Agent Runtime", summary: "Run an agent task", operationId: "runAgent", permission: "agent:run", requestSchema: "RunAgentRequest" },
+  { method: "post", path: "/agent/run/stream", tag: "Agent Runtime", summary: "Run an agent task with Server-Sent Events", operationId: "streamAgentRun", permission: "agent:run", requestSchema: "RunAgentRequest", responseSchema: "ServerSentEventsResponse" },
   { method: "get", path: "/tools", tag: "Tools", summary: "List registered tools", operationId: "listTools" },
   { method: "post", path: "/tools/execute", tag: "Tools", summary: "Execute a registered tool", operationId: "executeTool", permission: "tools:execute", requestSchema: "ExecuteToolRequest" },
   { method: "post", path: "/knowledge/ingest", tag: "Knowledge", summary: "Ingest a knowledge document", operationId: "ingestKnowledge", permission: "knowledge:write", requestSchema: "IngestKnowledgeRequest" },
@@ -182,6 +183,17 @@ function successResponses(schemaName = "AnyJson"): Record<string, unknown> {
         description: "Successful response",
         content: { "text/plain": { schema: { type: "string" } } },
       },
+    };
+  }
+  if (schemaName === "ServerSentEventsResponse") {
+    return {
+      "200": {
+        description: "Server-Sent Events stream",
+        content: { "text/event-stream": { schema: { type: "string" } } },
+      },
+      "400": { $ref: "#/components/responses/BadRequest" },
+      "401": { $ref: "#/components/responses/Unauthorized" },
+      "403": { $ref: "#/components/responses/Forbidden" },
     };
   }
   return {

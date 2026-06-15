@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -32,12 +33,72 @@ export class AgentRuntimeController {
     @Body() body: RunAgentDto,
     @CurrentUser() user: RequestUser,
   ): Promise<AgentRunResult> {
-    await this.quota.enforce({
-      tenantId: user.tenantId,
-      userId: user.userId,
-      action: "agent.run",
-      metadata: { requestId: body.requestId, model: body.model ?? null },
+    await this.enforceRequestQuota(body, user);
+    const options = this.toRunOptions(body, user);
+
+    const result = await this.agentRuntime.run(options);
+    await this.enforceTokenQuota(body, user, result);
+    return result;
+  }
+
+  @Post("run/stream")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("agent:run")
+  async streamAgentRun(
+    @Body() body: RunAgentDto,
+    @CurrentUser() user: RequestUser,
+    @Res() response: Response,
+  ): Promise<void> {
+    response.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    response.setHeader("Cache-Control", "no-cache, no-transform");
+    response.setHeader("Connection", "keep-alive");
+    response.flushHeaders();
+
+    const writeEvent = (event: string, data: Record<string, unknown>): void => {
+      response.write(`event: ${event}\n`);
+      response.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    writeEvent("started", {
+      requestId: body.requestId,
+      timestamp: new Date().toISOString(),
     });
+
+    try {
+      await this.enforceRequestQuota(body, user);
+      const result = await this.agentRuntime.run(this.toRunOptions(body, user));
+      await this.enforceTokenQuota(body, user, result);
+
+      for (const chunk of this.chunkText(result.answer, 120)) {
+        writeEvent("delta", {
+          requestId: result.requestId,
+          content: chunk,
+        });
+      }
+
+      writeEvent("result", {
+        requestId: result.requestId,
+        stopReason: result.stopReason,
+        steps: result.steps,
+        context: result.context,
+        usage: result.usage,
+        durationMs: result.durationMs,
+      });
+      writeEvent("done", {
+        requestId: result.requestId,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      writeEvent("error", {
+        requestId: body.requestId,
+        message: error instanceof Error ? error.message : "Agent stream failed.",
+      });
+    } finally {
+      response.end();
+    }
+  }
+
+  private toRunOptions(body: RunAgentDto, user: RequestUser): AgentRunOptions {
     const options: AgentRunOptions = {
       requestId: body.requestId,
       userMessage: body.message,
@@ -68,22 +129,54 @@ export class AgentRuntimeController {
       options.model = body.model;
     }
 
-    const result = await this.agentRuntime.run(options);
-    if (result.usage.totalTokens > 0) {
-      await this.quota.enforce({
-        tenantId: user.tenantId,
-        userId: user.userId,
-        action: "agent.run",
-        requestCost: 0,
-        tokenCost: result.usage.totalTokens,
-        metadata: {
-          requestId: body.requestId,
-          model: body.model ?? null,
-          promptTokens: result.usage.promptTokens,
-          completionTokens: result.usage.completionTokens,
-        },
-      });
+    return options;
+  }
+
+  private async enforceRequestQuota(
+    body: RunAgentDto,
+    user: RequestUser,
+  ): Promise<void> {
+    await this.quota.enforce({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      action: "agent.run",
+      metadata: { requestId: body.requestId, model: body.model ?? null },
+    });
+  }
+
+  private async enforceTokenQuota(
+    body: RunAgentDto,
+    user: RequestUser,
+    result: AgentRunResult,
+  ): Promise<void> {
+    if (result.usage.totalTokens <= 0) {
+      return;
     }
-    return result;
+
+    await this.quota.enforce({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      action: "agent.run",
+      requestCost: 0,
+      tokenCost: result.usage.totalTokens,
+      metadata: {
+        requestId: body.requestId,
+        model: body.model ?? null,
+        promptTokens: result.usage.promptTokens,
+        completionTokens: result.usage.completionTokens,
+      },
+    });
+  }
+
+  private chunkText(value: string, chunkSize: number): string[] {
+    if (!value) {
+      return [];
+    }
+
+    const chunks: string[] = [];
+    for (let index = 0; index < value.length; index += chunkSize) {
+      chunks.push(value.slice(index, index + chunkSize));
+    }
+    return chunks;
   }
 }

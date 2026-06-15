@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Activity,
   Bot,
@@ -10,22 +12,26 @@ import {
   ShieldCheck,
   Wrench,
 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 const navigation = [
-  { label: "Dashboard", icon: Gauge, active: true },
-  { label: "Agent Chat", icon: Bot, active: false },
-  { label: "Knowledge", icon: Library, active: false },
-  { label: "Tools", icon: Wrench, active: false },
-  { label: "Workflows", icon: GitBranch, active: false },
-  { label: "Security", icon: ShieldCheck, active: false },
-  { label: "Evaluations", icon: ClipboardCheck, active: false },
-  { label: "Observability", icon: Activity, active: false },
-  { label: "Settings", icon: KeyRound, active: false },
+  { label: "Dashboard", icon: Gauge, href: "/" },
+  { label: "Agent Chat", icon: Bot, href: "/agent-chat" },
+  { label: "Knowledge", icon: Library, href: "#" },
+  { label: "Tools", icon: Wrench, href: "#" },
+  { label: "Workflows", icon: GitBranch, href: "#" },
+  { label: "Security", icon: ShieldCheck, href: "#" },
+  { label: "Evaluations", icon: ClipboardCheck, href: "#" },
+  { label: "Observability", icon: Activity, href: "#" },
+  { label: "Settings", icon: KeyRound, href: "#" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -42,16 +48,23 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="nav" aria-label="Primary navigation">
           {navigation.map((item) => {
             const Icon = item.icon;
+            const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const className = isActive ? "nav-link nav-link-active" : "nav-link";
 
-            return (
+            return item.href === "#" ? (
               <a
                 key={item.label}
                 href="#"
-                className={item.active ? "nav-link nav-link-active" : "nav-link"}
+                className={className}
               >
                 <Icon className="icon-sm" aria-hidden="true" />
                 <span>{item.label}</span>
               </a>
+            ) : (
+              <Link key={item.label} href={item.href} className={className}>
+                <Icon className="icon-sm" aria-hidden="true" />
+                <span>{item.label}</span>
+              </Link>
             );
           })}
         </nav>
