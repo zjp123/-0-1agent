@@ -24,6 +24,7 @@
     "compose:prod:up": "docker compose -f infra/docker-compose.prod.yml up -d --build",
     "compose:prod:down": "docker compose -f infra/docker-compose.prod.yml down",
     "db:generate": "npm run db:generate -w @enterprise-agent/api",
+    "db:migrate": "npm run db:migrate -w @enterprise-agent/api",
     "db:push": "npm run db:push -w @enterprise-agent/api",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down"

@@ -28,7 +28,6 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=prod-deps /app/apps/api/package.json ./apps/api/package.json
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/drizzle ./apps/api/drizzle
-COPY --from=build /app/apps/api/drizzle.config.ts ./apps/api/drizzle.config.ts
 USER agent
 EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]

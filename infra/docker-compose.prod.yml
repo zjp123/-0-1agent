@@ -23,6 +23,7 @@ services:
       SERVICE_TOKEN_TENANT_ID: ${SERVICE_TOKEN_TENANT_ID:-default}
       SERVICE_TOKEN_ROLES: ${SERVICE_TOKEN_ROLES:-service}
       SERVICE_TOKEN_PERMISSIONS: ${SERVICE_TOKEN_PERMISSIONS:-}
+      DATABASE_MIGRATIONS_FOLDER: ${DATABASE_MIGRATIONS_FOLDER:-apps/api/drizzle}
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
@@ -36,7 +37,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+          "node -e \"fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
         ]
       interval: 15s
       timeout: 5s

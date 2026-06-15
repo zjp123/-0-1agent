@@ -46,22 +46,22 @@
 - [x] Test System: unit / integration / e2e
 - [x] OpenAPI / SDK / API Documentation
 - [x] CI/CD / Docker Production Build
+- [x] Deployment Operations: readiness / migrations / environment profiles
 
 ## 未完成
 
-- [ ] Deployment Operations: readiness / migrations / environment profiles
 - [ ] Security Hardening: audit pagination / break-glass / anomaly detection
 
 ## 当前进行中
 
-- [ ] Deployment Operations: readiness / migrations / environment profiles
+- [ ] Security Hardening: audit pagination / break-glass / anomaly detection
 
 ## 下一步说明
 
-Deployment Operations: readiness / migrations / environment profiles 目标：
+Security Hardening: audit pagination / break-glass / anomaly detection 目标：
 
-1. readiness / liveness endpoint separation
-2. migration apply command
-3. production env profile documentation
-4. deployment runbook
-5. rollback and migration safety checklist
+1. audit pagination / filtering
+2. break-glass role and reason enforcement
+3. anomaly event model
+4. security alert surfaces
+5. security hardening runbook

@@ -203,10 +203,10 @@ docker: command not found
 
 ## 下一步
 
-建议下一步实现 `Deployment Operations: readiness / migrations / environment profiles`：
+建议下一步实现 `Security Hardening: audit pagination / break-glass / anomaly detection`：
 
-1. readiness / liveness endpoint separation
-2. migration apply command
-3. production env profile documentation
-4. deployment runbook
-5. rollback and migration safety checklist
+1. audit pagination / filtering
+2. break-glass role and reason enforcement
+3. anomaly event model
+4. security alert surfaces
+5. security hardening runbook

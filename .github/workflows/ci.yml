@@ -64,12 +64,13 @@ jobs:
             -e LLM_API_KEY=ci-placeholder \
             -e API_KEY=ci-api-key \
             -e SECRETS_MASTER_KEY=ci-secret-master-key-minimum-32-bytes \
+            -e DATABASE_MIGRATIONS_FOLDER=apps/api/drizzle \
             enterprise-agent-api:ci
 
       - name: API startup smoke test
         run: |
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:3000/api/health; then
+            if curl -fsS http://127.0.0.1:3000/api/health/ready; then
               exit 0
             fi
             docker logs enterprise-agent-ci-api || true

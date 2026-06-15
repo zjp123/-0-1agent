@@ -35,8 +35,7 @@ class VectorStoreStub implements VectorStore {
 
   async health(): Promise<VectorStoreHealth> {
     return {
-      enabled: false,
-      provider: "qdrant",
+      status: "disabled",
       collection: "test",
     };
   }
@@ -64,5 +63,31 @@ test("HealthController returns dependency health shape", async () => {
   assert.equal(result.service, "enterprise-agent-api");
   assert.equal(result.environment, "development");
   assert.equal(result.dependencies.database.status, "ok");
-  assert.equal(result.dependencies.vectorStore.provider, "qdrant");
+  assert.equal(result.dependencies.vectorStore.collection, "test");
+});
+
+test("HealthController exposes liveness without dependency checks", () => {
+  const controller = new HealthController(
+    new ConfigStub() as never,
+    new DatabaseStub() as never,
+    new VectorStoreStub(),
+  );
+
+  const result = controller.getLive();
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.service, "enterprise-agent-api");
+});
+
+test("HealthController returns readiness when dependencies are usable", async () => {
+  const controller = new HealthController(
+    new ConfigStub() as never,
+    new DatabaseStub() as never,
+    new VectorStoreStub(),
+  );
+
+  const result = await controller.getReady();
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.dependencies.database.status, "ok");
 });

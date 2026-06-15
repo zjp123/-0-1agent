@@ -14,6 +14,8 @@ type ApiRoute = {
 const routes: ApiRoute[] = [
   { method: "get", path: "/", tag: "System", summary: "Get API root metadata", operationId: "getRoot", responseSchema: "RootResponse" },
   { method: "get", path: "/health", tag: "System", summary: "Get service and dependency health", operationId: "getHealth", responseSchema: "HealthResponse" },
+  { method: "get", path: "/health/live", tag: "System", summary: "Get process liveness", operationId: "getLive", responseSchema: "LiveResponse" },
+  { method: "get", path: "/health/ready", tag: "System", summary: "Get dependency readiness", operationId: "getReady", responseSchema: "HealthResponse" },
   { method: "get", path: "/docs", tag: "Documentation", summary: "List API documentation groups", operationId: "getApiDocumentationSummary", responseSchema: "ApiDocumentationSummary" },
   { method: "get", path: "/docs/openapi.json", tag: "Documentation", summary: "Get OpenAPI document", operationId: "getOpenApiDocument", responseSchema: "OpenApiDocument" },
   { method: "get", path: "/agent/capabilities", tag: "Agent Runtime", summary: "Get agent capability snapshot", operationId: "getAgentCapabilities" },
@@ -207,6 +209,12 @@ function buildSchemas(): Record<string, unknown> {
       timestamp: stringSchema("date-time"),
       dependencies: { type: "object", additionalProperties: true },
     }, ["status", "service", "environment", "uptimeSeconds", "timestamp", "dependencies"]),
+    LiveResponse: objectSchema({
+      status: { type: "string", enum: ["ok"] },
+      service: stringSchema(),
+      uptimeSeconds: numberSchema(),
+      timestamp: stringSchema("date-time"),
+    }, ["status", "service", "uptimeSeconds", "timestamp"]),
     ApiDocumentationSummary: objectSchema({
       title: stringSchema(),
       version: stringSchema(),

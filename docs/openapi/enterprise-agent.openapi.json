@@ -125,6 +125,68 @@
         }
       }
     },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get process liveness",
+        "operationId": "getLive",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get dependency readiness",
+        "operationId": "getReady",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
     "/docs": {
       "get": {
         "tags": [
@@ -3025,6 +3087,34 @@
           "uptimeSeconds",
           "timestamp",
           "dependencies"
+        ]
+      },
+      "LiveResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "service": {
+            "type": "string"
+          },
+          "uptimeSeconds": {
+            "type": "number"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "uptimeSeconds",
+          "timestamp"
         ]
       },
       "ApiDocumentationSummary": {
