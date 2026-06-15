@@ -179,10 +179,10 @@ npm test
 
 ## 下一步
 
-建议下一步实现 `CI/CD / Docker Production Build`：
+建议下一步实现 `Deployment Operations: readiness / migrations / environment profiles`：
 
-1. Dockerfile production build
-2. docker compose production profile
-3. CI lint / check / test / build baseline
-4. migration check step
-5. image build and startup smoke test
+1. readiness / liveness endpoint separation
+2. migration apply command
+3. production env profile documentation
+4. deployment runbook
+5. rollback and migration safety checklist

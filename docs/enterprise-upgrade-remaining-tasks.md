@@ -45,23 +45,23 @@
 - [x] Workflow Production Scheduling Enhancement
 - [x] Test System: unit / integration / e2e
 - [x] OpenAPI / SDK / API Documentation
+- [x] CI/CD / Docker Production Build
 
 ## 未完成
 
-- [ ] CI/CD / Docker Production Build
 - [ ] Deployment Operations: readiness / migrations / environment profiles
 - [ ] Security Hardening: audit pagination / break-glass / anomaly detection
 
 ## 当前进行中
 
-- [ ] CI/CD / Docker Production Build
+- [ ] Deployment Operations: readiness / migrations / environment profiles
 
 ## 下一步说明
 
-CI/CD / Docker Production Build 目标：
+Deployment Operations: readiness / migrations / environment profiles 目标：
 
-1. Dockerfile production build
-2. docker compose production profile
-3. CI lint / check / test / build baseline
-4. migration check step
-5. image build and startup smoke test
+1. readiness / liveness endpoint separation
+2. migration apply command
+3. production env profile documentation
+4. deployment runbook
+5. rollback and migration safety checklist

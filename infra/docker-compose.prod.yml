@@ -1,0 +1,91 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: enterprise-agent-api:local
+    container_name: enterprise-agent-api
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://agent:agent_password@postgres:5432/agent_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_ENABLED: ${QDRANT_ENABLED:-false}
+      SECRETS_MASTER_KEY: ${SECRETS_MASTER_KEY:?SECRETS_MASTER_KEY is required in production}
+      SECRETS_MASTER_KEY_ID: ${SECRETS_MASTER_KEY_ID:-prod}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ISSUER: ${JWT_ISSUER:-}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-}
+      API_KEY: ${API_KEY:-}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-}
+      SERVICE_TOKEN_USER_ID: ${SERVICE_TOKEN_USER_ID:-service-token-user}
+      SERVICE_TOKEN_TENANT_ID: ${SERVICE_TOKEN_TENANT_ID:-default}
+      SERVICE_TOKEN_ROLES: ${SERVICE_TOKEN_ROLES:-service}
+      SERVICE_TOKEN_PERMISSIONS: ${SERVICE_TOKEN_PERMISSIONS:-}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: enterprise-agent-postgres-prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agent_db}
+      POSTGRES_USER: ${POSTGRES_USER:-agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agent} -d ${POSTGRES_DB:-agent_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: enterprise-agent-redis-prod
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.4
+    container_name: enterprise-agent-qdrant-prod
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:

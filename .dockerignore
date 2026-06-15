@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.git
+.env
+.agent-memory.json
+.agent-memory
+baseCode
+docs
+knowledge
+public
+*.log
+Dockerfile
+docker-compose*.yml

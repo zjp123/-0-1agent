@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  api:
+    name: API check, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      - name: Test
+        run: npm test
+
+      - name: Export OpenAPI
+        run: npm run docs:openapi
+
+      - name: Build
+        run: npm run build
+
+      - name: Migration generation check
+        run: npm run db:generate
+
+      - name: Assert generated files are current
+        run: git diff --exit-code
+
+      - name: Docker build
+        run: docker build -f apps/api/Dockerfile -t enterprise-agent-api:ci .
+
+      - name: Start production image
+        run: |
+          docker network create enterprise-agent-ci
+          docker run -d --name enterprise-agent-ci-postgres --network enterprise-agent-ci \
+            -e POSTGRES_DB=agent_db \
+            -e POSTGRES_USER=agent \
+            -e POSTGRES_PASSWORD=agent_password \
+            postgres:16-alpine
+          until docker exec enterprise-agent-ci-postgres pg_isready -U agent -d agent_db; do sleep 2; done
+          docker run -d --name enterprise-agent-ci-redis --network enterprise-agent-ci redis:7-alpine
+          docker run -d --name enterprise-agent-ci-api --network enterprise-agent-ci \
+            -p 3000:3000 \
+            -e NODE_ENV=production \
+            -e DATABASE_URL=postgresql://agent:agent_password@enterprise-agent-ci-postgres:5432/agent_db \
+            -e REDIS_URL=redis://enterprise-agent-ci-redis:6379 \
+            -e QDRANT_ENABLED=false \
+            -e LLM_API_KEY=ci-placeholder \
+            -e API_KEY=ci-api-key \
+            -e SECRETS_MASTER_KEY=ci-secret-master-key-minimum-32-bytes \
+            enterprise-agent-api:ci
+
+      - name: API startup smoke test
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/api/health; then
+              exit 0
+            fi
+            docker logs enterprise-agent-ci-api || true
+            sleep 2
+          done
+          docker logs enterprise-agent-ci-api || true
+          exit 1
