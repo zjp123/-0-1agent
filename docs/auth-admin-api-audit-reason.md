@@ -167,7 +167,27 @@ sha256(token)
 GET /api/auth/audit-events
 ```
 
-当前返回当前租户最近 100 条 auth 管理审计事件。
+当前支持分页和过滤：
+
+- `limit`
+- `offset`
+- `action`
+- `targetType`
+- `targetId`
+- `actorUserId`
+- `from`
+- `to`
+
+响应包含 `items`、`limit`、`offset` 和可选 `nextOffset`。
+
+### 安全异常查询
+
+```http
+GET /api/auth/security/anomalies
+POST /api/auth/security/anomalies/:eventId/acknowledge
+```
+
+当前用于查询和确认 break-glass、credential admin、privilege escalation 等安全异常事件。
 
 ## 租户边界
 
@@ -196,6 +216,7 @@ GET /api/auth/audit-events
 - `auth.refresh_token.create`
 - `auth.refresh_token.rotate`
 - `auth.refresh_token.revoke`
+- `auth.security_anomaly.acknowledge`
 
 ## 当前边界
 
@@ -217,7 +238,7 @@ GET /api/auth/audit-events
 未完成：
 
 - 更细粒度的 auth admin 分权
-- 审计事件分页和过滤
+- 更细粒度异常检测规则
 - 审计事件导出
 - break-glass / emergency access 流程
 - service token 创建后的外部密钥库托管

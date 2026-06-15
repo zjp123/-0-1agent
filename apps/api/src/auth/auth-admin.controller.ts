@@ -6,15 +6,18 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 
 import { ApiKeyGuard } from "./api-key.guard.js";
 import {
   AuthAdminService,
-  type AuthAuditEventResponse,
+  type AuthAuditEventListResponse,
   type AuthRoleResponse,
   type CreatedServiceTokenResponse,
+  type SecurityAnomalyEventListResponse,
+  type SecurityAnomalyEventResponse,
   type ServiceTokenResponse,
   type UserRoleAssignmentResponse,
 } from "./auth-admin.service.js";
@@ -27,11 +30,14 @@ import {
 } from "./auth-session.service.js";
 import type { RequestUser } from "./auth.types.js";
 import { CurrentUser } from "./current-user.decorator.js";
+import { AcknowledgeSecurityAnomalyDto } from "./dto/acknowledge-security-anomaly.dto.js";
 import { AssignUserRoleDto } from "./dto/assign-user-role.dto.js";
 import { AuthAdminReasonDto } from "./dto/auth-admin-common.dto.js";
 import { CreateRefreshTokenDto } from "./dto/create-refresh-token.dto.js";
 import { CreateAuthRoleDto } from "./dto/create-auth-role.dto.js";
 import { CreateServiceTokenDto } from "./dto/create-service-token.dto.js";
+import { ListAuditEventsDto } from "./dto/list-audit-events.dto.js";
+import { ListSecurityAnomaliesDto } from "./dto/list-security-anomalies.dto.js";
 import { RegisterAuthSessionDto } from "./dto/register-auth-session.dto.js";
 import { UpdateAuthRoleDto } from "./dto/update-auth-role.dto.js";
 import { UpdateServiceTokenDto } from "./dto/update-service-token.dto.js";
@@ -150,9 +156,27 @@ export class AuthAdminController {
 
   @Get("audit-events")
   listAuditEvents(
+    @Query() query: ListAuditEventsDto,
     @CurrentUser() user: RequestUser,
-  ): Promise<AuthAuditEventResponse[]> {
-    return this.authAdmin.listAuditEvents(user);
+  ): Promise<AuthAuditEventListResponse> {
+    return this.authAdmin.listAuditEvents(user, query);
+  }
+
+  @Get("security/anomalies")
+  listSecurityAnomalies(
+    @Query() query: ListSecurityAnomaliesDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<SecurityAnomalyEventListResponse> {
+    return this.authAdmin.listSecurityAnomalies(user, query);
+  }
+
+  @Post("security/anomalies/:eventId/acknowledge")
+  acknowledgeSecurityAnomaly(
+    @Param("eventId") eventId: string,
+    @Body() body: AcknowledgeSecurityAnomalyDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<SecurityAnomalyEventResponse> {
+    return this.authAdmin.acknowledgeSecurityAnomaly(eventId, body, user);
   }
 
   @Get("sessions")

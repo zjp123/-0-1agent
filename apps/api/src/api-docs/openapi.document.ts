@@ -79,6 +79,9 @@ const routes: ApiRoute[] = [
   { method: "post", path: "/secrets/{secretId}/rotate", tag: "Secrets", summary: "Rotate secret value", operationId: "rotateSecret", permission: "auth:manage", requestSchema: "RotateSecretRequest" },
   { method: "get", path: "/secrets/provider-credentials", tag: "Secrets", summary: "List provider credentials", operationId: "listProviderCredentials", permission: "auth:manage" },
   { method: "post", path: "/secrets/provider-credentials", tag: "Secrets", summary: "Create provider credential", operationId: "createProviderCredential", permission: "auth:manage" },
+  { method: "get", path: "/auth/audit-events", tag: "Security", summary: "List auth admin audit events", operationId: "listAuthAuditEvents", permission: "auth:manage", responseSchema: "AuthAuditEventListResponse" },
+  { method: "get", path: "/auth/security/anomalies", tag: "Security", summary: "List security anomaly events", operationId: "listSecurityAnomalies", permission: "auth:manage", responseSchema: "SecurityAnomalyEventListResponse" },
+  { method: "post", path: "/auth/security/anomalies/{eventId}/acknowledge", tag: "Security", summary: "Acknowledge security anomaly event", operationId: "acknowledgeSecurityAnomaly", permission: "auth:manage", requestSchema: "AcknowledgeSecurityAnomalyRequest", responseSchema: "SecurityAnomalyEvent" },
 ];
 
 export type ApiDocumentationSummary = {
@@ -315,6 +318,30 @@ function buildSchemas(): Record<string, unknown> {
     DecisionCommentRequest: objectSchema({ comment: stringSchema() }),
     CreateSecretRequest: objectSchema({ name: stringSchema(), provider: stringSchema(), purpose: stringSchema(), value: stringSchema(), reason: stringSchema(), metadata: { type: "object", additionalProperties: true } }, ["name", "provider", "purpose", "value", "reason"]),
     RotateSecretRequest: objectSchema({ value: stringSchema(), reason: stringSchema(), approvalId: stringSchema("uuid") }, ["value", "reason"]),
+    AuthAuditEventListResponse: objectSchema({
+      items: arraySchema({ type: "object", additionalProperties: true }),
+      limit: integerSchema(1, 500),
+      offset: integerSchema(0),
+      nextOffset: integerSchema(0),
+    }, ["items", "limit", "offset"]),
+    SecurityAnomalyEvent: objectSchema({
+      id: stringSchema("uuid"),
+      tenantId: stringSchema(),
+      severity: { type: "string", enum: ["info", "warning", "critical"] },
+      category: stringSchema(),
+      action: stringSchema(),
+      message: stringSchema(),
+      metadata: { type: "object", additionalProperties: true },
+      acknowledged: booleanSchema(),
+      createdAt: stringSchema("date-time"),
+    }, ["id", "tenantId", "severity", "category", "action", "message", "metadata", "acknowledged", "createdAt"]),
+    SecurityAnomalyEventListResponse: objectSchema({
+      items: arraySchema({ $ref: "#/components/schemas/SecurityAnomalyEvent" }),
+      limit: integerSchema(1, 500),
+      offset: integerSchema(0),
+      nextOffset: integerSchema(0),
+    }, ["items", "limit", "offset"]),
+    AcknowledgeSecurityAnomalyRequest: objectSchema({ comment: stringSchema() }),
   };
 }
 

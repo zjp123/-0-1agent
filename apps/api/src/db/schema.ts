@@ -164,6 +164,45 @@ export const authAdminAuditEvents = pgTable(
   }),
 );
 
+export const securityAnomalyEvents = pgTable(
+  "security_anomaly_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    severity: varchar("severity", { length: 40 }).notNull(),
+    category: varchar("category", { length: 80 }).notNull(),
+    action: varchar("action", { length: 120 }).notNull(),
+    actorUserId: varchar("actor_user_id", { length: 160 }),
+    actorAuthType: varchar("actor_auth_type", { length: 40 }),
+    targetType: varchar("target_type", { length: 80 }),
+    targetId: varchar("target_id", { length: 160 }),
+    message: text("message").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    acknowledged: boolean("acknowledged").notNull().default(false),
+    acknowledgedBy: varchar("acknowledged_by", { length: 160 }),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantCreatedIdx: index("security_anomaly_events_tenant_created_idx").on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    tenantSeverityIdx: index("security_anomaly_events_tenant_severity_idx").on(
+      table.tenantId,
+      table.severity,
+    ),
+    tenantCategoryIdx: index("security_anomaly_events_tenant_category_idx").on(
+      table.tenantId,
+      table.category,
+    ),
+    tenantAcknowledgedIdx: index("security_anomaly_events_tenant_acknowledged_idx").on(
+      table.tenantId,
+      table.acknowledged,
+    ),
+  }),
+);
+
 export const authSessions = pgTable(
   "auth_sessions",
   {

@@ -88,6 +88,7 @@ node --import tsx scripts/export-openapi.ts
 - Governance
 - Approvals
 - Secrets
+- Security
 
 ## Security Schemes
 

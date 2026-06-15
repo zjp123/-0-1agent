@@ -43,6 +43,7 @@ export class AuthService {
         "tenant isolation",
         "tool authorization",
         "audit logs",
+        "break-glass controls",
       ],
       roles: ROLE_PERMISSIONS,
     };
@@ -128,4 +129,5 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "evaluation:manage",
   ],
   admin: ALL_PERMISSIONS,
+  break_glass: ALL_PERMISSIONS,
 };

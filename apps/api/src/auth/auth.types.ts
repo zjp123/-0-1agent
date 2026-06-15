@@ -8,7 +8,13 @@ export type Permission =
   | "evaluation:manage"
   | "auth:manage";
 
-export type Role = "viewer" | "developer" | "operator" | "admin" | "service";
+export type Role =
+  | "viewer"
+  | "developer"
+  | "operator"
+  | "admin"
+  | "service"
+  | "break_glass";
 
 export type RequestUser = {
   userId: string;

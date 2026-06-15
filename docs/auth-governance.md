@@ -63,6 +63,7 @@ type RequestUser = {
 - `operator`
 - `admin`
 - `service`
+- `break_glass`
 
 ## JWT
 
@@ -181,6 +182,8 @@ API_KEY=dev-api-key
 - `POST /api/auth/service-tokens/:tokenId/disable`
 - `POST /api/auth/service-tokens/:tokenId/rotate`
 - `GET /api/auth/audit-events`
+- `GET /api/auth/security/anomalies`
+- `POST /api/auth/security/anomalies/:eventId/acknowledge`
 - `GET /api/auth/sessions`
 - `POST /api/auth/sessions`
 - `POST /api/auth/sessions/:sessionId/revoke`

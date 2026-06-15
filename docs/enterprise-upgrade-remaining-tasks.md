@@ -47,21 +47,23 @@
 - [x] OpenAPI / SDK / API Documentation
 - [x] CI/CD / Docker Production Build
 - [x] Deployment Operations: readiness / migrations / environment profiles
+- [x] Security Hardening: audit pagination / break-glass / anomaly detection
 
 ## 未完成
 
-- [ ] Security Hardening: audit pagination / break-glass / anomaly detection
+- 无
 
 ## 当前进行中
 
-- [ ] Security Hardening: audit pagination / break-glass / anomaly detection
+- 无
 
 ## 下一步说明
 
-Security Hardening: audit pagination / break-glass / anomaly detection 目标：
+企业级升级路线当前清单已全部完成。
 
-1. audit pagination / filtering
-2. break-glass role and reason enforcement
-3. anomaly event model
-4. security alert surfaces
-5. security hardening runbook
+后续建议进入：
+
+1. 生产环境联调
+2. 端到端业务场景压测
+3. 部署演练和回滚演练
+4. SDK / CLI / 管理台增强

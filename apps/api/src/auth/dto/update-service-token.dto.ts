@@ -17,6 +17,7 @@ const SERVICE_TOKEN_ROLES: Role[] = [
   "operator",
   "admin",
   "service",
+  "break_glass",
 ];
 
 export class UpdateServiceTokenDto extends AuthAdminReasonDto {

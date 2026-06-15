@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, lte, type SQL } from "drizzle-orm";
 import crypto from "node:crypto";
 
 import { DRIZZLE_DB } from "../db/database.constants.js";
@@ -16,11 +16,15 @@ import {
   authRoles,
   authServiceTokens,
   authUserRoles,
+  securityAnomalyEvents,
 } from "../db/schema.js";
+import type { AcknowledgeSecurityAnomalyDto } from "./dto/acknowledge-security-anomaly.dto.js";
 import type { AssignUserRoleDto } from "./dto/assign-user-role.dto.js";
 import type { AuthAdminReasonDto } from "./dto/auth-admin-common.dto.js";
 import type { CreateAuthRoleDto } from "./dto/create-auth-role.dto.js";
 import type { CreateServiceTokenDto } from "./dto/create-service-token.dto.js";
+import type { ListAuditEventsDto } from "./dto/list-audit-events.dto.js";
+import type { ListSecurityAnomaliesDto } from "./dto/list-security-anomalies.dto.js";
 import type { UpdateAuthRoleDto } from "./dto/update-auth-role.dto.js";
 import type { UpdateServiceTokenDto } from "./dto/update-service-token.dto.js";
 import type { Permission, RequestUser, Role } from "./auth.types.js";
@@ -75,7 +79,44 @@ export type AuthAuditEventResponse = {
   createdAt: string;
 };
 
+export type AuthAuditEventListResponse = {
+  items: AuthAuditEventResponse[];
+  limit: number;
+  offset: number;
+  nextOffset?: number;
+};
+
+export type SecurityAnomalySeverity = "info" | "warning" | "critical";
+
+export type SecurityAnomalyEventResponse = {
+  id: string;
+  tenantId: string;
+  severity: SecurityAnomalySeverity;
+  category: string;
+  action: string;
+  actorUserId?: string;
+  actorAuthType?: RequestUser["authType"];
+  targetType?: string;
+  targetId?: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  acknowledged: boolean;
+  acknowledgedBy?: string;
+  acknowledgedAt?: string;
+  createdAt: string;
+};
+
+export type SecurityAnomalyEventListResponse = {
+  items: SecurityAnomalyEventResponse[];
+  limit: number;
+  offset: number;
+  nextOffset?: number;
+};
+
 const DEFAULT_SERVICE_TOKEN_ROLES: Role[] = ["service"];
+const DEFAULT_LIST_LIMIT = 100;
+const MAX_LIST_LIMIT = 500;
+const BREAK_GLASS_REASON_PREFIX = "BREAK-GLASS:";
 
 @Injectable()
 export class AuthAdminService {
@@ -309,6 +350,7 @@ export class AuthAdminService {
         userId: externalUserId,
         roleId: body.roleId,
         roleName: role.name,
+        rolePermissions: role.permissions,
       },
     });
 
@@ -563,36 +605,120 @@ export class AuthAdminService {
     };
   }
 
-  async listAuditEvents(actor: RequestUser): Promise<AuthAuditEventResponse[]> {
+  async listAuditEvents(
+    actor: RequestUser,
+    query: ListAuditEventsDto = {},
+  ): Promise<AuthAuditEventListResponse> {
     const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
+    const limit = this.normalizeLimit(query.limit);
+    const offset = this.normalizeOffset(query.offset);
+    const filters: SQL[] = [eq(authAdminAuditEvents.tenantId, tenantUuid)];
+    if (query.action) {
+      filters.push(eq(authAdminAuditEvents.action, query.action));
+    }
+    if (query.targetType) {
+      filters.push(eq(authAdminAuditEvents.targetType, query.targetType));
+    }
+    if (query.targetId) {
+      filters.push(eq(authAdminAuditEvents.targetId, query.targetId));
+    }
+    if (query.actorUserId) {
+      filters.push(eq(authAdminAuditEvents.actorUserId, query.actorUserId));
+    }
+    if (query.from) {
+      filters.push(gte(authAdminAuditEvents.createdAt, new Date(query.from)));
+    }
+    if (query.to) {
+      filters.push(lte(authAdminAuditEvents.createdAt, new Date(query.to)));
+    }
     const rows = await this.db
       .select()
       .from(authAdminAuditEvents)
-      .where(eq(authAdminAuditEvents.tenantId, tenantUuid))
+      .where(and(...filters))
       .orderBy(desc(authAdminAuditEvents.createdAt))
-      .limit(100);
+      .limit(limit + 1)
+      .offset(offset);
 
-    return rows.map((row) => {
-      const event: AuthAuditEventResponse = {
-        id: row.id,
-        tenantId: actor.tenantId,
-        actorUserId: row.actorUserId,
-        actorAuthType: row.actorAuthType as RequestUser["authType"],
-        action: row.action,
-        targetType: row.targetType,
-        targetId: row.targetId,
-        reason: row.reason,
-        metadata: row.metadata,
-        createdAt: row.createdAt.toISOString(),
-      };
-      if (row.actorTokenId) {
-        event.actorTokenId = row.actorTokenId;
-      }
-      if (row.comment) {
-        event.comment = row.comment;
-      }
-      return event;
+    const items = rows.slice(0, limit).map((row) =>
+      this.toAuditEventResponse(row, actor.tenantId),
+    );
+    return this.toListResponse(items, limit, offset, rows.length > limit);
+  }
+
+  async listSecurityAnomalies(
+    actor: RequestUser,
+    query: ListSecurityAnomaliesDto = {},
+  ): Promise<SecurityAnomalyEventListResponse> {
+    const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
+    const limit = this.normalizeLimit(query.limit);
+    const offset = this.normalizeOffset(query.offset);
+    const filters: SQL[] = [eq(securityAnomalyEvents.tenantId, tenantUuid)];
+    if (query.severity) {
+      filters.push(eq(securityAnomalyEvents.severity, query.severity));
+    }
+    if (query.category) {
+      filters.push(eq(securityAnomalyEvents.category, query.category));
+    }
+    if (query.acknowledged !== undefined) {
+      filters.push(eq(securityAnomalyEvents.acknowledged, query.acknowledged));
+    }
+
+    const rows = await this.db
+      .select()
+      .from(securityAnomalyEvents)
+      .where(and(...filters))
+      .orderBy(desc(securityAnomalyEvents.createdAt))
+      .limit(limit + 1)
+      .offset(offset);
+
+    const items = rows.slice(0, limit).map((row) =>
+      this.toSecurityAnomalyEventResponse(row, actor.tenantId),
+    );
+    return this.toListResponse(items, limit, offset, rows.length > limit);
+  }
+
+  async acknowledgeSecurityAnomaly(
+    eventId: string,
+    body: AcknowledgeSecurityAnomalyDto,
+    actor: RequestUser,
+  ): Promise<SecurityAnomalyEventResponse> {
+    const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
+    const [updated] = await this.db
+      .update(securityAnomalyEvents)
+      .set({
+        acknowledged: true,
+        acknowledgedBy: actor.userId,
+        acknowledgedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(securityAnomalyEvents.tenantId, tenantUuid),
+          eq(securityAnomalyEvents.id, eventId),
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new NotFoundException("Security anomaly event not found");
+    }
+
+    await this.recordAudit({
+      tenantUuid,
+      actor,
+      action: "auth.security_anomaly.acknowledge",
+      targetType: "security_anomaly_event",
+      targetId: eventId,
+      reason: this.isBreakGlassActor(actor)
+        ? "BREAK-GLASS: Security anomaly acknowledged"
+        : "Security anomaly acknowledged",
+      comment: body.comment,
+      metadata: {
+        severity: updated.severity,
+        category: updated.category,
+      },
     });
+
+    return this.toSecurityAnomalyEventResponse(updated, actor.tenantId);
   }
 
   private async assertRoleNameAvailable(
@@ -658,6 +784,10 @@ export class AuthAdminService {
     comment?: string | undefined;
     metadata: Record<string, unknown>;
   }): Promise<void> {
+    this.assertBreakGlassReason(input);
+    const metadata = this.isBreakGlassActor(input.actor)
+      ? { ...input.metadata, breakGlass: true }
+      : input.metadata;
     const values: typeof authAdminAuditEvents.$inferInsert = {
       tenantId: input.tenantUuid,
       actorUserId: input.actor.userId,
@@ -666,7 +796,7 @@ export class AuthAdminService {
       targetType: input.targetType,
       targetId: input.targetId,
       reason: input.reason,
-      metadata: input.metadata,
+      metadata,
     };
     if (input.actor.tokenId) {
       values.actorTokenId = input.actor.tokenId;
@@ -675,6 +805,111 @@ export class AuthAdminService {
       values.comment = input.comment;
     }
     await this.db.insert(authAdminAuditEvents).values(values);
+    await this.detectSecurityAnomalies({ ...input, metadata });
+  }
+
+  private assertBreakGlassReason(input: {
+    actor: RequestUser;
+    reason: string;
+    comment?: string | undefined;
+  }): void {
+    if (!this.isBreakGlassActor(input.actor)) {
+      return;
+    }
+    if (!input.reason.trim().startsWith(BREAK_GLASS_REASON_PREFIX)) {
+      throw new BadRequestException(
+        `Break-glass operations require reason to start with ${BREAK_GLASS_REASON_PREFIX}`,
+      );
+    }
+    if (!input.comment?.trim()) {
+      throw new BadRequestException("Break-glass operations require a comment");
+    }
+  }
+
+  private async detectSecurityAnomalies(input: {
+    tenantUuid: string;
+    actor: RequestUser;
+    action: string;
+    targetType: string;
+    targetId: string;
+    metadata: Record<string, unknown>;
+  }): Promise<void> {
+    if (this.isBreakGlassActor(input.actor)) {
+      await this.recordSecurityAnomaly({
+        ...input,
+        severity: "critical",
+        category: "break_glass",
+        message: "Break-glass actor performed an administrative operation",
+      });
+    }
+
+    if (input.action.startsWith("auth.service_token.")) {
+      await this.recordSecurityAnomaly({
+        ...input,
+        severity: "warning",
+        category: "credential_admin",
+        message: "Service token administrative operation detected",
+      });
+    }
+
+    if (this.isPrivilegeEscalation(input.action, input.metadata)) {
+      await this.recordSecurityAnomaly({
+        ...input,
+        severity: "critical",
+        category: "privilege_escalation",
+        message: "Administrative permission or break-glass role grant detected",
+      });
+    }
+  }
+
+  private async recordSecurityAnomaly(input: {
+    tenantUuid: string;
+    actor: RequestUser;
+    action: string;
+    targetType: string;
+    targetId: string;
+    severity: SecurityAnomalySeverity;
+    category: string;
+    message: string;
+    metadata: Record<string, unknown>;
+  }): Promise<void> {
+    await this.db.insert(securityAnomalyEvents).values({
+      tenantId: input.tenantUuid,
+      severity: input.severity,
+      category: input.category,
+      action: input.action,
+      actorUserId: input.actor.userId,
+      actorAuthType: input.actor.authType,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      message: input.message,
+      metadata: input.metadata,
+    });
+  }
+
+  private isBreakGlassActor(actor: RequestUser): boolean {
+    return actor.roles.includes("break_glass");
+  }
+
+  private isPrivilegeEscalation(
+    action: string,
+    metadata: Record<string, unknown>,
+  ): boolean {
+    if (!["auth.role.create", "auth.role.update", "auth.user_role.assign"].includes(action)) {
+      return false;
+    }
+    const permissions = Array.isArray(metadata.permissions)
+      ? metadata.permissions
+      : [];
+    const rolePermissions = Array.isArray(metadata.rolePermissions)
+      ? metadata.rolePermissions
+      : [];
+    const roleName = typeof metadata.roleName === "string" ? metadata.roleName : "";
+    return (
+      permissions.includes("auth:manage") ||
+      rolePermissions.includes("auth:manage") ||
+      roleName === "break_glass"
+    );
   }
 
   private assertHasRoleUpdate(body: UpdateAuthRoleDto): void {
@@ -737,6 +972,97 @@ export class AuthAdminService {
       token.lastUsedAt = row.lastUsedAt.toISOString();
     }
     return token;
+  }
+
+  private toAuditEventResponse(
+    row: typeof authAdminAuditEvents.$inferSelect,
+    externalTenantId: string,
+  ): AuthAuditEventResponse {
+    const event: AuthAuditEventResponse = {
+      id: row.id,
+      tenantId: externalTenantId,
+      actorUserId: row.actorUserId,
+      actorAuthType: row.actorAuthType as RequestUser["authType"],
+      action: row.action,
+      targetType: row.targetType,
+      targetId: row.targetId,
+      reason: row.reason,
+      metadata: row.metadata,
+      createdAt: row.createdAt.toISOString(),
+    };
+    if (row.actorTokenId) {
+      event.actorTokenId = row.actorTokenId;
+    }
+    if (row.comment) {
+      event.comment = row.comment;
+    }
+    return event;
+  }
+
+  private toSecurityAnomalyEventResponse(
+    row: typeof securityAnomalyEvents.$inferSelect,
+    externalTenantId: string,
+  ): SecurityAnomalyEventResponse {
+    const event: SecurityAnomalyEventResponse = {
+      id: row.id,
+      tenantId: externalTenantId,
+      severity: row.severity as SecurityAnomalySeverity,
+      category: row.category,
+      action: row.action,
+      message: row.message,
+      metadata: row.metadata,
+      acknowledged: row.acknowledged,
+      createdAt: row.createdAt.toISOString(),
+    };
+    if (row.actorUserId) {
+      event.actorUserId = row.actorUserId;
+    }
+    if (row.actorAuthType) {
+      event.actorAuthType = row.actorAuthType as RequestUser["authType"];
+    }
+    if (row.targetType) {
+      event.targetType = row.targetType;
+    }
+    if (row.targetId) {
+      event.targetId = row.targetId;
+    }
+    if (row.acknowledgedBy) {
+      event.acknowledgedBy = row.acknowledgedBy;
+    }
+    if (row.acknowledgedAt) {
+      event.acknowledgedAt = row.acknowledgedAt.toISOString();
+    }
+    return event;
+  }
+
+  private normalizeLimit(value: number | undefined): number {
+    if (value === undefined) {
+      return DEFAULT_LIST_LIMIT;
+    }
+    return Math.min(Math.max(value, 1), MAX_LIST_LIMIT);
+  }
+
+  private normalizeOffset(value: number | undefined): number {
+    return Math.max(value ?? 0, 0);
+  }
+
+  private toListResponse<T>(
+    items: T[],
+    limit: number,
+    offset: number,
+    hasMore: boolean,
+  ): {
+    items: T[];
+    limit: number;
+    offset: number;
+    nextOffset?: number;
+  } {
+    return {
+      items,
+      limit,
+      offset,
+      ...(hasMore ? { nextOffset: offset + limit } : {}),
+    };
   }
 
   private generateServiceToken(): string {

@@ -21,6 +21,9 @@ test("openApiDocument includes core production API paths", () => {
   assert.ok(paths["/workflows/schedules/claim-due"]?.post);
   assert.ok(paths["/orchestration/runs"]?.post);
   assert.ok(paths["/governance/approval/requests/{requestId}/approve"]?.post);
+  assert.ok(paths["/auth/audit-events"]?.get);
+  assert.ok(paths["/auth/security/anomalies"]?.get);
+  assert.ok(paths["/auth/security/anomalies/{eventId}/acknowledge"]?.post);
   assert.ok(paths["/docs/openapi.json"]?.get);
 });
 
@@ -31,5 +34,6 @@ test("getApiDocumentationSummary groups operations by tag", () => {
   assert.equal(summary.openapiUrl, "/api/docs/openapi.json");
   assert.ok(tags.includes("Agent Runtime"));
   assert.ok(tags.includes("Workflow Scheduling"));
+  assert.ok(tags.includes("Security"));
   assert.ok(tags.includes("Documentation"));
 });
