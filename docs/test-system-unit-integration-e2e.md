@@ -159,10 +159,10 @@ npm run build
 
 ## 下一步
 
-建议下一步实现 `OpenAPI / SDK / API Documentation`：
+建议下一步实现 `CI/CD / Docker Production Build`：
 
-1. OpenAPI generation baseline
-2. API route grouping and tags
-3. request / response schema documentation
-4. SDK generation plan
-5. API usage examples
+1. Dockerfile production build
+2. docker compose production profile
+3. CI lint / check / test / build baseline
+4. migration check step
+5. image build and startup smoke test

@@ -44,24 +44,24 @@
 - [x] Multi-agent Orchestration Enhancement
 - [x] Workflow Production Scheduling Enhancement
 - [x] Test System: unit / integration / e2e
+- [x] OpenAPI / SDK / API Documentation
 
 ## 未完成
 
-- [ ] OpenAPI / SDK / API Documentation
 - [ ] CI/CD / Docker Production Build
 - [ ] Deployment Operations: readiness / migrations / environment profiles
 - [ ] Security Hardening: audit pagination / break-glass / anomaly detection
 
 ## 当前进行中
 
-- [ ] OpenAPI / SDK / API Documentation
+- [ ] CI/CD / Docker Production Build
 
 ## 下一步说明
 
-OpenAPI / SDK / API Documentation 目标：
+CI/CD / Docker Production Build 目标：
 
-1. OpenAPI generation baseline
-2. API route grouping and tags
-3. request / response schema documentation
-4. SDK generation plan
-5. API usage examples
+1. Dockerfile production build
+2. docker compose production profile
+3. CI lint / check / test / build baseline
+4. migration check step
+5. image build and startup smoke test

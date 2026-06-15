@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 
 import { AgentRuntimeModule } from "./agent-runtime/agent-runtime.module.js";
+import { ApiDocsModule } from "./api-docs/api-docs.module.js";
 import { AppController } from "./app.controller.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { configuration } from "./common/config/configuration.js";
@@ -40,6 +41,7 @@ import { WorkflowModule } from "./workflow/workflow.module.js";
     ObservabilityModule,
     OrchestrationModule,
     EvaluationModule,
+    ApiDocsModule,
   ],
   controllers: [AppController],
 })
