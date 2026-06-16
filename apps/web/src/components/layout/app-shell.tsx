@@ -10,29 +10,36 @@ import {
   GitBranch,
   KeyRound,
   Library,
+  LogOut,
   ShieldCheck,
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useSession } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { Permission } from "@/lib/api/client";
 
 const navigation = [
   { label: "Dashboard", icon: Gauge, href: "/" },
   { label: "API Docs", icon: FileText, href: "/api-docs" },
-  { label: "Agent Chat", icon: Bot, href: "/agent-chat" },
-  { label: "Knowledge", icon: Library, href: "/knowledge" },
-  { label: "Tools", icon: Wrench, href: "/tools" },
-  { label: "Workflows", icon: GitBranch, href: "/workflows" },
-  { label: "Security", icon: ShieldCheck, href: "/security" },
-  { label: "Evaluations", icon: ClipboardCheck, href: "/evaluations" },
-  { label: "Observability", icon: Activity, href: "/observability" },
-  { label: "Settings", icon: KeyRound, href: "#" },
-];
+  { label: "Agent Chat", icon: Bot, href: "/agent-chat", permission: "agent:run" },
+  { label: "Knowledge", icon: Library, href: "/knowledge", permission: "knowledge:read" },
+  { label: "Tools", icon: Wrench, href: "/tools", permission: "tools:execute" },
+  { label: "Workflows", icon: GitBranch, href: "/workflows", permission: "workflow:manage" },
+  { label: "Security", icon: ShieldCheck, href: "/security", permission: "auth:manage" },
+  { label: "Evaluations", icon: ClipboardCheck, href: "/evaluations", permission: "evaluation:manage" },
+  { label: "Observability", icon: Activity, href: "/observability", permission: "observability:read" },
+  { label: "Login", icon: KeyRound, href: "/login" },
+] satisfies Array<{ label: string; icon: typeof Gauge; href: string; permission?: Permission }>;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { user, status, hasPermission, logout } = useSession();
+  const visibleNavigation = navigation.filter(
+    (item) => !item.permission || status !== "authenticated" || hasPermission(item.permission),
+  );
 
   return (
     <div className="app-shell">
@@ -48,26 +55,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="nav" aria-label="Primary navigation">
-          {navigation.map((item) => {
+          {visibleNavigation.map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             const className = isActive ? "nav-link nav-link-active" : "nav-link";
 
-            return item.href === "#" ? (
-              <a
-                key={item.label}
-                href="#"
-                className={className}
-              >
-                <Icon className="icon-sm" aria-hidden="true" />
-                <span>{item.label}</span>
-              </a>
-            ) : (
-              <Link key={item.label} href={item.href} className={className}>
-                <Icon className="icon-sm" aria-hidden="true" />
-                <span>{item.label}</span>
-              </Link>
-            );
+            return (
+            <Link key={item.label} href={item.href} className={className}>
+              <Icon className="icon-sm" aria-hidden="true" />
+              <span>{item.label}</span>
+            </Link>
+          );
           })}
         </nav>
       </aside>
@@ -76,11 +74,27 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <div>
             <div className="topbar-title">Operations Workspace</div>
-            <div className="topbar-meta">Local API: {process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3000/api"}</div>
+            <div className="topbar-meta">
+              {user
+                ? `${user.userId} / ${user.tenantId}`
+                : `Local API: ${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3000/api"}`}
+            </div>
           </div>
           <div className="topbar-actions">
-            <StatusBadge tone="success">Local</StatusBadge>
+            <StatusBadge tone={status === "authenticated" ? "success" : "neutral"}>
+              {status === "authenticated" ? user?.authType ?? "session" : status}
+            </StatusBadge>
             <StatusBadge tone="neutral">Next.js</StatusBadge>
+            {status === "authenticated" ? (
+              <button type="button" className="icon-button" onClick={() => void logout()} aria-label="Sign out">
+                <LogOut className="icon-sm" aria-hidden="true" />
+              </button>
+            ) : (
+              <Link href="/login" className="refresh-button">
+                <KeyRound className="icon-sm" aria-hidden="true" />
+                Sign in
+              </Link>
+            )}
           </div>
         </header>
 

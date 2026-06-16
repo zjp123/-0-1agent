@@ -10,6 +10,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   listTraceEvents,
@@ -68,14 +69,7 @@ export function ObservabilityDashboard() {
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [successMessage, setSuccessMessage] = useState<string | undefined>();
 
-  const credentials = useMemo<AuthCredentials>(
-    () => ({
-      apiKey: apiKey.trim() || undefined,
-      serviceToken: serviceToken.trim() || undefined,
-    }),
-    [apiKey, serviceToken],
-  );
-  const hasCredentials = Boolean(credentials.apiKey || credentials.serviceToken);
+  const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? events[0];
   const uniqueRequests = new Set(events.map((event) => event.requestId)).size;
   const failureCount = events.filter((event) => event.type.endsWith(".failed")).length;
@@ -184,9 +178,10 @@ export function ObservabilityDashboard() {
               <p className="section-card-description">Use a token with observability:read.</p>
             </div>
             <div className="section-card-body auth-form">
+              {usingSession ? <div className="alert alert-success">Using signed-in Web Console session.</div> : null}
               <label>
                 <span className="label">API key</span>
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" />
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" disabled={usingSession} />
               </label>
               <label>
                 <span className="label">Service token</span>
@@ -194,6 +189,7 @@ export function ObservabilityDashboard() {
                   value={serviceToken}
                   onChange={(event) => setServiceToken(event.target.value)}
                   className="text-input"
+                  disabled={usingSession}
                 />
               </label>
             </div>

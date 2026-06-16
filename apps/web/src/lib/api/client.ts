@@ -66,6 +66,7 @@ export type RunAgentStreamInput = {
   requestId: string;
   message: string;
   messages?: AgentMessage[];
+  accessToken?: string;
   apiKey?: string;
   serviceToken?: string;
   signal?: AbortSignal;
@@ -185,8 +186,35 @@ export const ALL_PERMISSIONS: Permission[] = [
 ];
 
 export type AuthCredentials = {
+  accessToken?: string;
   apiKey?: string;
   serviceToken?: string;
+};
+
+export type ConsoleAuthUser = {
+  userId: string;
+  tenantId: string;
+  roles: Role[];
+  permissions: Permission[];
+  authType: "api_key" | "dev" | "jwt" | "service_token";
+  tokenId?: string;
+};
+
+export type ConsoleAuthResponse = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  refreshTokenExpiresAt: string;
+  sessionId: string;
+  user: ConsoleAuthUser;
+};
+
+export type ConsoleLoginInput = {
+  credentialType: "api_key" | "service_token";
+  credential: string;
+  tenantId?: string;
+  userId?: string;
+  deviceLabel?: string;
 };
 
 export type AuthRole = {
@@ -700,6 +728,24 @@ const roleSchema = z.enum([
 ]);
 const authTypeSchema = z.enum(["api_key", "dev", "jwt", "service_token"]);
 
+const consoleAuthUserSchema: z.ZodType<ConsoleAuthUser> = z.object({
+  userId: z.string(),
+  tenantId: z.string(),
+  roles: z.array(roleSchema),
+  permissions: z.array(permissionSchema),
+  authType: authTypeSchema,
+  tokenId: z.string().optional(),
+});
+
+const consoleAuthResponseSchema: z.ZodType<ConsoleAuthResponse> = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  expiresAt: z.string(),
+  refreshTokenExpiresAt: z.string(),
+  sessionId: z.string(),
+  user: consoleAuthUserSchema,
+});
+
 const authRoleSchema: z.ZodType<AuthRole> = z.object({
   id: z.string(),
   tenantId: z.string(),
@@ -1113,6 +1159,9 @@ export async function runAgentStream(input: RunAgentStreamInput): Promise<void> 
     accept: "text/event-stream",
     "content-type": "application/json",
   };
+  if (input.accessToken) {
+    headers.authorization = `Bearer ${input.accessToken}`;
+  }
   if (input.apiKey) {
     headers["x-api-key"] = input.apiKey;
   }
@@ -1192,19 +1241,8 @@ export async function listTools(): Promise<ToolDefinition[]> {
 export async function executeTool(input: {
   name: string;
   arguments: Record<string, unknown>;
-  apiKey?: string;
-  serviceToken?: string;
-}): Promise<ToolCallResponse> {
-  const headers: Record<string, string> = {
-    accept: "application/json",
-    "content-type": "application/json",
-  };
-  if (input.apiKey) {
-    headers["x-api-key"] = input.apiKey;
-  }
-  if (input.serviceToken) {
-    headers["x-service-token"] = input.serviceToken;
-  }
+} & AuthCredentials): Promise<ToolCallResponse> {
+  const headers: Record<string, string> = buildAuthHeaders(input, true);
 
   const response = await fetch(`${apiBaseUrl}/tools/execute`, {
     method: "POST",
@@ -1222,6 +1260,45 @@ export async function executeTool(input: {
   }
 
   return toolCallResponseSchema.parse(payload);
+}
+
+export async function consoleLogin(input: ConsoleLoginInput): Promise<ConsoleAuthResponse> {
+  const payload = await fetchJson(`${apiBaseUrl}/auth/console/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      credentialType: input.credentialType,
+      credential: input.credential,
+      tenantId: input.tenantId || undefined,
+      userId: input.userId || undefined,
+      deviceLabel: input.deviceLabel || undefined,
+    }),
+  });
+  return consoleAuthResponseSchema.parse(payload);
+}
+
+export async function consoleRefresh(refreshToken: string): Promise<ConsoleAuthResponse> {
+  const payload = await fetchJson(`${apiBaseUrl}/auth/console/refresh`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+  return consoleAuthResponseSchema.parse(payload);
+}
+
+export async function consoleLogout(refreshToken: string): Promise<void> {
+  await fetchJson(`${apiBaseUrl}/auth/console/logout`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  });
+}
+
+export async function getConsoleMe(accessToken: string): Promise<ConsoleAuthUser> {
+  const payload = await fetchJson(`${apiBaseUrl}/auth/console/me`, {
+    headers: buildAuthHeaders({ accessToken }),
+  });
+  return consoleAuthUserSchema.parse(payload);
 }
 
 export async function listAuthRoles(
@@ -1640,6 +1717,9 @@ function buildAuthHeaders(
   const headers: Record<string, string> = includeJson
     ? { "content-type": "application/json" }
     : {};
+  if (credentials.accessToken) {
+    headers.authorization = `Bearer ${credentials.accessToken}`;
+  }
   if (credentials.apiKey) {
     headers["x-api-key"] = credentials.apiKey;
   }

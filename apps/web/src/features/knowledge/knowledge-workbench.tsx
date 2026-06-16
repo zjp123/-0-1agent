@@ -10,6 +10,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   enqueueKnowledgeReindex,
@@ -103,14 +104,7 @@ export function KnowledgeWorkbench() {
   const [queryTagsText, setQueryTagsText] = useState("");
   const [limit, setLimit] = useState(5);
 
-  const credentials = useMemo<AuthCredentials>(
-    () => ({
-      apiKey: apiKey.trim() || undefined,
-      serviceToken: serviceToken.trim() || undefined,
-    }),
-    [apiKey, serviceToken],
-  );
-  const hasCredentials = Boolean(credentials.apiKey || credentials.serviceToken);
+  const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
   const totalChunks = data.jobs.reduce((total, job) => total + job.totalChunks, 0);
   const processedChunks = data.jobs.reduce((total, job) => total + job.processedChunks, 0);
 
@@ -239,7 +233,7 @@ export function KnowledgeWorkbench() {
       {successMessage ? <div className="alert alert-success">{successMessage}</div> : null}
       {!hasCredentials ? (
         <div className="alert alert-neutral">
-          Enter an API key or service token, then refresh to load protected Knowledge/RAG data.
+          Sign in or enter an API key/service token, then refresh to load protected Knowledge/RAG data.
         </div>
       ) : null}
 
@@ -297,9 +291,10 @@ export function KnowledgeWorkbench() {
               <p className="section-card-description">Use a token with knowledge:read and knowledge:write.</p>
             </div>
             <div className="section-card-body auth-form">
+              {usingSession ? <div className="alert alert-success">Using signed-in Web Console session.</div> : null}
               <label>
                 <span className="label">API key</span>
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" />
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" disabled={usingSession} />
               </label>
               <label>
                 <span className="label">Service token</span>
@@ -307,6 +302,7 @@ export function KnowledgeWorkbench() {
                   value={serviceToken}
                   onChange={(event) => setServiceToken(event.target.value)}
                   className="text-input"
+                  disabled={usingSession}
                 />
               </label>
             </div>

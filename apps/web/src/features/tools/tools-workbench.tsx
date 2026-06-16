@@ -2,6 +2,7 @@
 
 import { Play, RefreshCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   executeTool,
@@ -29,6 +30,7 @@ export function ToolsWorkbench() {
   const [result, setResult] = useState<ToolCallResponse | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
+  const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
 
   const selectedTool = useMemo(
     () => tools.find((tool) => tool.name === selectedName),
@@ -70,8 +72,7 @@ export function ToolsWorkbench() {
       const response = await executeTool({
         name: selectedTool.name,
         arguments: parsedArguments,
-        apiKey: apiKey.trim() || undefined,
-        serviceToken: serviceToken.trim() || undefined,
+        ...credentials,
       });
       setResult(response);
     } catch (error) {
@@ -155,13 +156,15 @@ export function ToolsWorkbench() {
                   <p className="section-card-description">Provide credentials only for protected tool execution.</p>
                 </div>
                 <div className="section-card-body auth-form">
+                  {usingSession ? <div className="alert alert-success">Using signed-in Web Console session.</div> : null}
+                  {!hasCredentials ? <div className="alert alert-neutral">Sign in or enter local credentials before executing tools.</div> : null}
                   <label>
                     <span className="label">API key</span>
-                    <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" />
+                    <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" disabled={usingSession} />
                   </label>
                   <label>
                     <span className="label">Service token</span>
-                    <input value={serviceToken} onChange={(event) => setServiceToken(event.target.value)} className="text-input" />
+                    <input value={serviceToken} onChange={(event) => setServiceToken(event.target.value)} className="text-input" disabled={usingSession} />
                   </label>
                   <label>
                     <span className="label">Arguments JSON</span>
@@ -172,7 +175,7 @@ export function ToolsWorkbench() {
                       rows={8}
                     />
                   </label>
-                  <button type="button" className="refresh-button" onClick={() => void runSelectedTool()} disabled={loading}>
+                  <button type="button" className="refresh-button" onClick={() => void runSelectedTool()} disabled={loading || !hasCredentials}>
                     <Play className="icon-sm" aria-hidden="true" />
                     Execute
                   </button>

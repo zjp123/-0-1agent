@@ -51,19 +51,30 @@
 
 ## 未完成
 
-- 无
+- [x] Phase 13 - Web 正式 Auth / 登录体系
+- [ ] Phase 14 - Web Docker / CI/CD
+- [ ] Phase 15 - Web E2E 自动化测试
+- [ ] Phase 16 - Web 配置与密钥治理
+- [ ] Phase 17 - Web 生产运行手册
 
 ## 当前进行中
 
-- 无
+- Phase 14 - Web Docker / CI/CD
 
 ## 下一步说明
 
-企业级升级路线当前清单已全部完成。
+企业级 API / Agent 核心升级路线已完成，Web Console 已完成 Phase 1-12。
 
-后续建议进入：
+下一阶段进入 Web 生产可上线闭环：
 
-1. 生产环境联调
-2. 端到端业务场景压测
-3. 部署演练和回滚演练
-4. SDK / CLI / 管理台增强
+1. 正式 Auth / 登录体系
+2. Web Docker / CI/CD
+3. E2E 自动化测试
+4. 配置与密钥治理
+5. 生产运行手册
+
+优先级说明：
+
+- 当前 Web 仍以本地 API key / service token 输入为主，生产环境需要正式用户身份、会话续期、退出登录和前端权限裁剪。
+- Web 需要纳入生产镜像、compose 和 CI，才能形成标准部署闭环。
+- E2E、配置治理和运行手册是后续生产联调、发布、回滚、排障的基础。

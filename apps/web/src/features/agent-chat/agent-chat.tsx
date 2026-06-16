@@ -3,6 +3,7 @@
 import { RotateCcw, SendHorizonal, Square } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { ProtectedOperationHint } from "@/components/auth/protected-operation-hint";
+import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 import { notify } from "@/components/notifications/toast-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -53,7 +54,7 @@ export function AgentChat() {
 
   const canSubmit = status !== "streaming" && message.trim().length > 0;
   const canRetry = status !== "streaming" && Boolean(lastRun);
-  const hasCredentials = Boolean(apiKey.trim() || serviceToken.trim());
+  const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
 
   const history = useMemo<AgentMessage[]>(
     () =>
@@ -123,8 +124,7 @@ export function AgentChat() {
         requestId,
         message: run.message,
         messages: run.history,
-        apiKey: apiKey.trim() || undefined,
-        serviceToken: serviceToken.trim() || undefined,
+        ...credentials,
         signal: controller.signal,
         timeoutMs: 120_000,
         idleTimeoutMs: 45_000,
@@ -261,13 +261,14 @@ export function AgentChat() {
                 permissions={["agent:run"]}
                 title="Agent run permission"
               />
+              {usingSession ? <div className="alert alert-success">Using signed-in Web Console session.</div> : null}
               <label>
                 <span className="label">API key</span>
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" />
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" disabled={usingSession} />
               </label>
               <label>
                 <span className="label">Service token</span>
-                <input value={serviceToken} onChange={(event) => setServiceToken(event.target.value)} className="text-input" />
+                <input value={serviceToken} onChange={(event) => setServiceToken(event.target.value)} className="text-input" disabled={usingSession} />
               </label>
             </div>
           </section>

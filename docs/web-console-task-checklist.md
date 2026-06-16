@@ -141,20 +141,69 @@
 - [x] 增加部署说明。
 - [x] 新增 Web 生产化增强留痕文档。
 
+## Phase 13 - 正式 Auth / 登录体系
+
+- [x] 增加 Web 登录页。
+- [x] 增加 Access Token / Refresh Token 会话续期。
+- [x] 增加退出登录。
+- [x] 增加前端 session provider。
+- [x] 增加前端权限裁剪：菜单、页面、按钮按权限显示。
+- [x] 将当前手动输入 API key / service token 模式降级为本地开发入口。
+- [x] 与 API Auth / RBAC / Session Governance 联动。
+- [x] 新增 Web Auth / 登录体系留痕文档。
+
+## Phase 14 - Web Docker / CI/CD
+
+- [ ] 新增 `apps/web/Dockerfile`。
+- [ ] 新增 Web production runtime 配置。
+- [ ] 将 Web 加入 production compose。
+- [ ] 将 `check:web` 加入 CI。
+- [ ] 将 `build:web` 加入 CI。
+- [ ] 增加 Web 镜像构建验证。
+- [ ] 新增 Web Docker / CI/CD 留痕文档。
+
+## Phase 15 - E2E 自动化测试
+
+- [ ] 引入 Playwright E2E。
+- [ ] 覆盖 Dashboard 健康检查。
+- [ ] 覆盖 Agent Chat streaming 基础流程。
+- [ ] 覆盖 Tools 调用流程。
+- [ ] 覆盖 Knowledge / RAG 检索流程。
+- [ ] 覆盖 Security / Auth Governance 关键流程。
+- [ ] 覆盖 Evaluation / Observability 关键页面。
+- [ ] 新增 Web E2E 测试留痕文档。
+
+## Phase 16 - 配置与密钥治理
+
+- [ ] 完善 Web `.env.example`。
+- [ ] 统一 local / staging / production 配置说明。
+- [ ] 增加启动前配置校验策略。
+- [ ] 明确 `NEXT_PUBLIC_` 变量安全边界。
+- [ ] 明确生产环境禁止使用本地 service token。
+- [ ] 新增 Web 配置与密钥治理留痕文档。
+
+## Phase 17 - 生产运行手册
+
+- [ ] 增加 Web 上线流程。
+- [ ] 增加 Web 回滚流程。
+- [ ] 增加 Web 健康检查与 smoke test。
+- [ ] 增加常见故障排查。
+- [ ] 增加发布后观察项。
+- [ ] 新增 Web 生产运行手册留痕文档。
+
 ## 当前优先级
 
-首批实现顺序：
+下一阶段建议顺序：
 
-1. Phase 1 - Web 基础工程
-2. Phase 2 - Dashboard / 系统健康
-3. Phase 4 - Agent Chat / Streaming / LLM Entry
-4. Phase 5 - Tools
-5. Phase 8 - Security / Auth Governance
+1. Phase 13 - 正式 Auth / 登录体系
+2. Phase 14 - Web Docker / CI/CD
+3. Phase 15 - E2E 自动化测试
+4. Phase 16 - 配置与密钥治理
+5. Phase 17 - 生产运行手册
 
 原因：
 
-- 先让 Web 能启动和访问。
-- 先验证本地 API、数据库和基础设施状态。
-- 首版就要具备平台 Web 入口和大模型流式调用体验。
-- 再覆盖最容易自测的 tools。
-- 最后接入刚完成的企业级安全治理能力。
+- 当前 Web 已具备主要运维入口，但仍缺正式用户身份和前端权限模型。
+- 生产部署需要 Web 镜像、CI 构建和 compose/runtime 配置闭环。
+- 企业级交付需要 E2E 覆盖关键业务路径，避免后续功能回归。
+- 配置、密钥和运行手册是上线、回滚、排障的必要基础。

@@ -10,6 +10,7 @@ import {
   Workflow as WorkflowIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   createWorkflow,
@@ -122,14 +123,7 @@ export function WorkflowWorkbench() {
   const [cronExpression, setCronExpression] = useState("0 * * * *");
   const [nextRunAt, setNextRunAt] = useState(nextHourIso());
 
-  const credentials = useMemo<AuthCredentials>(
-    () => ({
-      apiKey: apiKey.trim() || undefined,
-      serviceToken: serviceToken.trim() || undefined,
-    }),
-    [apiKey, serviceToken],
-  );
-  const hasCredentials = Boolean(credentials.apiKey || credentials.serviceToken);
+  const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
 
   const selectedWorkflow = data.workflows.find((workflow) => workflow.id === selectedWorkflowId);
   const selectedStep = selectedWorkflow?.steps.find((step) => step.id === selectedStepId);
@@ -370,9 +364,10 @@ export function WorkflowWorkbench() {
               <p className="section-card-description">Use a token with workflow:manage.</p>
             </div>
             <div className="section-card-body auth-form">
+              {usingSession ? <div className="alert alert-success">Using signed-in Web Console session.</div> : null}
               <label>
                 <span className="label">API key</span>
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" />
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" disabled={usingSession} />
               </label>
               <label>
                 <span className="label">Service token</span>
@@ -380,6 +375,7 @@ export function WorkflowWorkbench() {
                   value={serviceToken}
                   onChange={(event) => setServiceToken(event.target.value)}
                   className="text-input"
+                  disabled={usingSession}
                 />
               </label>
             </div>
