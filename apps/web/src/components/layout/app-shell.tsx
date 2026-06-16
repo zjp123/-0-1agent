@@ -24,7 +24,7 @@ const navigation = [
   { label: "Agent Chat", icon: Bot, href: "/agent-chat" },
   { label: "Knowledge", icon: Library, href: "/knowledge" },
   { label: "Tools", icon: Wrench, href: "/tools" },
-  { label: "Workflows", icon: GitBranch, href: "#" },
+  { label: "Workflows", icon: GitBranch, href: "/workflows" },
   { label: "Security", icon: ShieldCheck, href: "/security" },
   { label: "Evaluations", icon: ClipboardCheck, href: "#" },
   { label: "Observability", icon: Activity, href: "#" },

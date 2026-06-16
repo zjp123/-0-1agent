@@ -638,9 +638,50 @@ pre {
   gap: 1.5rem;
 }
 
+.workflow-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
 .security-summary {
   display: grid;
   gap: 1rem;
+}
+
+.workflow-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.workflow-main,
+.workflow-side,
+.workflow-list {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+
+.workflow-list .tool-list-item {
+  align-items: start;
+}
+
+.workflow-list strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #0f172a;
+}
+
+.workflow-steps-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover {
+  background: #f8fafc;
 }
 
 .knowledge-layout {
@@ -956,6 +997,14 @@ pre {
 
   .knowledge-layout {
     grid-template-columns: 24rem minmax(0, 1fr);
+  }
+
+  .workflow-layout {
+    grid-template-columns: 24rem minmax(0, 1fr);
+  }
+
+  .workflow-steps-layout {
+    grid-template-columns: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
   }
 
   .security-layout {

@@ -429,6 +429,128 @@ export type RetrieveKnowledgeInput = AuthCredentials & {
   tags?: string[];
 };
 
+export type WorkflowStatusValue =
+  | "draft"
+  | "running"
+  | "completed"
+  | "failed"
+  | "paused"
+  | "cancelled";
+
+export type WorkflowStepStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped"
+  | "waiting_for_approval";
+
+export type WorkflowStep = {
+  id: string;
+  title: string;
+  description?: string;
+  status: WorkflowStepStatus;
+  order: number;
+  output?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkflowEvent = {
+  id: string;
+  type: "created" | "step_updated" | "status_updated";
+  timestamp: string;
+  message: string;
+  actorUserId: string;
+};
+
+export type Workflow = {
+  id: string;
+  tenantId: string;
+  createdBy: string;
+  title: string;
+  goal: string;
+  status: WorkflowStatusValue;
+  steps: WorkflowStep[];
+  events: WorkflowEvent[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkflowSchedule = {
+  id: string;
+  tenantId: string;
+  workflowId: string;
+  createdBy: string;
+  name: string;
+  scheduleType: "interval" | "cron";
+  cronExpression?: string;
+  intervalSeconds?: number;
+  timezone: string;
+  enabled: boolean;
+  maxConcurrentRuns: number;
+  nextRunAt: string;
+  lastRunAt?: string;
+  leaseOwner?: string;
+  leaseUntil?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkflowScheduleRun = {
+  id: string;
+  tenantId: string;
+  scheduleId: string;
+  workflowId: string;
+  triggeredBy: "scheduler" | "manual" | "recovery";
+  workerId?: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  dueAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+  output?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkflowSchedulerStatus = {
+  enabled: boolean;
+  store: string;
+  triggerModes: string[];
+  capabilities: string[];
+};
+
+export type CreateWorkflowInput = AuthCredentials & {
+  title: string;
+  goal: string;
+  steps: Array<{ title: string; description?: string }>;
+};
+
+export type UpdateWorkflowStepInput = AuthCredentials & {
+  workflowId: string;
+  stepId: string;
+  status: WorkflowStepStatus;
+  output?: string;
+  error?: string;
+};
+
+export type CreateWorkflowScheduleInput = AuthCredentials & {
+  workflowId: string;
+  name: string;
+  scheduleType: "interval" | "cron";
+  cronExpression?: string;
+  intervalSeconds?: number;
+  timezone?: string;
+  enabled?: boolean;
+  maxConcurrentRuns?: number;
+  nextRunAt: string;
+  metadata?: Record<string, unknown>;
+};
+
 const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
   name: z.string(),
   description: z.string(),
@@ -700,6 +822,102 @@ const indexingWorkerAlertsSchema: z.ZodType<IndexingWorkerAlerts> = z.object({
     lastRecoveryError: z.string().optional(),
     counters: z.record(z.string(), z.number()),
   }),
+});
+
+const workflowStatusValueSchema = z.enum([
+  "draft",
+  "running",
+  "completed",
+  "failed",
+  "paused",
+  "cancelled",
+]);
+const workflowStepStatusSchema = z.enum([
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "skipped",
+  "waiting_for_approval",
+]);
+
+const workflowStepSchema: z.ZodType<WorkflowStep> = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  status: workflowStepStatusSchema,
+  order: z.number(),
+  output: z.string().optional(),
+  error: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const workflowEventSchema: z.ZodType<WorkflowEvent> = z.object({
+  id: z.string(),
+  type: z.enum(["created", "step_updated", "status_updated"]),
+  timestamp: z.string(),
+  message: z.string(),
+  actorUserId: z.string(),
+});
+
+const workflowSchema: z.ZodType<Workflow> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  createdBy: z.string(),
+  title: z.string(),
+  goal: z.string(),
+  status: workflowStatusValueSchema,
+  steps: z.array(workflowStepSchema),
+  events: z.array(workflowEventSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const workflowScheduleSchema: z.ZodType<WorkflowSchedule> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  workflowId: z.string(),
+  createdBy: z.string(),
+  name: z.string(),
+  scheduleType: z.enum(["interval", "cron"]),
+  cronExpression: z.string().optional(),
+  intervalSeconds: z.number().optional(),
+  timezone: z.string(),
+  enabled: z.boolean(),
+  maxConcurrentRuns: z.number(),
+  nextRunAt: z.string(),
+  lastRunAt: z.string().optional(),
+  leaseOwner: z.string().optional(),
+  leaseUntil: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const workflowScheduleRunSchema: z.ZodType<WorkflowScheduleRun> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  scheduleId: z.string(),
+  workflowId: z.string(),
+  triggeredBy: z.enum(["scheduler", "manual", "recovery"]),
+  workerId: z.string().optional(),
+  status: z.enum(["pending", "running", "completed", "failed", "cancelled"]),
+  dueAt: z.string(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
+  error: z.string().optional(),
+  output: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const workflowSchedulerStatusSchema: z.ZodType<WorkflowSchedulerStatus> = z.object({
+  enabled: z.boolean(),
+  store: z.string(),
+  triggerModes: z.array(z.string()),
+  capabilities: z.array(z.string()),
 });
 
 export async function getReadiness(): Promise<HealthResponse> {
@@ -1006,6 +1224,107 @@ export async function getIndexingWorkerAlerts(
     headers: buildAuthHeaders(credentials),
   });
   return indexingWorkerAlertsSchema.parse(payload);
+}
+
+export async function listWorkflows(credentials: AuthCredentials): Promise<Workflow[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(workflowSchema).parse(payload);
+}
+
+export async function createWorkflow(input: CreateWorkflowInput): Promise<Workflow> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      title: input.title,
+      goal: input.goal,
+      steps: input.steps,
+    }),
+  });
+  return workflowSchema.parse(payload);
+}
+
+export async function updateWorkflowStep(
+  input: UpdateWorkflowStepInput,
+): Promise<Workflow> {
+  const payload = await fetchJson(
+    `${apiBaseUrl}/workflows/${input.workflowId}/steps/${input.stepId}`,
+    {
+      method: "PATCH",
+      headers: buildAuthHeaders(input, true),
+      body: JSON.stringify({
+        status: input.status,
+        output: input.output || undefined,
+        error: input.error || undefined,
+      }),
+    },
+  );
+  return workflowSchema.parse(payload);
+}
+
+export async function getWorkflowSchedulerStatus(
+  credentials: AuthCredentials,
+): Promise<WorkflowSchedulerStatus> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows/scheduler/status`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return workflowSchedulerStatusSchema.parse(payload);
+}
+
+export async function listWorkflowSchedules(
+  credentials: AuthCredentials,
+): Promise<WorkflowSchedule[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows/schedules`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(workflowScheduleSchema).parse(payload);
+}
+
+export async function createWorkflowSchedule(
+  input: CreateWorkflowScheduleInput,
+): Promise<WorkflowSchedule> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows/schedules`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      workflowId: input.workflowId,
+      name: input.name,
+      scheduleType: input.scheduleType,
+      cronExpression: input.cronExpression || undefined,
+      intervalSeconds: input.intervalSeconds,
+      timezone: input.timezone || undefined,
+      enabled: input.enabled,
+      maxConcurrentRuns: input.maxConcurrentRuns,
+      nextRunAt: input.nextRunAt,
+      metadata: input.metadata,
+    }),
+  });
+  return workflowScheduleSchema.parse(payload);
+}
+
+export async function listWorkflowScheduleRuns(
+  credentials: AuthCredentials,
+): Promise<WorkflowScheduleRun[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows/schedule-runs`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(workflowScheduleRunSchema).parse(payload);
+}
+
+export async function triggerWorkflowSchedule(input: AuthCredentials & {
+  scheduleId: string;
+}): Promise<WorkflowScheduleRun> {
+  const payload = await fetchJson(
+    `${apiBaseUrl}/workflows/schedules/${input.scheduleId}/trigger`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(input, true),
+      body: JSON.stringify({}),
+    },
+  );
+  return workflowScheduleRunSchema.parse(payload);
 }
 
 async function fetchJson(url: string, init: RequestInit): Promise<unknown> {

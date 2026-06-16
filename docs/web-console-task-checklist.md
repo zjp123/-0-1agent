@@ -88,12 +88,12 @@
 
 ## Phase 7 - Workflow
 
-- [ ] 展示 workflow 列表。
-- [ ] 支持创建 workflow 草稿。
-- [ ] 支持查看 workflow steps。
-- [ ] 支持运行 workflow。
-- [ ] 展示 schedule 相关状态。
-- [ ] 新增 Workflow 页面留痕文档。
+- [x] 展示 workflow 列表。
+- [x] 支持创建 workflow 草稿。
+- [x] 支持查看 workflow steps。
+- [x] 支持运行 workflow。
+- [x] 展示 schedule 相关状态。
+- [x] 新增 Workflow 页面留痕文档。
 
 ## Phase 8 - Security / Auth Governance
 

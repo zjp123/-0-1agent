@@ -1,0 +1,740 @@
+"use client";
+
+import {
+  CalendarClock,
+  CheckCircle2,
+  GitBranch,
+  Play,
+  Plus,
+  RefreshCcw,
+  Workflow as WorkflowIcon,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  createWorkflow,
+  createWorkflowSchedule,
+  getWorkflowSchedulerStatus,
+  listWorkflowScheduleRuns,
+  listWorkflowSchedules,
+  listWorkflows,
+  triggerWorkflowSchedule,
+  updateWorkflowStep,
+  type AuthCredentials,
+  type Workflow,
+  type WorkflowSchedule,
+  type WorkflowScheduleRun,
+  type WorkflowSchedulerStatus,
+  type WorkflowStep,
+  type WorkflowStepStatus,
+} from "@/lib/api/client";
+
+type WorkflowData = {
+  workflows: Workflow[];
+  schedules: WorkflowSchedule[];
+  runs: WorkflowScheduleRun[];
+  schedulerStatus?: WorkflowSchedulerStatus;
+};
+
+const emptyData: WorkflowData = {
+  workflows: [],
+  schedules: [],
+  runs: [],
+};
+
+const workflowStepStatuses: WorkflowStepStatus[] = [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "skipped",
+  "waiting_for_approval",
+];
+
+function formatDate(value?: string): string {
+  if (!value) {
+    return "none";
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function statusTone(status: string) {
+  if (status === "completed") {
+    return "success" as const;
+  }
+  if (status === "failed" || status === "cancelled") {
+    return "danger" as const;
+  }
+  if (status === "running" || status === "waiting_for_approval") {
+    return "warning" as const;
+  }
+  return "neutral" as const;
+}
+
+function parseSteps(value: string): Array<{ title: string; description?: string }> {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [title, ...descriptionParts] = line.split(" - ");
+      const description = descriptionParts.join(" - ").trim();
+      return {
+        title: title.trim(),
+        ...(description ? { description } : {}),
+      };
+    });
+}
+
+function nextHourIso(): string {
+  const next = new Date(Date.now() + 60 * 60 * 1000);
+  return next.toISOString();
+}
+
+export function WorkflowWorkbench() {
+  const [apiKey, setApiKey] = useState("");
+  const [serviceToken, setServiceToken] = useState("");
+  const [data, setData] = useState<WorkflowData>(emptyData);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
+  const [selectedScheduleId, setSelectedScheduleId] = useState("");
+  const [selectedStepId, setSelectedStepId] = useState("");
+  const [stepStatus, setStepStatus] = useState<WorkflowStepStatus>("running");
+  const [stepOutput, setStepOutput] = useState("");
+  const [stepError, setStepError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [creatingWorkflow, setCreatingWorkflow] = useState(false);
+  const [creatingSchedule, setCreatingSchedule] = useState(false);
+  const [updatingStep, setUpdatingStep] = useState(false);
+  const [triggeringSchedule, setTriggeringSchedule] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [successMessage, setSuccessMessage] = useState<string | undefined>();
+  const [workflowTitle, setWorkflowTitle] = useState("Production Readiness Review");
+  const [workflowGoal, setWorkflowGoal] = useState("Validate the enterprise agent before production deployment.");
+  const [stepsText, setStepsText] = useState(
+    "Check infrastructure - Confirm database, Redis, and vector store readiness.\nRun smoke tests - Execute core API and Web console checks.\nApprove rollout - Record operator approval before deployment.",
+  );
+  const [scheduleName, setScheduleName] = useState("Manual production readiness trigger");
+  const [scheduleType, setScheduleType] = useState<"interval" | "cron">("interval");
+  const [intervalSeconds, setIntervalSeconds] = useState(3600);
+  const [cronExpression, setCronExpression] = useState("0 * * * *");
+  const [nextRunAt, setNextRunAt] = useState(nextHourIso());
+
+  const credentials = useMemo<AuthCredentials>(
+    () => ({
+      apiKey: apiKey.trim() || undefined,
+      serviceToken: serviceToken.trim() || undefined,
+    }),
+    [apiKey, serviceToken],
+  );
+  const hasCredentials = Boolean(credentials.apiKey || credentials.serviceToken);
+
+  const selectedWorkflow = data.workflows.find((workflow) => workflow.id === selectedWorkflowId);
+  const selectedStep = selectedWorkflow?.steps.find((step) => step.id === selectedStepId);
+  const selectedSchedule = data.schedules.find((schedule) => schedule.id === selectedScheduleId);
+  const activeRuns = data.runs.filter((run) => run.status === "pending" || run.status === "running");
+
+  async function refresh(): Promise<void> {
+    if (!hasCredentials) {
+      setData(emptyData);
+      setErrorMessage(undefined);
+      setSuccessMessage(undefined);
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const [workflows, schedules, runs, schedulerStatus] = await Promise.all([
+        listWorkflows(credentials),
+        listWorkflowSchedules(credentials),
+        listWorkflowScheduleRuns(credentials),
+        getWorkflowSchedulerStatus(credentials),
+      ]);
+      setData({ workflows, schedules, runs, schedulerStatus });
+      const workflowId = selectedWorkflowId || workflows[0]?.id || "";
+      setSelectedWorkflowId(workflowId);
+      const workflow = workflows.find((item) => item.id === workflowId) ?? workflows[0];
+      setSelectedStepId((current) => current || workflow?.steps[0]?.id || "");
+      setSelectedScheduleId((current) => current || schedules[0]?.id || "");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load workflows.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitWorkflow(): Promise<void> {
+    if (!hasCredentials) {
+      setErrorMessage("Enter an API key or service token before creating a workflow.");
+      return;
+    }
+    const steps = parseSteps(stepsText);
+    if (!workflowTitle.trim() || !workflowGoal.trim() || steps.length === 0) {
+      setErrorMessage("Workflow title, goal, and at least one step are required.");
+      return;
+    }
+
+    setCreatingWorkflow(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const workflow = await createWorkflow({
+        ...credentials,
+        title: workflowTitle.trim(),
+        goal: workflowGoal.trim(),
+        steps,
+      });
+      setSelectedWorkflowId(workflow.id);
+      setSelectedStepId(workflow.steps[0]?.id ?? "");
+      setSuccessMessage(`Created workflow ${workflow.title}.`);
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create workflow.");
+    } finally {
+      setCreatingWorkflow(false);
+    }
+  }
+
+  async function submitStepUpdate(): Promise<void> {
+    if (!hasCredentials || !selectedWorkflow || !selectedStep) {
+      setErrorMessage("Select a workflow step before updating status.");
+      return;
+    }
+
+    setUpdatingStep(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const workflow = await updateWorkflowStep({
+        ...credentials,
+        workflowId: selectedWorkflow.id,
+        stepId: selectedStep.id,
+        status: stepStatus,
+        output: stepOutput.trim() || undefined,
+        error: stepError.trim() || undefined,
+      });
+      setSelectedWorkflowId(workflow.id);
+      setSelectedStepId(selectedStep.id);
+      setSuccessMessage(`Updated step ${selectedStep.title}.`);
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to update workflow step.");
+    } finally {
+      setUpdatingStep(false);
+    }
+  }
+
+  async function submitSchedule(): Promise<void> {
+    if (!hasCredentials || !selectedWorkflow) {
+      setErrorMessage("Select a workflow before creating a schedule.");
+      return;
+    }
+
+    setCreatingSchedule(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const schedule = await createWorkflowSchedule({
+        ...credentials,
+        workflowId: selectedWorkflow.id,
+        name: scheduleName.trim(),
+        scheduleType,
+        cronExpression: scheduleType === "cron" ? cronExpression.trim() : undefined,
+        intervalSeconds: scheduleType === "interval" ? intervalSeconds : undefined,
+        timezone: "Asia/Shanghai",
+        enabled: true,
+        maxConcurrentRuns: 1,
+        nextRunAt: nextRunAt.trim(),
+        metadata: { source: "web-console" },
+      });
+      setSelectedScheduleId(schedule.id);
+      setSuccessMessage(`Created schedule ${schedule.name}.`);
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create workflow schedule.");
+    } finally {
+      setCreatingSchedule(false);
+    }
+  }
+
+  async function triggerSchedule(): Promise<void> {
+    if (!hasCredentials || !selectedSchedule) {
+      setErrorMessage("Select a schedule before triggering a workflow run.");
+      return;
+    }
+
+    setTriggeringSchedule(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const run = await triggerWorkflowSchedule({
+        ...credentials,
+        scheduleId: selectedSchedule.id,
+      });
+      setSuccessMessage(`Triggered workflow run ${run.id}.`);
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to trigger workflow schedule.");
+    } finally {
+      setTriggeringSchedule(false);
+    }
+  }
+
+  function selectWorkflow(workflowId: string): void {
+    const workflow = data.workflows.find((item) => item.id === workflowId);
+    setSelectedWorkflowId(workflowId);
+    setSelectedStepId(workflow?.steps[0]?.id ?? "");
+    setStepOutput("");
+    setStepError("");
+  }
+
+  function selectStep(step: WorkflowStep): void {
+    setSelectedStepId(step.id);
+    setStepStatus(step.status);
+    setStepOutput(step.output ?? "");
+    setStepError(step.error ?? "");
+  }
+
+  return (
+    <div className="workflow-page">
+      <div className="dashboard-header">
+        <div>
+          <h1 className="dashboard-title">Workflows</h1>
+          <p className="dashboard-description">
+            Create workflow drafts, inspect steps, trigger schedules, and advance execution state.
+          </p>
+        </div>
+        <button type="button" className="refresh-button" onClick={() => void refresh()} disabled={loading || !hasCredentials}>
+          <RefreshCcw className={`icon-sm ${loading ? "spin" : ""}`} aria-hidden="true" />
+          Refresh
+        </button>
+      </div>
+
+      {errorMessage ? <div className="alert alert-danger">{errorMessage}</div> : null}
+      {successMessage ? <div className="alert alert-success">{successMessage}</div> : null}
+      {!hasCredentials ? (
+        <div className="alert alert-neutral">
+          Enter an API key or service token, then refresh to load protected workflow data.
+        </div>
+      ) : null}
+
+      <section className="security-summary">
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Workflows</span>
+            <WorkflowIcon className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{data.workflows.length}</div>
+          </div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Schedules</span>
+            <CalendarClock className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{data.schedules.length}</div>
+          </div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Active Runs</span>
+            <Play className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{activeRuns.length}</div>
+          </div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Scheduler</span>
+            <GitBranch className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{data.schedulerStatus?.enabled ? "enabled" : "unknown"}</div>
+            <div className="dependency-detail">{data.schedulerStatus?.store ?? "not loaded"}</div>
+          </div>
+        </div>
+      </section>
+
+      <section className="workflow-layout">
+        <aside className="workflow-side">
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Credentials</h2>
+              <p className="section-card-description">Use a token with workflow:manage.</p>
+            </div>
+            <div className="section-card-body auth-form">
+              <label>
+                <span className="label">API key</span>
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" />
+              </label>
+              <label>
+                <span className="label">Service token</span>
+                <input
+                  value={serviceToken}
+                  onChange={(event) => setServiceToken(event.target.value)}
+                  className="text-input"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Create Workflow Draft</h2>
+              <p className="section-card-description">One step per line, optionally using "title - description".</p>
+            </div>
+            <div className="section-card-body auth-form">
+              <label>
+                <span className="label">Title</span>
+                <input
+                  value={workflowTitle}
+                  onChange={(event) => setWorkflowTitle(event.target.value)}
+                  className="text-input"
+                />
+              </label>
+              <label>
+                <span className="label">Goal</span>
+                <textarea
+                  value={workflowGoal}
+                  onChange={(event) => setWorkflowGoal(event.target.value)}
+                  className="composer-input"
+                  rows={3}
+                />
+              </label>
+              <label>
+                <span className="label">Steps</span>
+                <textarea
+                  value={stepsText}
+                  onChange={(event) => setStepsText(event.target.value)}
+                  className="composer-input"
+                  rows={7}
+                />
+              </label>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void submitWorkflow()}
+                disabled={creatingWorkflow || !hasCredentials}
+              >
+                <Plus className="icon-sm" aria-hidden="true" />
+                Create Workflow
+              </button>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Create Schedule</h2>
+              <p className="section-card-description">Attach a schedule to the selected workflow.</p>
+            </div>
+            <div className="section-card-body auth-form">
+              <label>
+                <span className="label">Name</span>
+                <input value={scheduleName} onChange={(event) => setScheduleName(event.target.value)} className="text-input" />
+              </label>
+              <label>
+                <span className="label">Type</span>
+                <select
+                  value={scheduleType}
+                  onChange={(event) => setScheduleType(event.target.value as "interval" | "cron")}
+                  className="text-input"
+                >
+                  <option value="interval">interval</option>
+                  <option value="cron">cron</option>
+                </select>
+              </label>
+              {scheduleType === "interval" ? (
+                <label>
+                  <span className="label">Interval seconds</span>
+                  <input
+                    type="number"
+                    min={60}
+                    value={intervalSeconds}
+                    onChange={(event) => setIntervalSeconds(Number(event.target.value))}
+                    className="text-input"
+                  />
+                </label>
+              ) : (
+                <label>
+                  <span className="label">Cron expression</span>
+                  <input
+                    value={cronExpression}
+                    onChange={(event) => setCronExpression(event.target.value)}
+                    className="text-input"
+                  />
+                </label>
+              )}
+              <label>
+                <span className="label">Next run ISO</span>
+                <input value={nextRunAt} onChange={(event) => setNextRunAt(event.target.value)} className="text-input" />
+              </label>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void submitSchedule()}
+                disabled={creatingSchedule || !hasCredentials || !selectedWorkflow}
+              >
+                <CalendarClock className="icon-sm" aria-hidden="true" />
+                Create Schedule
+              </button>
+            </div>
+          </section>
+        </aside>
+
+        <div className="workflow-main">
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Workflow List</h2>
+              <p className="section-card-description">Drafts and execution history foundation for the current tenant.</p>
+            </div>
+            <div className="section-card-body workflow-list">
+              {data.workflows.map((workflow) => (
+                <button
+                  key={workflow.id}
+                  type="button"
+                  className={workflow.id === selectedWorkflowId ? "tool-list-item tool-list-item-active" : "tool-list-item"}
+                  onClick={() => selectWorkflow(workflow.id)}
+                >
+                  <span>
+                    <strong>{workflow.title}</strong>
+                    <span className="dependency-detail">{workflow.goal}</span>
+                  </span>
+                  <StatusBadge tone={statusTone(workflow.status)}>{workflow.status}</StatusBadge>
+                </button>
+              ))}
+              {data.workflows.length === 0 ? <div className="empty-state">No workflows loaded.</div> : null}
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header table-card-header">
+              <div>
+                <h2 className="section-card-title">Steps</h2>
+                <p className="section-card-description">Select a step and advance its state.</p>
+              </div>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void submitStepUpdate()}
+                disabled={updatingStep || !hasCredentials || !selectedStep}
+              >
+                <CheckCircle2 className="icon-sm" aria-hidden="true" />
+                Update Step
+              </button>
+            </div>
+            <div className="section-card-body workflow-steps-layout">
+              <div className="dependency-table-wrap">
+                <table className="dependency-table">
+                  <thead>
+                    <tr>
+                      <th>Step</th>
+                      <th>Status</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedWorkflow?.steps.map((step) => (
+                      <tr key={step.id} onClick={() => selectStep(step)} className="clickable-row">
+                        <td>
+                          <div className="dependency-name">{step.order}. {step.title}</div>
+                          <div className="dependency-detail">{step.description ?? step.id}</div>
+                        </td>
+                        <td>
+                          <StatusBadge tone={statusTone(step.status)}>{step.status}</StatusBadge>
+                        </td>
+                        <td>{formatDate(step.updatedAt)}</td>
+                      </tr>
+                    ))}
+                    {!selectedWorkflow || selectedWorkflow.steps.length === 0 ? (
+                      <tr>
+                        <td colSpan={3}>
+                          <div className="table-empty">No workflow selected.</div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="auth-form">
+                <label>
+                  <span className="label">Selected step</span>
+                  <input value={selectedStep?.title ?? ""} readOnly className="text-input" />
+                </label>
+                <label>
+                  <span className="label">Status</span>
+                  <select
+                    value={stepStatus}
+                    onChange={(event) => setStepStatus(event.target.value as WorkflowStepStatus)}
+                    className="text-input"
+                  >
+                    {workflowStepStatuses.map((status) => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="label">Output</span>
+                  <textarea
+                    value={stepOutput}
+                    onChange={(event) => setStepOutput(event.target.value)}
+                    className="composer-input"
+                    rows={4}
+                  />
+                </label>
+                <label>
+                  <span className="label">Error</span>
+                  <textarea
+                    value={stepError}
+                    onChange={(event) => setStepError(event.target.value)}
+                    className="composer-input"
+                    rows={3}
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header table-card-header">
+              <div>
+                <h2 className="section-card-title">Schedules</h2>
+                <p className="section-card-description">Run workflow schedules manually or inspect next run state.</p>
+              </div>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void triggerSchedule()}
+                disabled={triggeringSchedule || !hasCredentials || !selectedSchedule}
+              >
+                <Play className="icon-sm" aria-hidden="true" />
+                Trigger
+              </button>
+            </div>
+            <div className="section-card-body">
+              <div className="dependency-table-wrap">
+                <table className="dependency-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Enabled</th>
+                      <th>Next run</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.schedules.map((schedule) => (
+                      <tr
+                        key={schedule.id}
+                        onClick={() => setSelectedScheduleId(schedule.id)}
+                        className="clickable-row"
+                      >
+                        <td>
+                          <div className="dependency-name">{schedule.name}</div>
+                          <div className="dependency-detail">{schedule.workflowId}</div>
+                        </td>
+                        <td>{schedule.scheduleType}</td>
+                        <td>
+                          <StatusBadge tone={schedule.enabled ? "success" : "warning"}>
+                            {schedule.enabled ? "enabled" : "disabled"}
+                          </StatusBadge>
+                        </td>
+                        <td>{formatDate(schedule.nextRunAt)}</td>
+                      </tr>
+                    ))}
+                    {data.schedules.length === 0 ? (
+                      <tr>
+                        <td colSpan={4}>
+                          <div className="table-empty">No schedules loaded.</div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Schedule Runs</h2>
+              <p className="section-card-description">Recent manual and scheduler-triggered runs.</p>
+            </div>
+            <div className="section-card-body">
+              <div className="dependency-table-wrap">
+                <table className="dependency-table">
+                  <thead>
+                    <tr>
+                      <th>Status</th>
+                      <th>Trigger</th>
+                      <th>Due</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.runs.map((run) => (
+                      <tr key={run.id}>
+                        <td>
+                          <StatusBadge tone={statusTone(run.status)}>{run.status}</StatusBadge>
+                          <div className="dependency-detail">{run.id}</div>
+                        </td>
+                        <td>{run.triggeredBy}</td>
+                        <td>{formatDate(run.dueAt)}</td>
+                        <td>{formatDate(run.updatedAt)}</td>
+                      </tr>
+                    ))}
+                    {data.runs.length === 0 ? (
+                      <tr>
+                        <td colSpan={4}>
+                          <div className="table-empty">No schedule runs loaded.</div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Scheduler Status</h2>
+              <p className="section-card-description">Workflow scheduler mode and supported capabilities.</p>
+            </div>
+            <div className="section-card-body">
+              {data.schedulerStatus ? (
+                <>
+                  <dl className="details-grid">
+                    <div>
+                      <dt className="label">Enabled</dt>
+                      <dd className="detail-value">{String(data.schedulerStatus.enabled)}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Store</dt>
+                      <dd className="detail-value">{data.schedulerStatus.store}</dd>
+                    </div>
+                  </dl>
+                  <div className="subsection-title">Capabilities</div>
+                  <div className="badge-row">
+                    {data.schedulerStatus.capabilities.map((capability) => (
+                      <StatusBadge key={capability}>{capability}</StatusBadge>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="empty-state">No scheduler status loaded.</div>
+              )}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
