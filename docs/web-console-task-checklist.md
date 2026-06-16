@@ -116,10 +116,10 @@
 
 ## Phase 10 - Observability
 
-- [ ] 展示 trace events。
-- [ ] 展示关键运行指标入口。
-- [ ] 展示最近任务、工具调用、索引事件的时间线。
-- [ ] 新增 Observability 页面留痕文档。
+- [x] 展示 trace events。
+- [x] 展示关键运行指标入口。
+- [x] 展示最近任务、工具调用、索引事件的时间线。
+- [x] 新增 Observability 页面留痕文档。
 
 ## Phase 11 - 本地联调与自测
 

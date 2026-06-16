@@ -1,0 +1,386 @@
+"use client";
+
+import {
+  Activity,
+  Clock,
+  DatabaseZap,
+  RefreshCcw,
+  Route,
+  Search,
+  Wrench,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  listTraceEvents,
+  TRACE_EVENT_TYPES,
+  type AuthCredentials,
+  type TraceEvent,
+  type TraceEventType,
+} from "@/lib/api/client";
+
+function formatDate(value?: string): string {
+  if (!value) {
+    return "none";
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function typeTone(type: TraceEventType) {
+  if (type.endsWith(".failed")) {
+    return "danger" as const;
+  }
+  if (type.includes("completed")) {
+    return "success" as const;
+  }
+  if (type.includes("started") || type.includes("created")) {
+    return "warning" as const;
+  }
+  return "neutral" as const;
+}
+
+function countByPrefix(events: TraceEvent[], prefix: string): number {
+  return events.filter((event) => event.type.startsWith(prefix)).length;
+}
+
+function averageDuration(events: TraceEvent[]): number {
+  const durations = events
+    .map((event) => event.durationMs)
+    .filter((value): value is number => typeof value === "number");
+  if (durations.length === 0) {
+    return 0;
+  }
+  return Math.round(durations.reduce((total, value) => total + value, 0) / durations.length);
+}
+
+export function ObservabilityDashboard() {
+  const [apiKey, setApiKey] = useState("");
+  const [serviceToken, setServiceToken] = useState("");
+  const [events, setEvents] = useState<TraceEvent[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const [requestId, setRequestId] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | TraceEventType>("all");
+  const [limit, setLimit] = useState(100);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const [successMessage, setSuccessMessage] = useState<string | undefined>();
+
+  const credentials = useMemo<AuthCredentials>(
+    () => ({
+      apiKey: apiKey.trim() || undefined,
+      serviceToken: serviceToken.trim() || undefined,
+    }),
+    [apiKey, serviceToken],
+  );
+  const hasCredentials = Boolean(credentials.apiKey || credentials.serviceToken);
+  const selectedEvent = events.find((event) => event.id === selectedEventId) ?? events[0];
+  const uniqueRequests = new Set(events.map((event) => event.requestId)).size;
+  const failureCount = events.filter((event) => event.type.endsWith(".failed")).length;
+  const timelineEvents = [...events].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+
+  async function refresh(): Promise<void> {
+    if (!hasCredentials) {
+      setEvents([]);
+      setErrorMessage(undefined);
+      setSuccessMessage(undefined);
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const nextEvents = await listTraceEvents(credentials, {
+        requestId: requestId.trim() || undefined,
+        type: typeFilter === "all" ? undefined : typeFilter,
+        limit,
+      });
+      setEvents(nextEvents);
+      setSelectedEventId((current) => current || nextEvents[0]?.id || "");
+      setSuccessMessage(`Loaded ${nextEvents.length} trace event(s).`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load trace events.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="observability-page">
+      <div className="dashboard-header">
+        <div>
+          <h1 className="dashboard-title">Observability</h1>
+          <p className="dashboard-description">
+            Inspect trace events, derived runtime metrics, and the latest task/tool/indexing timeline.
+          </p>
+        </div>
+        <button type="button" className="refresh-button" onClick={() => void refresh()} disabled={loading || !hasCredentials}>
+          <RefreshCcw className={`icon-sm ${loading ? "spin" : ""}`} aria-hidden="true" />
+          Refresh
+        </button>
+      </div>
+
+      {errorMessage ? <div className="alert alert-danger">{errorMessage}</div> : null}
+      {successMessage ? <div className="alert alert-success">{successMessage}</div> : null}
+      {!hasCredentials ? (
+        <div className="alert alert-neutral">
+          Enter an API key or service token, then refresh to load protected trace events.
+        </div>
+      ) : null}
+
+      <section className="security-summary">
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Trace Events</span>
+            <Activity className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{events.length}</div>
+            <div className="dependency-detail">{uniqueRequests} request(s)</div>
+          </div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Failures</span>
+            <Route className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{failureCount}</div>
+          </div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Avg Duration</span>
+            <Clock className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{averageDuration(events)} ms</div>
+          </div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Signals</span>
+            <DatabaseZap className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">
+              {countByPrefix(events, "agent.")}/{countByPrefix(events, "tool.")}/{countByPrefix(events, "rag.")}
+            </div>
+            <div className="dependency-detail">agent / tool / rag</div>
+          </div>
+        </div>
+      </section>
+
+      <section className="observability-layout">
+        <aside className="observability-side">
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Credentials</h2>
+              <p className="section-card-description">Use a token with observability:read.</p>
+            </div>
+            <div className="section-card-body auth-form">
+              <label>
+                <span className="label">API key</span>
+                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" />
+              </label>
+              <label>
+                <span className="label">Service token</span>
+                <input
+                  value={serviceToken}
+                  onChange={(event) => setServiceToken(event.target.value)}
+                  className="text-input"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Filters</h2>
+              <p className="section-card-description">Narrow trace events by request, type, or limit.</p>
+            </div>
+            <div className="section-card-body auth-form">
+              <label>
+                <span className="label">Request ID</span>
+                <input value={requestId} onChange={(event) => setRequestId(event.target.value)} className="text-input" />
+              </label>
+              <label>
+                <span className="label">Type</span>
+                <select
+                  value={typeFilter}
+                  onChange={(event) => setTypeFilter(event.target.value as "all" | TraceEventType)}
+                  className="text-input"
+                >
+                  <option value="all">all</option>
+                  {TRACE_EVENT_TYPES.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="label">Limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={limit}
+                  onChange={(event) => setLimit(Number(event.target.value))}
+                  className="text-input"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Event Mix</h2>
+              <p className="section-card-description">Derived counts from the current trace query.</p>
+            </div>
+            <div className="section-card-body">
+              <ul className="compact-list api-security-list">
+                <li>
+                  <span>Agent</span>
+                  <StatusBadge>{countByPrefix(events, "agent.")}</StatusBadge>
+                </li>
+                <li>
+                  <span>Model</span>
+                  <StatusBadge>{countByPrefix(events, "model.")}</StatusBadge>
+                </li>
+                <li>
+                  <span>Tools</span>
+                  <StatusBadge>{countByPrefix(events, "tool.")}</StatusBadge>
+                </li>
+                <li>
+                  <span>RAG</span>
+                  <StatusBadge>{countByPrefix(events, "rag.")}</StatusBadge>
+                </li>
+                <li>
+                  <span>Workflow</span>
+                  <StatusBadge>{countByPrefix(events, "workflow.")}</StatusBadge>
+                </li>
+              </ul>
+            </div>
+          </section>
+        </aside>
+
+        <div className="observability-main">
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Trace Events</h2>
+              <p className="section-card-description">Structured trace event stream returned by the API.</p>
+            </div>
+            <div className="section-card-body">
+              <div className="dependency-table-wrap">
+                <table className="dependency-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Request</th>
+                      <th>Duration</th>
+                      <th>Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {timelineEvents.map((event) => (
+                      <tr
+                        key={event.id}
+                        className="clickable-row"
+                        onClick={() => setSelectedEventId(event.id)}
+                      >
+                        <td>
+                          <StatusBadge tone={typeTone(event.type)}>{event.type}</StatusBadge>
+                        </td>
+                        <td>
+                          <code className="inline-code">{event.requestId}</code>
+                          <div className="dependency-detail">{event.id}</div>
+                        </td>
+                        <td>{event.durationMs !== undefined ? `${event.durationMs} ms` : "none"}</td>
+                        <td>{formatDate(event.timestamp)}</td>
+                      </tr>
+                    ))}
+                    {timelineEvents.length === 0 ? (
+                      <tr>
+                        <td colSpan={4}>
+                          <div className="table-empty">No trace events loaded.</div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Latest Timeline</h2>
+              <p className="section-card-description">Recent tasks, tool calls, indexing events, and workflow runs.</p>
+            </div>
+            <div className="section-card-body timeline-list">
+              {timelineEvents.slice(0, 12).map((event) => (
+                <article key={event.id} className="timeline-item">
+                  <div className="timeline-marker">
+                    {event.type.startsWith("tool.") ? (
+                      <Wrench className="icon-sm" aria-hidden="true" />
+                    ) : event.type.startsWith("rag.") ? (
+                      <DatabaseZap className="icon-sm" aria-hidden="true" />
+                    ) : (
+                      <Search className="icon-sm" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="dependency-name">{event.type}</div>
+                    <div className="dependency-detail">
+                      {formatDate(event.timestamp)} / {event.durationMs ?? "no duration"} ms
+                    </div>
+                    <div className="dependency-detail">{event.requestId}</div>
+                  </div>
+                </article>
+              ))}
+              {timelineEvents.length === 0 ? <div className="empty-state">No timeline events loaded.</div> : null}
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Selected Event</h2>
+              <p className="section-card-description">Raw attributes for debugging and incident review.</p>
+            </div>
+            <div className="section-card-body">
+              {selectedEvent ? (
+                <>
+                  <dl className="details-grid">
+                    <div>
+                      <dt className="label">Type</dt>
+                      <dd className="detail-value">{selectedEvent.type}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">User</dt>
+                      <dd className="detail-value">{selectedEvent.userId ?? "none"}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Tenant</dt>
+                      <dd className="detail-value">{selectedEvent.tenantId ?? "none"}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Timestamp</dt>
+                      <dd className="detail-value">{formatDate(selectedEvent.timestamp)}</dd>
+                    </div>
+                  </dl>
+                  <pre className="code-block api-json-preview">{JSON.stringify(selectedEvent.attributes, null, 2)}</pre>
+                </>
+              ) : (
+                <div className="empty-state">No trace event selected.</div>
+              )}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}

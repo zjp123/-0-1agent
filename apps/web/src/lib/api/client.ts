@@ -595,6 +595,62 @@ export type RunEvaluationCaseInput = AuthCredentials & {
   actualOutput: string;
 };
 
+export type TraceEventType =
+  | "agent.run.started"
+  | "agent.context.built"
+  | "rag.retrieved"
+  | "rag.vector.failed"
+  | "rag.indexing.completed"
+  | "rag.indexing.failed"
+  | "rag.indexing.admin"
+  | "rag.indexing.recovery"
+  | "model.completed"
+  | "model.failed"
+  | "tool.completed"
+  | "agent.run.completed"
+  | "orchestration.run.started"
+  | "orchestration.handoff.started"
+  | "orchestration.handoff.completed"
+  | "orchestration.handoff.failed"
+  | "orchestration.run.completed"
+  | "workflow.schedule.created"
+  | "workflow.schedule.run.created"
+  | "workflow.schedule.run.failed";
+
+export const TRACE_EVENT_TYPES: TraceEventType[] = [
+  "agent.run.started",
+  "agent.context.built",
+  "rag.retrieved",
+  "rag.vector.failed",
+  "rag.indexing.completed",
+  "rag.indexing.failed",
+  "rag.indexing.admin",
+  "rag.indexing.recovery",
+  "model.completed",
+  "model.failed",
+  "tool.completed",
+  "agent.run.completed",
+  "orchestration.run.started",
+  "orchestration.handoff.started",
+  "orchestration.handoff.completed",
+  "orchestration.handoff.failed",
+  "orchestration.run.completed",
+  "workflow.schedule.created",
+  "workflow.schedule.run.created",
+  "workflow.schedule.run.failed",
+];
+
+export type TraceEvent = {
+  id: string;
+  requestId: string;
+  type: TraceEventType;
+  timestamp: string;
+  durationMs?: number;
+  userId?: string;
+  tenantId?: string;
+  attributes: Record<string, string | number | boolean | null>;
+};
+
 const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
   name: z.string(),
   description: z.string(),
@@ -994,6 +1050,22 @@ const evaluationRunSchema: z.ZodType<EvaluationRun> = z.object({
   evaluator: z.literal("string_contains"),
   notes: z.array(z.string()),
   createdAt: z.string(),
+});
+
+const traceEventTypeSchema = z.enum(TRACE_EVENT_TYPES);
+
+const traceEventSchema: z.ZodType<TraceEvent> = z.object({
+  id: z.string(),
+  requestId: z.string(),
+  type: traceEventTypeSchema,
+  timestamp: z.string(),
+  durationMs: z.number().optional(),
+  userId: z.string().optional(),
+  tenantId: z.string().optional(),
+  attributes: z.record(
+    z.string(),
+    z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  ),
 });
 
 export async function getReadiness(): Promise<HealthResponse> {
@@ -1455,6 +1527,27 @@ export async function listEvaluationRuns(
     headers: buildAuthHeaders(credentials),
   });
   return z.array(evaluationRunSchema).parse(payload);
+}
+
+export async function listTraceEvents(
+  credentials: AuthCredentials,
+  query: { requestId?: string; type?: TraceEventType; limit?: number } = {},
+): Promise<TraceEvent[]> {
+  const params = new URLSearchParams();
+  if (query.requestId) {
+    params.set("requestId", query.requestId);
+  }
+  if (query.type) {
+    params.set("type", query.type);
+  }
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const payload = await fetchJson(`${apiBaseUrl}/observability/traces${suffix}`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(traceEventSchema).parse(payload);
 }
 
 async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
