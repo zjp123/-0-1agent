@@ -551,6 +551,50 @@ export type CreateWorkflowScheduleInput = AuthCredentials & {
   metadata?: Record<string, unknown>;
 };
 
+export type EvaluationCaseType =
+  | "agent_response"
+  | "rag_retrieval"
+  | "tool_execution";
+
+export type EvaluationCase = {
+  id: string;
+  tenantId: string;
+  createdBy: string;
+  name: string;
+  type: EvaluationCaseType;
+  input: string;
+  expectedOutput: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EvaluationRun = {
+  id: string;
+  tenantId: string;
+  caseId: string;
+  status: "passed" | "failed";
+  score: number;
+  actualOutput: string;
+  expectedOutput: string;
+  evaluator: "string_contains";
+  notes: string[];
+  createdAt: string;
+};
+
+export type CreateEvaluationCaseInput = AuthCredentials & {
+  name: string;
+  type: EvaluationCaseType;
+  input: string;
+  expectedOutput: string;
+  tags?: string[];
+};
+
+export type RunEvaluationCaseInput = AuthCredentials & {
+  caseId: string;
+  actualOutput: string;
+};
+
 const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
   name: z.string(),
   description: z.string(),
@@ -918,6 +962,38 @@ const workflowSchedulerStatusSchema: z.ZodType<WorkflowSchedulerStatus> = z.obje
   store: z.string(),
   triggerModes: z.array(z.string()),
   capabilities: z.array(z.string()),
+});
+
+const evaluationCaseTypeSchema = z.enum([
+  "agent_response",
+  "rag_retrieval",
+  "tool_execution",
+]);
+
+const evaluationCaseSchema: z.ZodType<EvaluationCase> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  createdBy: z.string(),
+  name: z.string(),
+  type: evaluationCaseTypeSchema,
+  input: z.string(),
+  expectedOutput: z.string(),
+  tags: z.array(z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const evaluationRunSchema: z.ZodType<EvaluationRun> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  caseId: z.string(),
+  status: z.enum(["passed", "failed"]),
+  score: z.number(),
+  actualOutput: z.string(),
+  expectedOutput: z.string(),
+  evaluator: z.literal("string_contains"),
+  notes: z.array(z.string()),
+  createdAt: z.string(),
 });
 
 export async function getReadiness(): Promise<HealthResponse> {
@@ -1325,6 +1401,60 @@ export async function triggerWorkflowSchedule(input: AuthCredentials & {
     },
   );
   return workflowScheduleRunSchema.parse(payload);
+}
+
+export async function listEvaluationCases(
+  credentials: AuthCredentials,
+): Promise<EvaluationCase[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/evaluations/cases`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(evaluationCaseSchema).parse(payload);
+}
+
+export async function createEvaluationCase(
+  input: CreateEvaluationCaseInput,
+): Promise<EvaluationCase> {
+  const payload = await fetchJson(`${apiBaseUrl}/evaluations/cases`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      name: input.name,
+      type: input.type,
+      input: input.input,
+      expectedOutput: input.expectedOutput,
+      tags: input.tags,
+    }),
+  });
+  return evaluationCaseSchema.parse(payload);
+}
+
+export async function runEvaluationCase(
+  input: RunEvaluationCaseInput,
+): Promise<EvaluationRun> {
+  const payload = await fetchJson(`${apiBaseUrl}/evaluations/cases/${input.caseId}/runs`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      actualOutput: input.actualOutput,
+    }),
+  });
+  return evaluationRunSchema.parse(payload);
+}
+
+export async function listEvaluationRuns(
+  credentials: AuthCredentials,
+  query: { caseId?: string } = {},
+): Promise<EvaluationRun[]> {
+  const params = new URLSearchParams();
+  if (query.caseId) {
+    params.set("caseId", query.caseId);
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const payload = await fetchJson(`${apiBaseUrl}/evaluations/runs${suffix}`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(evaluationRunSchema).parse(payload);
 }
 
 async function fetchJson(url: string, init: RequestInit): Promise<unknown> {

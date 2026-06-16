@@ -26,7 +26,7 @@ const navigation = [
   { label: "Tools", icon: Wrench, href: "/tools" },
   { label: "Workflows", icon: GitBranch, href: "/workflows" },
   { label: "Security", icon: ShieldCheck, href: "/security" },
-  { label: "Evaluations", icon: ClipboardCheck, href: "#" },
+  { label: "Evaluations", icon: ClipboardCheck, href: "/evaluations" },
   { label: "Observability", icon: Activity, href: "#" },
   { label: "Settings", icon: KeyRound, href: "#" },
 ];

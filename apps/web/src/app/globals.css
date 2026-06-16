@@ -643,6 +643,11 @@ pre {
   gap: 1.5rem;
 }
 
+.evaluation-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
 .security-summary {
   display: grid;
   gap: 1rem;
@@ -682,6 +687,29 @@ pre {
 
 .clickable-row:hover {
   background: #f8fafc;
+}
+
+.evaluation-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.evaluation-main,
+.evaluation-side,
+.evaluation-list {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+
+.evaluation-list .tool-list-item {
+  align-items: start;
+}
+
+.evaluation-list strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #0f172a;
 }
 
 .knowledge-layout {
@@ -1000,6 +1028,10 @@ pre {
   }
 
   .workflow-layout {
+    grid-template-columns: 24rem minmax(0, 1fr);
+  }
+
+  .evaluation-layout {
     grid-template-columns: 24rem minmax(0, 1fr);
   }
 

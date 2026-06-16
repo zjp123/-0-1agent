@@ -108,11 +108,11 @@
 
 ## Phase 9 - Evaluation
 
-- [ ] 展示 evaluation cases。
-- [ ] 支持创建 evaluation case。
-- [ ] 支持运行 evaluation。
-- [ ] 展示 evaluation runs 和评分结果。
-- [ ] 新增 Evaluation 页面留痕文档。
+- [x] 展示 evaluation cases。
+- [x] 支持创建 evaluation case。
+- [x] 支持运行 evaluation。
+- [x] 展示 evaluation runs 和评分结果。
+- [x] 新增 Evaluation 页面留痕文档。
 
 ## Phase 10 - Observability
 
