@@ -122,6 +122,7 @@ const BREAK_GLASS_REASON_PREFIX = "BREAK-GLASS:";
 export class AuthAdminService {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
   ) {}
 

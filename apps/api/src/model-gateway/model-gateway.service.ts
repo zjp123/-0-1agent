@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type { ModelRequest, ModelResponse } from "./model-gateway.types.js";
@@ -16,7 +16,7 @@ export type ModelGatewayStatus = {
 @Injectable()
 export class ModelGatewayService {
   constructor(
-    private readonly config: ConfigService,
+    @Inject(ConfigService) private readonly config: ConfigService,
     private readonly provider: OpenAiCompatibleProvider,
   ) {}
 

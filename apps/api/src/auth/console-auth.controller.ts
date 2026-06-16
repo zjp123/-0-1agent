@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
 
 import { ApiKeyGuard } from "./api-key.guard.js";
 import {
@@ -13,7 +13,10 @@ import { ConsoleRefreshDto } from "./dto/console-refresh.dto.js";
 
 @Controller("auth/console")
 export class ConsoleAuthController {
-  constructor(private readonly consoleAuth: ConsoleAuthService) {}
+  constructor(
+    @Inject(ConsoleAuthService)
+    private readonly consoleAuth: ConsoleAuthService,
+  ) {}
 
   @Post("login")
   login(@Body() body: ConsoleLoginDto): Promise<ConsoleAuthResponse> {
@@ -36,4 +39,3 @@ export class ConsoleAuthController {
     return this.consoleAuth.me(user);
   }
 }
-

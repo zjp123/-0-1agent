@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -21,7 +21,10 @@ import {
 @UseGuards(ApiKeyGuard, PermissionsGuard)
 @RequirePermissions("auth:manage")
 export class SecretsController {
-  constructor(private readonly secrets: SecretsService) {}
+  constructor(
+    @Inject(SecretsService)
+    private readonly secrets: SecretsService,
+  ) {}
 
   @Get()
   listSecrets(@CurrentUser() user: RequestUser): Promise<SecretMetadataResponse[]> {

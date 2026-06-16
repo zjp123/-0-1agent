@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
@@ -50,7 +51,9 @@ import { PermissionsGuard } from "./permissions.guard.js";
 @RequirePermissions("auth:manage")
 export class AuthAdminController {
   constructor(
+    @Inject(AuthAdminService)
     private readonly authAdmin: AuthAdminService,
+    @Inject(AuthSessionService)
     private readonly authSessions: AuthSessionService,
   ) {}
 

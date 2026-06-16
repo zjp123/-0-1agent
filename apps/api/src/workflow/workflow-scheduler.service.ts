@@ -31,7 +31,9 @@ import type {
 export class WorkflowSchedulerService {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
+    @Inject(ObservabilityService)
     private readonly observability: ObservabilityService,
   ) {}
 

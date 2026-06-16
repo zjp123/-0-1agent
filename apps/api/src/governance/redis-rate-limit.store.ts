@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import net from "node:net";
 
@@ -13,7 +13,7 @@ export class RedisRateLimitStore {
   private readonly redisUrl: URL;
   private readonly keyPrefix: string;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     this.redisUrl = new URL(
       config.get<string>("app.redis.url", "redis://localhost:6379"),
     );

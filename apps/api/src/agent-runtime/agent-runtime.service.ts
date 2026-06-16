@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
 import { AuthService } from "../auth/auth.service.js";
 import { MemoryContextService } from "../memory-context/memory-context.service.js";
@@ -43,12 +43,19 @@ export type AgentCapabilitySnapshot = {
 @Injectable()
 export class AgentRuntimeService {
   constructor(
+    @Inject(ModelGatewayService)
     private readonly modelGateway: ModelGatewayService,
+    @Inject(ToolRegistryService)
     private readonly tools: ToolRegistryService,
+    @Inject(MemoryContextService)
     private readonly memoryContext: MemoryContextService,
+    @Inject(RagService)
     private readonly rag: RagService,
+    @Inject(WorkflowService)
     private readonly workflow: WorkflowService,
+    @Inject(AuthService)
     private readonly auth: AuthService,
+    @Inject(ObservabilityService)
     private readonly observability: ObservabilityService,
   ) {}
 

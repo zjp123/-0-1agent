@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
 import { CalculatorTool } from "./builtin/calculator.tool.js";
 import { CurrentTimeTool } from "./builtin/current-time.tool.js";
@@ -25,7 +25,9 @@ export class ToolRegistryService {
   private readonly handlers = new Map<string, ToolHandler>();
 
   constructor(
+    @Inject(CurrentTimeTool)
     currentTimeTool: CurrentTimeTool,
+    @Inject(CalculatorTool)
     calculatorTool: CalculatorTool,
   ) {
     this.register(currentTimeTool);

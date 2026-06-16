@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import crypto from "node:crypto";
 
@@ -16,7 +16,7 @@ export class SecretCryptoService {
   private readonly key: Buffer;
   private readonly keyId: string;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     const masterKey = config.get<string>(
       "app.secrets.masterKey",
       "development-only-secret-master-key-change-me",

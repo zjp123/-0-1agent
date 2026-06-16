@@ -30,7 +30,8 @@ type LiveResponse = {
 @Controller("health")
 export class HealthController {
   constructor(
-    private readonly config: ConfigService,
+    @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(DatabaseService)
     private readonly database: DatabaseService,
     @Inject(VECTOR_STORE) private readonly vectorStore: VectorStore,
   ) {}

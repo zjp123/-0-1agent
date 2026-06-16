@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import type { Permission, Role } from "./auth.types.js";
@@ -12,7 +12,7 @@ export type AuthStatus = {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(@Inject(ConfigService) private readonly config: ConfigService) {}
 
   getStatus(): AuthStatus {
     const hasApiKey = Boolean(this.config.get<string>("app.auth.apiKey"));

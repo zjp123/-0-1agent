@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Header,
+  Inject,
   NotFoundException,
   Param,
   Post,
@@ -36,8 +37,11 @@ import type { IndexingQueueMessage } from "./redis-indexing-queue.js";
 @Controller("knowledge")
 export class RagController {
   constructor(
+    @Inject(RagService)
     private readonly rag: RagService,
+    @Inject(IndexingWorkerService)
     private readonly indexingWorker: IndexingWorkerService,
+    @Inject(QuotaService)
     private readonly quota: QuotaService,
   ) {}
 

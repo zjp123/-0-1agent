@@ -45,9 +45,11 @@ type EffectivePolicy = {
 export class QuotaService {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
+    @Inject(RedisRateLimitStore)
     private readonly redis: RedisRateLimitStore,
-    private readonly config: ConfigService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
   async enforce(input: QuotaCheckInput): Promise<QuotaCheckResult> {

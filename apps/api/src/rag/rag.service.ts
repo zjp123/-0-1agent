@@ -55,6 +55,7 @@ export class RagService {
     @Inject(EMBEDDING_PROVIDER)
     private readonly embeddingProvider: EmbeddingProvider,
     @Inject(VECTOR_STORE) private readonly vectorStore: VectorStore,
+    @Inject(ObservabilityService)
     private readonly observability: ObservabilityService,
   ) {}
 

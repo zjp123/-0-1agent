@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, UseGuards } from "@nestjs/common";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -17,7 +17,9 @@ import type {
 @Controller("tools")
 export class ToolsController {
   constructor(
+    @Inject(ToolRegistryService)
     private readonly registry: ToolRegistryService,
+    @Inject(QuotaService)
     private readonly quota: QuotaService,
   ) {}
 

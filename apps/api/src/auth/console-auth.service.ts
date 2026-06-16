@@ -44,9 +44,13 @@ export class ConsoleAuthService {
   private readonly refreshTokenTtlSeconds = 7 * 24 * 60 * 60;
 
   constructor(
+    @Inject(ConfigService)
     private readonly config: ConfigService,
+    @Inject(AuthService)
     private readonly auth: AuthService,
+    @Inject(AuthRbacService)
     private readonly rbac: AuthRbacService,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
     @Inject(DRIZZLE_DB) private readonly db: Database,
   ) {}

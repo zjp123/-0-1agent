@@ -37,6 +37,7 @@ export type ApprovalRequirementInput = {
 export class ApprovalService {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
   ) {}
 

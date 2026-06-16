@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -23,7 +23,9 @@ import type { QuotaPolicy, QuotaUsageEvent } from "./governance.types.js";
 @RequirePermissions("auth:manage")
 export class GovernanceController {
   constructor(
+    @Inject(QuotaService)
     private readonly quota: QuotaService,
+    @Inject(ApprovalService)
     private readonly approvals: ApprovalService,
   ) {}
 

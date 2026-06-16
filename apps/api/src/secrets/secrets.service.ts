@@ -62,8 +62,11 @@ export type ProviderCredentialResponse = {
 export class SecretsService {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
+    @Inject(SecretCryptoService)
     private readonly crypto: SecretCryptoService,
+    @Inject(ApprovalService)
     private readonly approvals: ApprovalService,
   ) {}
 

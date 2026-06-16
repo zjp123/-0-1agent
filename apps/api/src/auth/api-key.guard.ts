@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -34,6 +35,7 @@ type JwtPayload = {
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
   constructor(
+    @Inject(ConfigService)
     private readonly config: ConfigService,
     private readonly auth: AuthService,
     private readonly rbac: AuthRbacService,

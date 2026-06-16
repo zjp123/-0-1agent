@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   NotFoundException,
   Param,
   Patch,
@@ -37,7 +38,9 @@ import type {
 @RequirePermissions("workflow:manage")
 export class WorkflowController {
   constructor(
+    @Inject(WorkflowService)
     private readonly workflow: WorkflowService,
+    @Inject(WorkflowSchedulerService)
     private readonly scheduler: WorkflowSchedulerService,
   ) {}
 

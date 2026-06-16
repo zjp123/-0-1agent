@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from "@nestjs/common";
+import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import net from "node:net";
 
@@ -26,7 +26,7 @@ export class RedisIndexingQueue implements OnModuleDestroy {
   private readonly blockMs: number;
   private closed = false;
 
-  constructor(config: ConfigService) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     this.redisUrl = new URL(
       config.get<string>("app.redis.url", "redis://localhost:6379"),
     );

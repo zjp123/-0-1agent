@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
@@ -17,7 +17,9 @@ import type { AgentRunOptions, AgentRunResult } from "./agent-runtime.types.js";
 @Controller("agent")
 export class AgentRuntimeController {
   constructor(
+    @Inject(AgentRuntimeService)
     private readonly agentRuntime: AgentRuntimeService,
+    @Inject(QuotaService)
     private readonly quota: QuotaService,
   ) {}
 

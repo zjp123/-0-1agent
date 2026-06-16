@@ -24,6 +24,7 @@ import { WorkflowModule } from "./workflow/workflow.module.js";
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: [".env", "../../.env"],
       load: [configuration],
       validate: validateEnv,
     }),

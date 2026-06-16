@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import OpenAI from "openai";
 import type {
@@ -33,7 +33,7 @@ export class OpenAiCompatibleProvider implements ModelProvider {
   private readonly defaultTimeoutMs: number;
   private readonly defaultMaxRetries: number;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(@Inject(ConfigService) private readonly config: ConfigService) {
     this.name = this.config.get<string>("app.model.provider", "deepseek");
     this.defaultModel = this.config.get<string>(
       "app.model.defaultModel",

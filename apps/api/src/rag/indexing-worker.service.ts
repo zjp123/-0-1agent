@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import {
@@ -61,8 +61,10 @@ export class IndexingWorkerService implements OnModuleInit, OnModuleDestroy {
   };
 
   constructor(
-    private readonly config: ConfigService,
+    @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(RedisIndexingQueue)
     private readonly queue: RedisIndexingQueue,
+    @Inject(RagService)
     private readonly rag: RagService,
   ) {
     this.maxAttempts = this.config.get<number>("app.redis.maxAttempts", 3);

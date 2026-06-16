@@ -56,11 +56,11 @@ SERVICE_TOKEN=local-admin-service-token
 SERVICE_TOKEN_ROLES=admin
 SERVICE_TOKEN_TENANT_ID=default
 
-DATABASE_URL=postgresql://agent:agent_password@localhost:5432/agent_db
+DATABASE_URL=postgresql://agent:agent_password@localhost:15432/agent_db
 POSTGRES_DB=agent_db
 POSTGRES_USER=agent
 POSTGRES_PASSWORD=agent_password
-POSTGRES_PORT=5432
+POSTGRES_PORT=15432
 REDIS_URL=redis://localhost:6379
 REDIS_PORT=6379
 QDRANT_URL=http://localhost:6333
@@ -234,6 +234,75 @@ docker compose -f infra/docker-compose.yml ps
 
 确认 PostgreSQL 和 Redis 已启动。
 
+### 后端报 `role "agent" does not exist`
+
+这是 2026-06-16 已记录过的本地端口冲突问题。优先参考：
+
+```text
+docs/local-postgres-port-conflict-runbook.md
+```
+
+典型错误：
+
+```text
+DrizzleQueryError: Failed query ...
+cause: error: role "agent" does not exist
+```
+
+本项目本地 Postgres 必须使用：
+
+```text
+DATABASE_URL=postgresql://agent:agent_password@localhost:15432/agent_db
+POSTGRES_PORT=15432
+```
+
+原因：
+
+- 本机可能已有 PostgreSQL 监听 `127.0.0.1:5432`。
+- 如果 API 连 `localhost:5432`，会连到本机 Postgres，而不是 Docker 容器。
+- 本项目 Docker Postgres 应映射为 `15432 -> container 5432`。
+
+检查 Docker 映射：
+
+```bash
+docker compose -f infra/docker-compose.yml ps
+docker port enterprise-agent-postgres
+```
+
+期望：
+
+```text
+0.0.0.0:15432->5432/tcp
+```
+
+检查是否连到正确数据库：
+
+```bash
+node -e "import('pg').then(async ({Pool}) => { const pool = new Pool({ connectionString: 'postgresql://agent:agent_password@127.0.0.1:15432/agent_db' }); try { const r = await pool.query('select current_user, current_database()'); console.log(r.rows); } finally { await pool.end(); } })"
+```
+
+期望：
+
+```text
+current_user: agent
+current_database: agent_db
+```
+
+如果 Docker 仍映射到 `5432`，先重启 infra：
+
+```bash
+npm run infra:down
+npm run infra:up
+```
+
+如果 API 仍然连 `5432`，确认 `apps/api/src/app.module.ts` 的 `ConfigModule.forRoot` 包含：
+
+```ts
+envFilePath: [".env", "../../.env"]
+```
+
+这是为了让 `npm run dev:api` 在 workspace 启动时也能读取根目录 `.env`。
+
 ### Web Dashboard 请求 API 失败
 
 检查 `.env`：
@@ -268,7 +337,7 @@ JWT_SECRET=development-only-jwt-secret-change-me
 ```text
 API: 3000
 Web: 3001
-Postgres: 5432
+Postgres: 15432 -> container 5432
 Redis: 6379
 Qdrant: 6333 / 6334
 ```
@@ -278,6 +347,39 @@ Qdrant: 6333 / 6334
 ```bash
 lsof -nP -iTCP:3000 -sTCP:LISTEN
 lsof -nP -iTCP:3001 -sTCP:LISTEN
+lsof -nP -iTCP:15432 -sTCP:LISTEN
+```
+
+如果本机已有 PostgreSQL 监听 `127.0.0.1:5432`，本项目应保持 `POSTGRES_PORT=15432`，并让 `DATABASE_URL` 指向 `localhost:15432`。
+
+### Web 启动报 `EADDRINUSE :::3001`
+
+典型错误：
+
+```text
+Failed to start server
+Error: listen EADDRINUSE: address already in use :::3001
+```
+
+含义：`3001` 已经被旧的 Web dev 服务或其他进程占用。
+
+先查看占用进程：
+
+```bash
+lsof -nP -iTCP:3001 -sTCP:LISTEN
+```
+
+如果看到类似：
+
+```text
+node ... TCP *:3001 (LISTEN)
+next-server
+```
+
+说明之前的 `npm run dev:web` 还在运行。停止旧终端里的进程，或确认 PID 后再停止旧进程，然后重新执行：
+
+```bash
+npm run dev:web
 ```
 
 ### Web build 遇到本机 SWC 签名问题
