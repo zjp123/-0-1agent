@@ -51,10 +51,10 @@
 
 ## Phase 3 - API Docs / 能力总览
 
-- [ ] 拉取 `/docs` 或 `/docs/openapi.json`。
-- [ ] 展示 API 分组和核心能力。
-- [ ] 展示安全相关接口入口。
-- [ ] 新增 API Docs 页面留痕文档。
+- [x] 拉取 `/docs` 或 `/docs/openapi.json`。
+- [x] 展示 API 分组和核心能力。
+- [x] 展示安全相关接口入口。
+- [x] 新增 API Docs 页面留痕文档。
 
 ## Phase 4 - Agent Chat / Streaming / LLM Entry
 

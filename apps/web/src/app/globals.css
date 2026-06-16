@@ -628,9 +628,43 @@ pre {
   gap: 1.5rem;
 }
 
+.api-docs-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
 .security-summary {
   display: grid;
   gap: 1rem;
+}
+
+.api-docs-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.api-docs-main,
+.api-docs-side,
+.api-group-list {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+
+.inline-code {
+  border-radius: 0.25rem;
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.api-json-preview {
+  max-height: 24rem;
+}
+
+.api-security-list li {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .security-layout {
@@ -868,6 +902,10 @@ pre {
 
   .tools-layout {
     grid-template-columns: 18rem minmax(0, 1fr);
+  }
+
+  .api-docs-layout {
+    grid-template-columns: 20rem minmax(0, 1fr);
   }
 
   .security-layout {

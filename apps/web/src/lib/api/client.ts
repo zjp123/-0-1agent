@@ -265,6 +265,42 @@ export type CreateAuthRoleInput = AuthCredentials & {
   comment?: string;
 };
 
+export type ApiDocOperation = {
+  method: "get" | "post" | "patch" | "delete";
+  path: string;
+  summary: string;
+  operationId: string;
+  permission?: string;
+};
+
+export type ApiDocGroup = {
+  tag: string;
+  operations: ApiDocOperation[];
+};
+
+export type ApiDocumentationSummary = {
+  title: string;
+  version: string;
+  openapiUrl: string;
+  groups: ApiDocGroup[];
+};
+
+export type OpenApiDocument = {
+  openapi: string;
+  info: {
+    title: string;
+    version: string;
+    description?: string;
+  };
+  servers?: Array<{ url: string }>;
+  tags?: Array<{ name: string }>;
+  paths: Record<string, Record<string, unknown>>;
+  components?: {
+    schemas?: Record<string, unknown>;
+    securitySchemes?: Record<string, unknown>;
+  };
+};
+
 const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
   name: z.string(),
   description: z.string(),
@@ -380,6 +416,44 @@ const securityAnomalyEventListSchema: z.ZodType<SecurityAnomalyEventList> = z.ob
   limit: z.number(),
   offset: z.number(),
   nextOffset: z.number().optional(),
+});
+
+const apiDocOperationSchema: z.ZodType<ApiDocOperation> = z.object({
+  method: z.enum(["get", "post", "patch", "delete"]),
+  path: z.string(),
+  summary: z.string(),
+  operationId: z.string(),
+  permission: z.string().optional(),
+});
+
+const apiDocumentationSummarySchema: z.ZodType<ApiDocumentationSummary> = z.object({
+  title: z.string(),
+  version: z.string(),
+  openapiUrl: z.string(),
+  groups: z.array(
+    z.object({
+      tag: z.string(),
+      operations: z.array(apiDocOperationSchema),
+    }),
+  ),
+});
+
+const openApiDocumentSchema: z.ZodType<OpenApiDocument> = z.object({
+  openapi: z.string(),
+  info: z.object({
+    title: z.string(),
+    version: z.string(),
+    description: z.string().optional(),
+  }),
+  servers: z.array(z.object({ url: z.string() })).optional(),
+  tags: z.array(z.object({ name: z.string() })).optional(),
+  paths: z.record(z.string(), z.record(z.string(), z.unknown())),
+  components: z
+    .object({
+      schemas: z.record(z.string(), z.unknown()).optional(),
+      securitySchemes: z.record(z.string(), z.unknown()).optional(),
+    })
+    .optional(),
 });
 
 export async function getReadiness(): Promise<HealthResponse> {
@@ -593,6 +667,20 @@ export async function acknowledgeSecurityAnomaly(input: AuthCredentials & {
     },
   );
   return securityAnomalyEventSchema.parse(payload);
+}
+
+export async function getApiDocumentationSummary(): Promise<ApiDocumentationSummary> {
+  const payload = await fetchJson(`${apiBaseUrl}/docs`, {
+    headers: {},
+  });
+  return apiDocumentationSummarySchema.parse(payload);
+}
+
+export async function getOpenApiDocument(): Promise<OpenApiDocument> {
+  const payload = await fetchJson(`${apiBaseUrl}/docs/openapi.json`, {
+    headers: {},
+  });
+  return openApiDocumentSchema.parse(payload);
 }
 
 async function fetchJson(url: string, init: RequestInit): Promise<unknown> {

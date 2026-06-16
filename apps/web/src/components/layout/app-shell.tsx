@@ -5,6 +5,7 @@ import {
   Bot,
   Brain,
   ClipboardCheck,
+  FileText,
   Gauge,
   GitBranch,
   KeyRound,
@@ -19,6 +20,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 
 const navigation = [
   { label: "Dashboard", icon: Gauge, href: "/" },
+  { label: "API Docs", icon: FileText, href: "/api-docs" },
   { label: "Agent Chat", icon: Bot, href: "/agent-chat" },
   { label: "Knowledge", icon: Library, href: "#" },
   { label: "Tools", icon: Wrench, href: "/tools" },
