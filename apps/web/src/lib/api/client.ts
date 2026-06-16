@@ -117,6 +117,78 @@ export type AgentRunContext = {
   droppedMessages: number;
 };
 
+export type ToolDefinition = {
+  name: string;
+  description: string;
+  source: "builtin" | "mcp";
+  inputSchema: {
+    type: "object";
+    properties: Record<string, unknown>;
+    required?: string[];
+    additionalProperties?: boolean;
+  };
+  timeoutMs: number;
+  maxResultLength: number;
+  requiredPermissions: string[];
+};
+
+export type ToolCallResponse = {
+  toolName: string;
+  status: string;
+  content: string;
+  data?: Record<string, unknown>;
+  latencyMs: number;
+  audit: {
+    requestId: string;
+    toolName: string;
+    source: string;
+    status: string;
+    startedAt: string;
+    endedAt: string;
+    latencyMs: number;
+    inputPreview: string;
+    resultPreview?: string;
+    error?: string;
+    requiredPermissions: string[];
+  };
+};
+
+const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
+  name: z.string(),
+  description: z.string(),
+  source: z.enum(["builtin", "mcp"]),
+  inputSchema: z.object({
+    type: z.literal("object"),
+    properties: z.record(z.string(), z.unknown()),
+    required: z.array(z.string()).optional(),
+    additionalProperties: z.boolean().optional(),
+  }),
+  timeoutMs: z.number(),
+  maxResultLength: z.number(),
+  requiredPermissions: z.array(z.string()),
+});
+
+const toolCallResponseSchema: z.ZodType<ToolCallResponse> = z.object({
+  toolName: z.string(),
+  status: z.string(),
+  content: z.string(),
+  data: z.record(z.string(), z.unknown()).optional(),
+  latencyMs: z.number(),
+  audit: z.object({
+    requestId: z.string(),
+    toolName: z.string(),
+    source: z.string(),
+    status: z.string(),
+    startedAt: z.string(),
+    endedAt: z.string(),
+    latencyMs: z.number(),
+    inputPreview: z.string(),
+    resultPreview: z.string().optional(),
+    error: z.string().optional(),
+    requiredPermissions: z.array(z.string()),
+  }),
+});
+
 export async function getReadiness(): Promise<HealthResponse> {
   const response = await fetch(`${apiBaseUrl}/health/ready`, {
     cache: "no-store",
@@ -190,6 +262,57 @@ export async function runAgentStream(input: RunAgentStreamInput): Promise<void> 
       input.onEvent(event);
     }
   }
+}
+
+export async function listTools(): Promise<ToolDefinition[]> {
+  const response = await fetch(`${apiBaseUrl}/tools`, {
+    cache: "no-store",
+    headers: {
+      accept: "application/json",
+    },
+  });
+
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(`Failed to list tools with HTTP ${response.status}.`);
+  }
+
+  return z.array(toolDefinitionSchema).parse(payload);
+}
+
+export async function executeTool(input: {
+  name: string;
+  arguments: Record<string, unknown>;
+  apiKey?: string;
+  serviceToken?: string;
+}): Promise<ToolCallResponse> {
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    "content-type": "application/json",
+  };
+  if (input.apiKey) {
+    headers["x-api-key"] = input.apiKey;
+  }
+  if (input.serviceToken) {
+    headers["x-service-token"] = input.serviceToken;
+  }
+
+  const response = await fetch(`${apiBaseUrl}/tools/execute`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      requestId: crypto.randomUUID(),
+      name: input.name,
+      arguments: input.arguments,
+    }),
+  });
+
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(JSON.stringify(payload));
+  }
+
+  return toolCallResponseSchema.parse(payload);
 }
 
 function parseSseEvent(raw: string): AgentStreamEvent | undefined {

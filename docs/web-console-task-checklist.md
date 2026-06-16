@@ -72,10 +72,10 @@
 
 ## Phase 5 - Tools
 
-- [ ] 展示 `/tools` 工具列表。
-- [ ] 展示工具 schema、说明和调用入口。
-- [ ] 支持 calculator/current_time 的简单调用测试。
-- [ ] 新增 Tools 页面留痕文档。
+- [x] 展示 `/tools` 工具列表。
+- [x] 展示工具 schema、说明和调用入口。
+- [x] 支持 calculator/current_time 的简单调用测试。
+- [x] 新增 Tools 页面留痕文档。
 
 ## Phase 6 - Knowledge / RAG
 
