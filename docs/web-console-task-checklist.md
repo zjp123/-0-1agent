@@ -123,12 +123,12 @@
 
 ## Phase 11 - 本地联调与自测
 
-- [ ] 启动 API、infra、Web 三件套。
-- [ ] 完成 Dashboard 联调。
-- [ ] 完成 Security 持久化联调。
-- [ ] 完成 Tools 调用联调。
-- [ ] 完成至少一次 build/check。当前 `check:web` 已通过，`build:web` 受 Codex macOS Node 原生模块签名限制，需要在系统 Node、CI Linux 或容器环境继续验证。
-- [ ] 新增 Web 本地自测留痕文档。
+- [x] 启动 API、infra、Web 三件套。
+- [x] 完成 Dashboard 联调。
+- [x] 完成 Security 持久化联调。
+- [x] 完成 Tools 调用联调。
+- [x] 完成至少一次 build/check。当前 `check:web`、API check、`build:web` 均已通过；`build:web` 使用 `--webpack` 与 WASM SWC 规避本机原生模块签名问题。
+- [x] 新增 Web 本地自测留痕文档。
 
 ## Phase 12 - 生产化增强
 

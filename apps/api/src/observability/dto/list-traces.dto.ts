@@ -1,4 +1,5 @@
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
+import { Type } from "class-transformer";
 
 import type { TraceEventType } from "../observability.types.js";
 
@@ -30,6 +31,7 @@ export class ListTracesDto {
   type?: TraceEventType;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(500)
