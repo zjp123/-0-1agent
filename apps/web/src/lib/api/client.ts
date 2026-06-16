@@ -301,6 +301,134 @@ export type OpenApiDocument = {
   };
 };
 
+export type KnowledgeSourceType = "manual" | "upload" | "wiki" | "webpage" | "api";
+
+export type KnowledgeDocument = {
+  id: string;
+  tenantId: string;
+  title: string;
+  content: string;
+  sourceType: KnowledgeSourceType;
+  sourceUri?: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type KnowledgeChunk = {
+  id: string;
+  documentId: string;
+  tenantId: string;
+  content: string;
+  index: number;
+  tokenEstimate: number;
+  title: string;
+  sourceType: KnowledgeSourceType;
+  sourceUri?: string;
+  tags: string[];
+};
+
+export type KnowledgeSearchResult = {
+  chunk: KnowledgeChunk;
+  score: number;
+  matchedTerms: string[];
+  retrievalMode?: "keyword" | "vector" | "hybrid";
+  scores?: {
+    keyword?: number;
+    vector?: number;
+  };
+};
+
+export type KnowledgeIngestResult = {
+  document: KnowledgeDocument;
+  chunks: KnowledgeChunk[];
+};
+
+export type IndexingJob = {
+  id: string;
+  tenantId: string;
+  createdBy?: string;
+  type: "tenant_reindex";
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  attempts: number;
+  maxAttempts: number;
+  totalChunks: number;
+  processedChunks: number;
+  failedChunks: number;
+  error?: string;
+  workerId?: string;
+  leaseUntil?: string;
+  metadata: Record<string, unknown>;
+  startedAt?: string;
+  heartbeatAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  deadLetteredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type IndexingWorkerStatus = {
+  workerId: string;
+  enabled: boolean;
+  stopped: boolean;
+  concurrency: number;
+  queueName: string;
+  retryQueueName: string;
+  deadLetterQueueName: string;
+  consumerGroup: string;
+  queueDepth: {
+    pending: number;
+    consumerPending: number;
+    delayed: number;
+    deadLetter: number;
+  };
+  queueAvailable: boolean;
+  queueError?: string;
+  leaseMs: number;
+  heartbeatIntervalMs: number;
+  recoveryIntervalMs: number;
+  retryDelayBaseMs: number;
+  retryDelayMaxMs: number;
+  pendingClaimMinIdleMs: number;
+};
+
+export type IndexingWorkerAlert = {
+  code: string;
+  severity: "warning" | "critical";
+  message: string;
+  value: number | string | boolean;
+  threshold?: number;
+};
+
+export type IndexingWorkerAlerts = {
+  status: "ok" | "warning" | "critical";
+  checkedAt: string;
+  thresholds: Record<string, number>;
+  alerts: IndexingWorkerAlert[];
+  metrics: IndexingWorkerStatus & {
+    uptimeMs: number;
+    recoveryRunning: boolean;
+    lastRecoveryAt?: string;
+    lastRecoveryError?: string;
+    counters: Record<string, number>;
+  };
+};
+
+export type IngestKnowledgeInput = AuthCredentials & {
+  title: string;
+  content: string;
+  sourceType?: KnowledgeSourceType;
+  sourceUri?: string;
+  tags?: string[];
+};
+
+export type RetrieveKnowledgeInput = AuthCredentials & {
+  query: string;
+  limit?: number;
+  tags?: string[];
+};
+
 const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
   name: z.string(),
   description: z.string(),
@@ -454,6 +582,124 @@ const openApiDocumentSchema: z.ZodType<OpenApiDocument> = z.object({
       securitySchemes: z.record(z.string(), z.unknown()).optional(),
     })
     .optional(),
+});
+
+const knowledgeSourceTypeSchema = z.enum(["manual", "upload", "wiki", "webpage", "api"]);
+
+const knowledgeDocumentSchema: z.ZodType<KnowledgeDocument> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  title: z.string(),
+  content: z.string(),
+  sourceType: knowledgeSourceTypeSchema,
+  sourceUri: z.string().optional(),
+  tags: z.array(z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const knowledgeChunkSchema: z.ZodType<KnowledgeChunk> = z.object({
+  id: z.string(),
+  documentId: z.string(),
+  tenantId: z.string(),
+  content: z.string(),
+  index: z.number(),
+  tokenEstimate: z.number(),
+  title: z.string(),
+  sourceType: knowledgeSourceTypeSchema,
+  sourceUri: z.string().optional(),
+  tags: z.array(z.string()),
+});
+
+const knowledgeSearchResultSchema: z.ZodType<KnowledgeSearchResult> = z.object({
+  chunk: knowledgeChunkSchema,
+  score: z.number(),
+  matchedTerms: z.array(z.string()),
+  retrievalMode: z.enum(["keyword", "vector", "hybrid"]).optional(),
+  scores: z
+    .object({
+      keyword: z.number().optional(),
+      vector: z.number().optional(),
+    })
+    .optional(),
+});
+
+const knowledgeIngestResultSchema: z.ZodType<KnowledgeIngestResult> = z.object({
+  document: knowledgeDocumentSchema,
+  chunks: z.array(knowledgeChunkSchema),
+});
+
+const indexingJobSchema: z.ZodType<IndexingJob> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  createdBy: z.string().optional(),
+  type: z.literal("tenant_reindex"),
+  status: z.enum(["pending", "running", "completed", "failed", "cancelled"]),
+  attempts: z.number(),
+  maxAttempts: z.number(),
+  totalChunks: z.number(),
+  processedChunks: z.number(),
+  failedChunks: z.number(),
+  error: z.string().optional(),
+  workerId: z.string().optional(),
+  leaseUntil: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()),
+  startedAt: z.string().optional(),
+  heartbeatAt: z.string().optional(),
+  completedAt: z.string().optional(),
+  cancelledAt: z.string().optional(),
+  deadLetteredAt: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const indexingWorkerStatusObjectSchema = z.object({
+  workerId: z.string(),
+  enabled: z.boolean(),
+  stopped: z.boolean(),
+  concurrency: z.number(),
+  queueName: z.string(),
+  retryQueueName: z.string(),
+  deadLetterQueueName: z.string(),
+  consumerGroup: z.string(),
+  queueDepth: z.object({
+    pending: z.number(),
+    consumerPending: z.number(),
+    delayed: z.number(),
+    deadLetter: z.number(),
+  }),
+  queueAvailable: z.boolean(),
+  queueError: z.string().optional(),
+  leaseMs: z.number(),
+  heartbeatIntervalMs: z.number(),
+  recoveryIntervalMs: z.number(),
+  retryDelayBaseMs: z.number(),
+  retryDelayMaxMs: z.number(),
+  pendingClaimMinIdleMs: z.number(),
+});
+
+const indexingWorkerStatusSchema: z.ZodType<IndexingWorkerStatus> = indexingWorkerStatusObjectSchema;
+
+const indexingWorkerAlertsSchema: z.ZodType<IndexingWorkerAlerts> = z.object({
+  status: z.enum(["ok", "warning", "critical"]),
+  checkedAt: z.string(),
+  thresholds: z.record(z.string(), z.number()),
+  alerts: z.array(
+    z.object({
+      code: z.string(),
+      severity: z.enum(["warning", "critical"]),
+      message: z.string(),
+      value: z.union([z.number(), z.string(), z.boolean()]),
+      threshold: z.number().optional(),
+    }),
+  ),
+  metrics: indexingWorkerStatusObjectSchema.extend({
+    uptimeMs: z.number(),
+    recoveryRunning: z.boolean(),
+    lastRecoveryAt: z.string().optional(),
+    lastRecoveryError: z.string().optional(),
+    counters: z.record(z.string(), z.number()),
+  }),
 });
 
 export async function getReadiness(): Promise<HealthResponse> {
@@ -681,6 +927,85 @@ export async function getOpenApiDocument(): Promise<OpenApiDocument> {
     headers: {},
   });
   return openApiDocumentSchema.parse(payload);
+}
+
+export async function listKnowledgeDocuments(
+  credentials: AuthCredentials,
+): Promise<KnowledgeDocument[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/knowledge/documents`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(knowledgeDocumentSchema).parse(payload);
+}
+
+export async function ingestKnowledge(
+  input: IngestKnowledgeInput,
+): Promise<KnowledgeIngestResult> {
+  const payload = await fetchJson(`${apiBaseUrl}/knowledge/ingest`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      title: input.title,
+      content: input.content,
+      sourceType: input.sourceType,
+      sourceUri: input.sourceUri || undefined,
+      tags: input.tags,
+    }),
+  });
+  return knowledgeIngestResultSchema.parse(payload);
+}
+
+export async function retrieveKnowledge(
+  input: RetrieveKnowledgeInput,
+): Promise<KnowledgeSearchResult[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/knowledge/retrieve`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      query: input.query,
+      limit: input.limit,
+      tags: input.tags,
+    }),
+  });
+  return z.array(knowledgeSearchResultSchema).parse(payload);
+}
+
+export async function enqueueKnowledgeReindex(
+  credentials: AuthCredentials,
+): Promise<IndexingJob> {
+  const payload = await fetchJson(`${apiBaseUrl}/knowledge/reindex`, {
+    method: "POST",
+    headers: buildAuthHeaders(credentials, true),
+    body: JSON.stringify({}),
+  });
+  return indexingJobSchema.parse(payload);
+}
+
+export async function listIndexingJobs(
+  credentials: AuthCredentials,
+): Promise<IndexingJob[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/knowledge/reindex/jobs`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(indexingJobSchema).parse(payload);
+}
+
+export async function getIndexingWorkerStatus(
+  credentials: AuthCredentials,
+): Promise<IndexingWorkerStatus> {
+  const payload = await fetchJson(`${apiBaseUrl}/knowledge/reindex/worker/status`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return indexingWorkerStatusSchema.parse(payload);
+}
+
+export async function getIndexingWorkerAlerts(
+  credentials: AuthCredentials,
+): Promise<IndexingWorkerAlerts> {
+  const payload = await fetchJson(`${apiBaseUrl}/knowledge/reindex/worker/alerts`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return indexingWorkerAlertsSchema.parse(payload);
 }
 
 async function fetchJson(url: string, init: RequestInit): Promise<unknown> {

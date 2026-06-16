@@ -22,7 +22,7 @@ const navigation = [
   { label: "Dashboard", icon: Gauge, href: "/" },
   { label: "API Docs", icon: FileText, href: "/api-docs" },
   { label: "Agent Chat", icon: Bot, href: "/agent-chat" },
-  { label: "Knowledge", icon: Library, href: "#" },
+  { label: "Knowledge", icon: Library, href: "/knowledge" },
   { label: "Tools", icon: Wrench, href: "/tools" },
   { label: "Workflows", icon: GitBranch, href: "#" },
   { label: "Security", icon: ShieldCheck, href: "/security" },

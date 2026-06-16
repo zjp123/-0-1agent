@@ -79,12 +79,12 @@
 
 ## Phase 6 - Knowledge / RAG
 
-- [ ] 展示知识库文档列表。
-- [ ] 支持创建或导入知识文档。
-- [ ] 支持触发索引或重建索引。
-- [ ] 支持检索测试。
-- [ ] 展示 indexing job 状态。
-- [ ] 新增 Knowledge/RAG 页面留痕文档。
+- [x] 展示知识库文档列表。
+- [x] 支持创建或导入知识文档。
+- [x] 支持触发索引或重建索引。
+- [x] 支持检索测试。
+- [x] 展示 indexing job 状态。
+- [x] 新增 Knowledge/RAG 页面留痕文档。
 
 ## Phase 7 - Workflow
 
