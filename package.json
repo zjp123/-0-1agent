@@ -24,6 +24,7 @@
     "docs:openapi": "npm run docs:openapi -w @enterprise-agent/api",
     "ci": "npm run check && npm test && npm run docs:openapi && npm run build",
     "docker:build": "docker build -f apps/api/Dockerfile -t enterprise-agent-api:local .",
+    "docker:build:web": "docker build -f apps/web/Dockerfile -t enterprise-agent-web:local .",
     "compose:prod:config": "docker compose -f infra/docker-compose.prod.yml config",
     "compose:prod:up": "docker compose -f infra/docker-compose.prod.yml up -d --build",
     "compose:prod:down": "docker compose -f infra/docker-compose.prod.yml down",

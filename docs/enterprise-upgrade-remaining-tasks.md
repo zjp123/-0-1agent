@@ -52,14 +52,14 @@
 ## 未完成
 
 - [x] Phase 13 - Web 正式 Auth / 登录体系
-- [ ] Phase 14 - Web Docker / CI/CD
+- [x] Phase 14 - Web Docker / CI/CD
 - [ ] Phase 15 - Web E2E 自动化测试
 - [ ] Phase 16 - Web 配置与密钥治理
 - [ ] Phase 17 - Web 生产运行手册
 
 ## 当前进行中
 
-- Phase 14 - Web Docker / CI/CD
+- Phase 15 - Web E2E 自动化测试
 
 ## 下一步说明
 

@@ -154,13 +154,13 @@
 
 ## Phase 14 - Web Docker / CI/CD
 
-- [ ] 新增 `apps/web/Dockerfile`。
-- [ ] 新增 Web production runtime 配置。
-- [ ] 将 Web 加入 production compose。
-- [ ] 将 `check:web` 加入 CI。
-- [ ] 将 `build:web` 加入 CI。
-- [ ] 增加 Web 镜像构建验证。
-- [ ] 新增 Web Docker / CI/CD 留痕文档。
+- [x] 新增 `apps/web/Dockerfile`。
+- [x] 新增 Web production runtime 配置。
+- [x] 将 Web 加入 production compose。
+- [x] 将 `check:web` 加入 CI。
+- [x] 将 `build:web` 加入 CI。
+- [x] 增加 Web 镜像构建验证。
+- [x] 新增 Web Docker / CI/CD 留痕文档。
 
 ## Phase 15 - E2E 自动化测试
 
