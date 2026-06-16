@@ -2,7 +2,9 @@
 
 import { RotateCcw, SendHorizonal, Square } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { ProtectedOperationHint } from "@/components/auth/protected-operation-hint";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
+import { notify } from "@/components/notifications/toast-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   runAgentStream,
@@ -51,6 +53,7 @@ export function AgentChat() {
 
   const canSubmit = status !== "streaming" && message.trim().length > 0;
   const canRetry = status !== "streaming" && Boolean(lastRun);
+  const hasCredentials = Boolean(apiKey.trim() || serviceToken.trim());
 
   const history = useMemo<AgentMessage[]>(
     () =>
@@ -123,6 +126,8 @@ export function AgentChat() {
         apiKey: apiKey.trim() || undefined,
         serviceToken: serviceToken.trim() || undefined,
         signal: controller.signal,
+        timeoutMs: 120_000,
+        idleTimeoutMs: 45_000,
         onEvent: (event) => handleStreamEvent(event, assistantMessage.id),
       });
       setStatus((current) => (current === "cancelled" ? current : "done"));
@@ -133,7 +138,13 @@ export function AgentChat() {
         return;
       }
       setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Agent stream failed.");
+      const messageText = normalizeStreamError(error);
+      setErrorMessage(messageText);
+      notify({
+        title: "Agent stream failed",
+        message: messageText,
+        tone: "danger",
+      });
     } finally {
       abortRef.current = undefined;
     }
@@ -245,6 +256,11 @@ export function AgentChat() {
               <p className="section-card-description">Use one local credential for the stream request.</p>
             </div>
             <div className="section-card-body auth-form">
+              <ProtectedOperationHint
+                hasCredentials={hasCredentials}
+                permissions={["agent:run"]}
+                title="Agent run permission"
+              />
               <label>
                 <span className="label">API key</span>
                 <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" />
@@ -261,6 +277,26 @@ export function AgentChat() {
       </section>
     </div>
   );
+}
+
+function normalizeStreamError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return "Agent stream failed.";
+  }
+
+  if (error.message.includes("idle timeout")) {
+    return "Agent stream stopped because no events were received for 45 seconds. Check API logs or retry the run.";
+  }
+
+  if (error.message.includes("timed out")) {
+    return "Agent stream exceeded the 120 second client timeout. Shorten the task or inspect the backend run.";
+  }
+
+  if (error.name === "AbortError") {
+    return "Agent stream was disconnected before completion.";
+  }
+
+  return error.message;
 }
 
 function RunMetadataPanel({

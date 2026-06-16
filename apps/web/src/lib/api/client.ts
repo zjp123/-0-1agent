@@ -69,6 +69,8 @@ export type RunAgentStreamInput = {
   apiKey?: string;
   serviceToken?: string;
   signal?: AbortSignal;
+  timeoutMs?: number;
+  idleTimeoutMs?: number;
   onEvent: (event: AgentStreamEvent) => void;
 };
 
@@ -1068,6 +1070,12 @@ const traceEventSchema: z.ZodType<TraceEvent> = z.object({
   ),
 });
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const DEFAULT_GET_RETRIES = 2;
+const DEFAULT_RETRY_DELAY_MS = 300;
+const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000;
+
 export async function getReadiness(): Promise<HealthResponse> {
   const response = await fetch(`${apiBaseUrl}/health/ready`, {
     cache: "no-store",
@@ -1086,6 +1094,21 @@ export async function getReadiness(): Promise<HealthResponse> {
 }
 
 export async function runAgentStream(input: RunAgentStreamInput): Promise<void> {
+  const controller = new AbortController();
+  const cleanupSignals = linkAbortSignals(input.signal, controller);
+  const timeout = setTimeout(() => {
+    controller.abort(new Error("Agent stream timed out."));
+  }, input.timeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS);
+  let idleTimeout = setTimeout(() => {
+    controller.abort(new Error("Agent stream idle timeout."));
+  }, input.idleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS);
+  const resetIdleTimeout = () => {
+    clearTimeout(idleTimeout);
+    idleTimeout = setTimeout(() => {
+      controller.abort(new Error("Agent stream idle timeout."));
+    }, input.idleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS);
+  };
+
   const headers: Record<string, string> = {
     accept: "text/event-stream",
     "content-type": "application/json",
@@ -1097,49 +1120,56 @@ export async function runAgentStream(input: RunAgentStreamInput): Promise<void> 
     headers["x-service-token"] = input.serviceToken;
   }
 
-  const response = await fetch(`${apiBaseUrl}/agent/run/stream`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      requestId: input.requestId,
-      message: input.message,
-      messages: input.messages,
-    }),
-    signal: input.signal,
-  });
+  try {
+    const response = await fetch(`${apiBaseUrl}/agent/run/stream`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        requestId: input.requestId,
+        message: input.message,
+        messages: input.messages,
+      }),
+      signal: controller.signal,
+    });
 
-  if (!response.ok || !response.body) {
-    const message = await response.text();
-    throw new Error(message || `Agent stream failed with HTTP ${response.status}.`);
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
+    if (!response.ok || !response.body) {
+      const message = await response.text();
+      throw new Error(message || `Agent stream failed with HTTP ${response.status}.`);
     }
 
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop() ?? "";
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
 
-    for (const part of parts) {
-      const event = parseSseEvent(part);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      resetIdleTimeout();
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        const event = parseSseEvent(part);
+        if (event) {
+          input.onEvent(event);
+        }
+      }
+    }
+
+    if (buffer.trim()) {
+      const event = parseSseEvent(buffer);
       if (event) {
         input.onEvent(event);
       }
     }
-  }
-
-  if (buffer.trim()) {
-    const event = parseSseEvent(buffer);
-    if (event) {
-      input.onEvent(event);
-    }
+  } finally {
+    clearTimeout(timeout);
+    clearTimeout(idleTimeout);
+    cleanupSignals();
   }
 }
 
@@ -1550,22 +1580,57 @@ export async function listTraceEvents(
   return z.array(traceEventSchema).parse(payload);
 }
 
-async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
-  const response = await fetch(url, {
-    cache: "no-store",
-    ...init,
-    headers: {
-      accept: "application/json",
-      ...init.headers,
-    },
-  });
+type FetchJsonInit = RequestInit & {
+  retries?: number;
+  timeoutMs?: number;
+};
 
-  const text = await response.text();
-  const payload = text ? (JSON.parse(text) as unknown) : undefined;
-  if (!response.ok) {
-    throw new Error(text || `Request failed with HTTP ${response.status}.`);
+async function fetchJson(url: string, init: FetchJsonInit): Promise<unknown> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const retries = init.retries ?? (method === "GET" ? DEFAULT_GET_RETRIES : 0);
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const cleanupSignals = linkAbortSignals(init.signal ?? undefined, controller);
+    const timeout = setTimeout(() => {
+      controller.abort(new Error(`Request timed out after ${init.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS} ms.`));
+    }, init.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        ...init,
+        signal: controller.signal,
+        headers: {
+          accept: "application/json",
+          ...init.headers,
+        },
+      });
+
+      const text = await response.text();
+      const payload = text ? (JSON.parse(text) as unknown) : undefined;
+      if (!response.ok) {
+        if (response.status >= 500 && attempt < retries) {
+          await delay(DEFAULT_RETRY_DELAY_MS * (attempt + 1));
+          continue;
+        }
+        throw new Error(text || `Request failed with HTTP ${response.status}.`);
+      }
+      return payload;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries || (error instanceof DOMException && error.name === "AbortError")) {
+        throw error;
+      }
+      await delay(DEFAULT_RETRY_DELAY_MS * (attempt + 1));
+    } finally {
+      clearTimeout(timeout);
+      cleanupSignals();
+    }
   }
-  return payload;
+
+  throw lastError instanceof Error ? lastError : new Error("Request failed.");
 }
 
 function buildAuthHeaders(
@@ -1582,6 +1647,28 @@ function buildAuthHeaders(
     headers["x-service-token"] = credentials.serviceToken;
   }
   return headers;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function linkAbortSignals(
+  externalSignal: AbortSignal | undefined,
+  controller: AbortController,
+): () => void {
+  if (!externalSignal) {
+    return () => undefined;
+  }
+
+  if (externalSignal.aborted) {
+    controller.abort(externalSignal.reason);
+    return () => undefined;
+  }
+
+  const onAbort = () => controller.abort(externalSignal.reason);
+  externalSignal.addEventListener("abort", onAbort, { once: true });
+  return () => externalSignal.removeEventListener("abort", onAbort);
 }
 
 function parseSseEvent(raw: string): AgentStreamEvent | undefined {

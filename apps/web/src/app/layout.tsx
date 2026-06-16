@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { AppShell } from "@/components/layout/app-shell";
+import { ToastProvider } from "@/components/notifications/toast-provider";
 
 export const metadata: Metadata = {
   title: "Enterprise Agent Console",
@@ -17,6 +18,7 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body>
         <AppShell>{children}</AppShell>
+        <ToastProvider />
       </body>
     </html>
   );
