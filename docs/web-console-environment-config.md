@@ -31,11 +31,17 @@ http://localhost:3001
 
 ## API 地址
 
-Web 通过环境变量连接 API：
+Web 通过公开环境变量连接 API：
 
 ```text
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:3000/api
 ```
+
+该变量必须满足：
+
+- 使用绝对 `http` 或 `https` URL。
+- 以 `/api` 结尾。
+- 浏览器可以直接访问。
 
 本地建议：
 
@@ -46,13 +52,34 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:3000/api
 生产建议：
 
 ```text
+NEXT_PUBLIC_WEB_ENV=production
 NEXT_PUBLIC_API_BASE_URL=https://<api-domain>/api
 ```
 
 注意：
 
 - `NEXT_PUBLIC_` 变量会进入浏览器 bundle，不得放入任何密钥。
-- API key、service token 只能由用户输入、浏览器安全存储方案或后续正式身份系统提供。
+- API key、service token、JWT secret、数据库密码、LLM key 不得出现在 Web public env 中。
+- 生产环境不得使用 `local-admin-service-token`。
+- `NEXT_PUBLIC_*` 通常在 Next.js build 阶段固化到浏览器 bundle，Docker build args 与 runtime env 应保持一致。
+
+## Web Profile
+
+Web 使用公开 profile 标识当前环境：
+
+```text
+NEXT_PUBLIC_WEB_ENV=local
+```
+
+允许值：
+
+- `local`
+- `development`
+- `staging`
+- `production`
+- `test`
+
+Dashboard 会展示当前 Web profile。若 `production` profile 指向 localhost API，页面会显示配置告警。
 
 ## 本地 Service Token
 
@@ -98,4 +125,3 @@ npm run build:web
 ```
 
 CI / 生产容器建议使用 Linux Node.js 22 镜像重新验证。
-

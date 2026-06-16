@@ -9,7 +9,9 @@ RUN npm ci --include=dev
 
 FROM deps AS build
 WORKDIR /app
+ARG NEXT_PUBLIC_WEB_ENV=production
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
+ENV NEXT_PUBLIC_WEB_ENV=$NEXT_PUBLIC_WEB_ENV
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY apps/web apps/web
@@ -29,4 +31,3 @@ COPY --from=build --chown=agent:agent /app/apps/web/public ./apps/web/public
 USER agent
 EXPOSE 3001
 CMD ["node", "apps/web/server.js"]
-

@@ -6,7 +6,7 @@ import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getReadiness, type HealthResponse } from "@/lib/api/client";
-import { apiBaseUrl } from "@/lib/config";
+import { apiBaseUrl, webConfig } from "@/lib/config";
 
 type StatusTone = "success" | "warning" | "danger" | "neutral";
 type LoadState = "idle" | "loading" | "success" | "error";
@@ -106,6 +106,12 @@ export function DashboardHealthPanel() {
         <div className="alert alert-danger">{errorMessage}</div>
       ) : null}
 
+      {webConfig.warnings.map((warning) => (
+        <div key={warning} className="alert alert-warning">
+          {warning}
+        </div>
+      ))}
+
       {isLoading ? <LoadingState /> : null}
 
       <div className="metric-grid">
@@ -142,6 +148,7 @@ export function DashboardHealthPanel() {
 
           <dl className="details-grid">
             <DetailItem label="API base URL" value={apiBaseUrl} />
+            <DetailItem label="Web profile" value={webConfig.webEnvironment} />
             <DetailItem label="Uptime seconds" value={readiness.uptimeSeconds?.toString() ?? "not reported"} />
             <DetailItem label="Service timestamp" value={readiness.timestamp ?? "not reported"} />
             <DetailItem label="Load state" value={loadState} />

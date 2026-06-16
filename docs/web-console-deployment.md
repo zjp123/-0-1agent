@@ -43,10 +43,19 @@ http://localhost:3001
 部署平台需要显式配置：
 
 ```text
+NEXT_PUBLIC_WEB_ENV=production
 NEXT_PUBLIC_API_BASE_URL=https://<api-domain>/api
 ```
 
 不要把 API key、service token、数据库密码、LLM key 写入 `NEXT_PUBLIC_` 环境变量。
+
+Next.js 会在 build 阶段固化 `NEXT_PUBLIC_*` 到浏览器 bundle。容器部署时必须同时在 Docker build args 和 runtime env 中保持一致，避免镜像内容与运行配置错位。
+
+生产环境禁止使用本地开发 token：
+
+```text
+local-admin-service-token
+```
 
 ## 反向代理要求
 
@@ -88,11 +97,9 @@ Browser
 - SSE streaming 不被代理缓冲。
 - API readiness 返回 `ok`。
 - 生产环境没有使用本地 `local-admin-service-token`。
+- Dashboard Web profile 显示 `production`。
+- Dashboard 没有出现 production 指向 localhost API 的配置告警。
 
 ## 后续增强
 
-- 为 Web 新增 Dockerfile。
-- 为 Web 新增 CI build job。
-- 增加 Playwright e2e。
-- 接入正式身份系统后增加服务端权限裁剪。
-
+- 增加生产运行手册。

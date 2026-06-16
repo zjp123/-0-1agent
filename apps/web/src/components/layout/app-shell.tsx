@@ -20,6 +20,7 @@ import type { ReactNode } from "react";
 import { useSession } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { Permission } from "@/lib/api/client";
+import { webConfig } from "@/lib/config";
 
 const navigation = [
   { label: "Dashboard", icon: Gauge, href: "/" },
@@ -77,12 +78,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="topbar-meta">
               {user
                 ? `${user.userId} / ${user.tenantId}`
-                : `Local API: ${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3000/api"}`}
+                : `${webConfig.webEnvironment} API: ${webConfig.apiBaseUrl}`}
             </div>
           </div>
           <div className="topbar-actions">
             <StatusBadge tone={status === "authenticated" ? "success" : "neutral"}>
               {status === "authenticated" ? user?.authType ?? "session" : status}
+            </StatusBadge>
+            <StatusBadge tone={webConfig.isProductionProfile ? "success" : "neutral"}>
+              {webConfig.webEnvironment}
             </StatusBadge>
             <StatusBadge tone="neutral">Next.js</StatusBadge>
             {status === "authenticated" ? (
