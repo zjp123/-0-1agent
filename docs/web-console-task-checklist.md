@@ -97,14 +97,14 @@
 
 ## Phase 8 - Security / Auth Governance
 
-- [ ] 展示 roles 列表。
-- [ ] 支持创建 role，并填写 reason/comment。
-- [ ] 展示 service tokens 列表。
-- [ ] 展示 audit events。
-- [ ] 展示 security anomaly events。
-- [ ] 支持 acknowledge anomaly。
-- [ ] 对 break-glass 操作显示强提醒。
-- [ ] 新增 Security 页面留痕文档。
+- [x] 展示 roles 列表。
+- [x] 支持创建 role，并填写 reason/comment。
+- [x] 展示 service tokens 列表。
+- [x] 展示 audit events。
+- [x] 展示 security anomaly events。
+- [x] 支持 acknowledge anomaly。
+- [x] 对 break-glass 操作显示强提醒。
+- [x] 新增 Security 页面留痕文档。
 
 ## Phase 9 - Evaluation
 

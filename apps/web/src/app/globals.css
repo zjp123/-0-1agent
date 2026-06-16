@@ -256,6 +256,12 @@ pre {
   color: #334155;
 }
 
+.alert-success {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
 .metric-grid {
   display: grid;
   gap: 1rem;
@@ -617,6 +623,95 @@ pre {
   gap: 1.5rem;
 }
 
+.security-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.security-summary {
+  display: grid;
+  gap: 1rem;
+}
+
+.security-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+.security-main,
+.security-side,
+.anomaly-list {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+}
+
+.break-glass-warning {
+  display: flex;
+  gap: 0.75rem;
+  border: 1px solid #fed7aa;
+  border-radius: 0.5rem;
+  background: #fffbeb;
+  color: #92400e;
+  padding: 1rem;
+}
+
+.break-glass-warning h2 {
+  margin: 0;
+  color: #7c2d12;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.break-glass-warning p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.table-empty {
+  padding: 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.anomaly-item {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.anomaly-head {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.compact-code {
+  max-height: 12rem;
+  margin-top: 0;
+}
+
+.permission-grid {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.check-row {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  background: #ffffff;
+  padding: 0.5rem 0.75rem;
+  color: #334155;
+  font-size: 0.8125rem;
+}
+
 .tools-layout {
   display: grid;
   gap: 1rem;
@@ -716,6 +811,15 @@ pre {
   .details-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .security-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .anomaly-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
 }
 
 @media (min-width: 768px) {
@@ -764,5 +868,13 @@ pre {
 
   .tools-layout {
     grid-template-columns: 18rem minmax(0, 1fr);
+  }
+
+  .security-layout {
+    grid-template-columns: minmax(0, 1fr) 24rem;
+  }
+
+  .security-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

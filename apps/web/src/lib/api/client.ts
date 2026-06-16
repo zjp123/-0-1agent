@@ -153,6 +153,118 @@ export type ToolCallResponse = {
   };
 };
 
+export type Permission =
+  | "agent:run"
+  | "tools:execute"
+  | "knowledge:read"
+  | "knowledge:write"
+  | "observability:read"
+  | "workflow:manage"
+  | "evaluation:manage"
+  | "auth:manage";
+
+export type Role =
+  | "viewer"
+  | "developer"
+  | "operator"
+  | "admin"
+  | "service"
+  | "break_glass";
+
+export const ALL_PERMISSIONS: Permission[] = [
+  "agent:run",
+  "tools:execute",
+  "knowledge:read",
+  "knowledge:write",
+  "observability:read",
+  "workflow:manage",
+  "evaluation:manage",
+  "auth:manage",
+];
+
+export type AuthCredentials = {
+  apiKey?: string;
+  serviceToken?: string;
+};
+
+export type AuthRole = {
+  id: string;
+  tenantId: string;
+  name: string;
+  permissions: Permission[];
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ServiceToken = {
+  id: string;
+  tenantId: string;
+  name: string;
+  roles: Role[];
+  permissions: Permission[];
+  enabled: boolean;
+  expiresAt?: string;
+  lastUsedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AuthAuditEvent = {
+  id: string;
+  tenantId: string;
+  actorUserId: string;
+  actorAuthType: "api_key" | "dev" | "jwt" | "service_token";
+  actorTokenId?: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  reason: string;
+  comment?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type AuthAuditEventList = {
+  items: AuthAuditEvent[];
+  limit: number;
+  offset: number;
+  nextOffset?: number;
+};
+
+export type SecurityAnomalyEvent = {
+  id: string;
+  tenantId: string;
+  severity: "info" | "warning" | "critical";
+  category: string;
+  action: string;
+  actorUserId?: string;
+  actorAuthType?: "api_key" | "dev" | "jwt" | "service_token";
+  targetType?: string;
+  targetId?: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  acknowledged: boolean;
+  acknowledgedBy?: string;
+  acknowledgedAt?: string;
+  createdAt: string;
+};
+
+export type SecurityAnomalyEventList = {
+  items: SecurityAnomalyEvent[];
+  limit: number;
+  offset: number;
+  nextOffset?: number;
+};
+
+export type CreateAuthRoleInput = AuthCredentials & {
+  name: string;
+  permissions: Permission[];
+  description?: string;
+  reason: string;
+  comment?: string;
+};
+
 const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
   name: z.string(),
   description: z.string(),
@@ -187,6 +299,87 @@ const toolCallResponseSchema: z.ZodType<ToolCallResponse> = z.object({
     error: z.string().optional(),
     requiredPermissions: z.array(z.string()),
   }),
+});
+
+const permissionSchema = z.enum(ALL_PERMISSIONS);
+const roleSchema = z.enum([
+  "viewer",
+  "developer",
+  "operator",
+  "admin",
+  "service",
+  "break_glass",
+]);
+const authTypeSchema = z.enum(["api_key", "dev", "jwt", "service_token"]);
+
+const authRoleSchema: z.ZodType<AuthRole> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  name: z.string(),
+  permissions: z.array(permissionSchema),
+  description: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const serviceTokenSchema: z.ZodType<ServiceToken> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  name: z.string(),
+  roles: z.array(roleSchema),
+  permissions: z.array(permissionSchema),
+  enabled: z.boolean(),
+  expiresAt: z.string().optional(),
+  lastUsedAt: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const authAuditEventSchema: z.ZodType<AuthAuditEvent> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  actorUserId: z.string(),
+  actorAuthType: authTypeSchema,
+  actorTokenId: z.string().optional(),
+  action: z.string(),
+  targetType: z.string(),
+  targetId: z.string(),
+  reason: z.string(),
+  comment: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+});
+
+const authAuditEventListSchema: z.ZodType<AuthAuditEventList> = z.object({
+  items: z.array(authAuditEventSchema),
+  limit: z.number(),
+  offset: z.number(),
+  nextOffset: z.number().optional(),
+});
+
+const securityAnomalyEventSchema: z.ZodType<SecurityAnomalyEvent> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  severity: z.enum(["info", "warning", "critical"]),
+  category: z.string(),
+  action: z.string(),
+  actorUserId: z.string().optional(),
+  actorAuthType: authTypeSchema.optional(),
+  targetType: z.string().optional(),
+  targetId: z.string().optional(),
+  message: z.string(),
+  metadata: z.record(z.string(), z.unknown()),
+  acknowledged: z.boolean(),
+  acknowledgedBy: z.string().optional(),
+  acknowledgedAt: z.string().optional(),
+  createdAt: z.string(),
+});
+
+const securityAnomalyEventListSchema: z.ZodType<SecurityAnomalyEventList> = z.object({
+  items: z.array(securityAnomalyEventSchema),
+  limit: z.number(),
+  offset: z.number(),
+  nextOffset: z.number().optional(),
 });
 
 export async function getReadiness(): Promise<HealthResponse> {
@@ -313,6 +506,127 @@ export async function executeTool(input: {
   }
 
   return toolCallResponseSchema.parse(payload);
+}
+
+export async function listAuthRoles(
+  credentials: AuthCredentials,
+): Promise<AuthRole[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/auth/roles`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(authRoleSchema).parse(payload);
+}
+
+export async function createAuthRole(input: CreateAuthRoleInput): Promise<AuthRole> {
+  const payload = await fetchJson(`${apiBaseUrl}/auth/roles`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      name: input.name,
+      permissions: input.permissions,
+      description: input.description || undefined,
+      reason: input.reason,
+      comment: input.comment || undefined,
+    }),
+  });
+  return authRoleSchema.parse(payload);
+}
+
+export async function listServiceTokens(
+  credentials: AuthCredentials,
+): Promise<ServiceToken[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/auth/service-tokens`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(serviceTokenSchema).parse(payload);
+}
+
+export async function listAuthAuditEvents(
+  credentials: AuthCredentials,
+  query: { limit?: number; offset?: number } = {},
+): Promise<AuthAuditEventList> {
+  const params = new URLSearchParams();
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.offset !== undefined) {
+    params.set("offset", String(query.offset));
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const payload = await fetchJson(`${apiBaseUrl}/auth/audit-events${suffix}`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return authAuditEventListSchema.parse(payload);
+}
+
+export async function listSecurityAnomalies(
+  credentials: AuthCredentials,
+  query: { limit?: number; offset?: number; acknowledged?: boolean } = {},
+): Promise<SecurityAnomalyEventList> {
+  const params = new URLSearchParams();
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.offset !== undefined) {
+    params.set("offset", String(query.offset));
+  }
+  if (query.acknowledged !== undefined) {
+    params.set("acknowledged", String(query.acknowledged));
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const payload = await fetchJson(`${apiBaseUrl}/auth/security/anomalies${suffix}`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return securityAnomalyEventListSchema.parse(payload);
+}
+
+export async function acknowledgeSecurityAnomaly(input: AuthCredentials & {
+  eventId: string;
+  comment?: string;
+}): Promise<SecurityAnomalyEvent> {
+  const payload = await fetchJson(
+    `${apiBaseUrl}/auth/security/anomalies/${input.eventId}/acknowledge`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(input, true),
+      body: JSON.stringify({ comment: input.comment || undefined }),
+    },
+  );
+  return securityAnomalyEventSchema.parse(payload);
+}
+
+async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
+  const response = await fetch(url, {
+    cache: "no-store",
+    ...init,
+    headers: {
+      accept: "application/json",
+      ...init.headers,
+    },
+  });
+
+  const text = await response.text();
+  const payload = text ? (JSON.parse(text) as unknown) : undefined;
+  if (!response.ok) {
+    throw new Error(text || `Request failed with HTTP ${response.status}.`);
+  }
+  return payload;
+}
+
+function buildAuthHeaders(
+  credentials: AuthCredentials,
+  includeJson = false,
+): Record<string, string> {
+  const headers: Record<string, string> = includeJson
+    ? { "content-type": "application/json" }
+    : {};
+  if (credentials.apiKey) {
+    headers["x-api-key"] = credentials.apiKey;
+  }
+  if (credentials.serviceToken) {
+    headers["x-service-token"] = credentials.serviceToken;
+  }
+  return headers;
 }
 
 function parseSseEvent(raw: string): AgentStreamEvent | undefined {
