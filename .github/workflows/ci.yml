@@ -42,6 +42,12 @@ jobs:
       - name: Web build
         run: npm run build:web
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Web E2E smoke tests
+        run: npm run test:e2e:web
+
       - name: Migration generation check
         run: npm run db:generate
 

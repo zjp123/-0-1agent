@@ -21,6 +21,7 @@
     "test:unit": "npm run test:unit -w @enterprise-agent/api",
     "test:integration": "npm run test:integration -w @enterprise-agent/api",
     "test:e2e": "npm run test:e2e -w @enterprise-agent/api",
+    "test:e2e:web": "npm run test:e2e -w @enterprise-agent/web",
     "docs:openapi": "npm run docs:openapi -w @enterprise-agent/api",
     "ci": "npm run check && npm test && npm run docs:openapi && npm run build",
     "docker:build": "docker build -f apps/api/Dockerfile -t enterprise-agent-api:local .",

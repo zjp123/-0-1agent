@@ -164,14 +164,14 @@
 
 ## Phase 15 - E2E 自动化测试
 
-- [ ] 引入 Playwright E2E。
-- [ ] 覆盖 Dashboard 健康检查。
-- [ ] 覆盖 Agent Chat streaming 基础流程。
-- [ ] 覆盖 Tools 调用流程。
-- [ ] 覆盖 Knowledge / RAG 检索流程。
-- [ ] 覆盖 Security / Auth Governance 关键流程。
-- [ ] 覆盖 Evaluation / Observability 关键页面。
-- [ ] 新增 Web E2E 测试留痕文档。
+- [x] 引入 Playwright E2E。
+- [x] 覆盖 Dashboard 健康检查。
+- [x] 覆盖 Agent Chat streaming 基础流程。
+- [x] 覆盖 Tools 调用流程。
+- [x] 覆盖 Knowledge / RAG 检索流程。
+- [x] 覆盖 Security / Auth Governance 关键流程。
+- [x] 覆盖 Evaluation / Observability 关键页面。
+- [x] 新增 Web E2E 测试留痕文档。
 
 ## Phase 16 - 配置与密钥治理
 
@@ -195,15 +195,10 @@
 
 下一阶段建议顺序：
 
-1. Phase 13 - 正式 Auth / 登录体系
-2. Phase 14 - Web Docker / CI/CD
-3. Phase 15 - E2E 自动化测试
-4. Phase 16 - 配置与密钥治理
-5. Phase 17 - 生产运行手册
+1. Phase 16 - 配置与密钥治理
+2. Phase 17 - 生产运行手册
 
 原因：
 
-- 当前 Web 已具备主要运维入口，但仍缺正式用户身份和前端权限模型。
-- 生产部署需要 Web 镜像、CI 构建和 compose/runtime 配置闭环。
-- 企业级交付需要 E2E 覆盖关键业务路径，避免后续功能回归。
+- 当前 Web 已具备主要运维入口、正式登录会话、生产镜像、CI 构建和 E2E smoke 覆盖。
 - 配置、密钥和运行手册是上线、回滚、排障的必要基础。

@@ -53,28 +53,24 @@
 
 - [x] Phase 13 - Web 正式 Auth / 登录体系
 - [x] Phase 14 - Web Docker / CI/CD
-- [ ] Phase 15 - Web E2E 自动化测试
+- [x] Phase 15 - Web E2E 自动化测试
 - [ ] Phase 16 - Web 配置与密钥治理
 - [ ] Phase 17 - Web 生产运行手册
 
 ## 当前进行中
 
-- Phase 15 - Web E2E 自动化测试
+- Phase 16 - Web 配置与密钥治理
 
 ## 下一步说明
 
-企业级 API / Agent 核心升级路线已完成，Web Console 已完成 Phase 1-12。
+企业级 API / Agent 核心升级路线已完成，Web Console 已完成 Phase 1-15。
 
-下一阶段进入 Web 生产可上线闭环：
+下一阶段继续补齐 Web 生产可上线闭环：
 
-1. 正式 Auth / 登录体系
-2. Web Docker / CI/CD
-3. E2E 自动化测试
-4. 配置与密钥治理
-5. 生产运行手册
+1. 配置与密钥治理
+2. 生产运行手册
 
 优先级说明：
 
-- 当前 Web 仍以本地 API key / service token 输入为主，生产环境需要正式用户身份、会话续期、退出登录和前端权限裁剪。
-- Web 需要纳入生产镜像、compose 和 CI，才能形成标准部署闭环。
-- E2E、配置治理和运行手册是后续生产联调、发布、回滚、排障的基础。
+- 当前 Web 已具备正式登录会话、生产镜像、CI 构建和 E2E smoke 覆盖。
+- 配置治理和运行手册是后续生产联调、发布、回滚、排障的基础。
