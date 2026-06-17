@@ -485,6 +485,9 @@ function RunMetadataPanel({
                 <div className="dependency-detail">
                   Permissions: {step.requiredPermissions.length > 0 ? step.requiredPermissions.join(", ") : "none"}
                 </div>
+                {step.approvalRequestId ? (
+                  <div className="dependency-detail">Approval: {step.approvalRequestId}</div>
+                ) : null}
                 <pre className="code-block api-json-preview">
                   {JSON.stringify(step.structuredOutput ?? { content: step.contentPreview }, null, 2)}
                 </pre>

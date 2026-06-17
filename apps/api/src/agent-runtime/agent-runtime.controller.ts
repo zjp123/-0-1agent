@@ -16,6 +16,7 @@ import { RequirePermissions } from "../auth/permissions.decorator.js";
 import { PermissionsGuard } from "../auth/permissions.guard.js";
 import type { RequestUser } from "../auth/auth.types.js";
 import { QuotaService } from "../governance/quota.service.js";
+import { ObservabilityService } from "../observability/observability.service.js";
 import {
   AgentCapabilitySnapshot,
   AgentRuntimeService,
@@ -44,6 +45,8 @@ export class AgentRuntimeController {
     private readonly agentRuntime: AgentRuntimeService,
     @Inject(QuotaService)
     private readonly quota: QuotaService,
+    @Inject(ObservabilityService)
+    private readonly observability: ObservabilityService,
     @Inject(WorkflowRunExecutorService)
     private readonly workflowExecutor: WorkflowRunExecutorService,
     @Inject(EvaluationAgentRunnerService)
@@ -225,6 +228,7 @@ export class AgentRuntimeController {
     result: AgentRunResult,
   ): Promise<void> {
     if (result.usage.totalTokens <= 0) {
+      this.recordUsageTrace(body, user, result, "skipped_zero_tokens");
       return;
     }
 
@@ -239,6 +243,28 @@ export class AgentRuntimeController {
         model: body.model ?? null,
         promptTokens: result.usage.promptTokens,
         completionTokens: result.usage.completionTokens,
+      },
+    });
+    this.recordUsageTrace(body, user, result, "recorded");
+  }
+
+  private recordUsageTrace(
+    body: RunAgentDto,
+    user: RequestUser,
+    result: AgentRunResult,
+    status: "recorded" | "skipped_zero_tokens",
+  ): void {
+    this.observability.record({
+      requestId: body.requestId,
+      type: "agent.usage.recorded",
+      tenantId: user.tenantId,
+      userId: user.userId,
+      attributes: {
+        status,
+        promptTokens: result.usage.promptTokens,
+        completionTokens: result.usage.completionTokens,
+        totalTokens: result.usage.totalTokens,
+        model: body.model ?? null,
       },
     });
   }

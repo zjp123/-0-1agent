@@ -19,6 +19,7 @@ export type AgentStopReason =
   | "max_steps"
   | "max_duration"
   | "model_error"
+  | "approval_required"
   | "max_tool_calls"
   | "empty_model_output"
   | "repeated_tool_call";
@@ -104,6 +105,7 @@ export type AgentRuntimeStep =
       status: ToolCallResponse["status"];
       contentPreview: string;
       structuredOutput?: JsonObject;
+      approvalRequestId?: string;
       latencyMs: number;
       audit: ToolAuditEvent;
     };
@@ -136,4 +138,22 @@ export type AgentRunResult = {
 export type AgentToolCallPlan = {
   toolDefinitions: ModelToolDefinition[];
   context: ToolExecutionContext;
+};
+
+export type AgentRunPreflight = {
+  requestId: string;
+  tenantId?: string;
+  userId?: string;
+  allowed: boolean;
+  checks: Array<{
+    name: string;
+    status: "passed" | "warning" | "failed";
+    summary: string;
+  }>;
+  toolRisk: {
+    low: number;
+    medium: number;
+    high: number;
+    critical: number;
+  };
 };

@@ -10,6 +10,9 @@ Agent Runtime 是企业级 Agent 平台的核心执行层。它负责把用户�
 - 支持基础 ReAct loop
 - 控制最大步骤数和最大执行时长
 - 记录模型步骤、工具步骤、usage 和 stop reason
+- 执行前治理 preflight
+- 高风险工具 approval-required 中断
+- Agent run history / usage trace
 - 为后续 Memory、RAG、Workflow、Observability 接入预留边界
 
 ## 当前实现
@@ -44,6 +47,12 @@ apps/api/src/agent-runtime/
 - usage 聚合
 - step trace
 - stop reason
+- execution plan
+- preflight trace
+- usage trace
+- RAG source summary
+- structured tool output
+- approval-required stop reason
 
 ## ReAct 执行流程
 
@@ -54,7 +63,9 @@ apps/api/src/agent-runtime/
 4. 如果模型返回最终文本：
    - 结束
 5. 如果模型返回 tool calls：
-   - 通过 Tool Registry 并行执行工具
+   - 检查工具风险等级
+   - high / critical 工具自动创建 approval request，并以 `approval_required` 停止
+   - low / medium 工具通过 Tool Registry 顺序执行
    - 追加 assistant tool_calls 消息
    - 追加 tool result 消息
    - 进入下一轮
@@ -94,8 +105,11 @@ POST /api/agent/run
 {
   "requestId": "00000000-0000-4000-8000-000000000000",
   "answer": "...",
+  "sourceSummary": [],
   "stopReason": "final_answer",
+  "plan": {},
   "steps": [],
+  "context": {},
   "messages": [],
   "usage": {
     "promptTokens": 0,
@@ -114,6 +128,10 @@ POST /api/agent/run
 - `max_steps`：达到最大步骤数
 - `max_duration`：达到最大执行时长
 - `model_error`：模型调用失败
+- `approval_required`：高风险工具调用需要人工审批
+- `max_tool_calls`：工具调用总数超过保护阈值
+- `empty_model_output`：模型连续返回空输出
+- `repeated_tool_call`：相同工具调用重复过多
 
 ## 安全边界
 
@@ -126,14 +144,15 @@ POST /api/agent/run
 - 工具权限检查
 - 工具超时
 - 工具审计事件
+- Agent preflight trace
+- Request quota 和 token quota
+- 高风险工具 approval request
 
-尚未接入：
+尚未完整接入：
 
-- Auth/RBAC 用户真实权限
-- Observability trace 持久化
-- Memory & Context 上下文压缩
-- RAG 检索注入
-- Workflow 任务状态持久化
+- Security/Governance Web 页面联动
+- 审批通过后的 Agent run 恢复执行
+- 真实 cost/billing ledger
 
 ## 当前边界
 
@@ -147,24 +166,31 @@ POST /api/agent/run
 - usage 聚合
 - step trace
 - Agent 执行 API
+- SSE streaming 包装
+- Memory & Context
+- RAG context 注入
+- Workflow step executor
+- Evaluation Agent run
+- Observability request timeline
+- Tools/RAG structured metadata
+- Governance preflight
+- approval-required 工具中断
+- Agent run history
 
 未完成：
 
-- streaming response
 - 对话持久化
-- 上下文预算管理
-- RAG context 注入
-- 任务计划模式
+- 审批通过后的恢复执行
+- Security/Governance Web 联动
 - Reflection 策略
-- 多 Agent 编排
-- 执行 trace 持久化
+- 真实 cost/billing ledger
 
 ## 下一步
 
-建议下一步实现 `Memory & Context` 基础版：
+建议下一步实现 `Security/Governance Web 联动`：
 
-1. 定义上下文包结构
-2. 支持短期会话 messages
-3. 支持 token budget 占位策略
-4. 支持上下文裁剪和摘要接口
-5. 让 Agent Runtime 通过 MemoryContextService 构造初始 messages
+1. Security 页面展示 approval requests
+2. Observability Agent Runs 增加详情 drawer
+3. approval request 审批后支持恢复 Agent run
+4. usage/cost dashboard
+5. governance audit 汇总

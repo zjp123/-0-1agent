@@ -126,6 +126,7 @@ export type AgentRunStep =
       status: string;
       contentPreview: string;
       structuredOutput?: Record<string, unknown>;
+      approvalRequestId?: string;
       latencyMs: number;
     };
 
@@ -752,6 +753,8 @@ export type AgentEvaluationBatchRunResult = {
 };
 
 export type TraceEventType =
+  | "agent.preflight.completed"
+  | "agent.usage.recorded"
   | "agent.run.started"
   | "agent.plan.created"
   | "agent.plan.step.started"
@@ -783,6 +786,8 @@ export type TraceEventType =
   | "evaluation.agent.run.failed";
 
 export const TRACE_EVENT_TYPES: TraceEventType[] = [
+  "agent.preflight.completed",
+  "agent.usage.recorded",
   "agent.run.started",
   "agent.plan.created",
   "agent.plan.step.started",
@@ -844,6 +849,23 @@ export type TraceFailureSummary = {
   lastFailureType: TraceEventType;
   lastTimestamp: string;
   lastError?: string;
+};
+
+export type AgentRunHistoryItem = {
+  requestId: string;
+  tenantId?: string;
+  userId?: string;
+  status: "completed" | "failed" | "approval_required" | "unknown";
+  stopReason?: string;
+  durationMs?: number;
+  stepCount?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  preflightAllowed?: boolean;
+  usageRecorded?: boolean;
+  startedAt?: string;
+  completedAt?: string;
 };
 
 const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
@@ -1397,6 +1419,23 @@ const traceFailureSummarySchema: z.ZodType<TraceFailureSummary> = z.object({
   lastFailureType: traceEventTypeSchema,
   lastTimestamp: z.string(),
   lastError: z.string().optional(),
+});
+
+const agentRunHistoryItemSchema: z.ZodType<AgentRunHistoryItem> = z.object({
+  requestId: z.string(),
+  tenantId: z.string().optional(),
+  userId: z.string().optional(),
+  status: z.enum(["completed", "failed", "approval_required", "unknown"]),
+  stopReason: z.string().optional(),
+  durationMs: z.number().optional(),
+  stepCount: z.number().optional(),
+  promptTokens: z.number().optional(),
+  completionTokens: z.number().optional(),
+  totalTokens: z.number().optional(),
+  preflightAllowed: z.boolean().optional(),
+  usageRecorded: z.boolean().optional(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
 });
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
@@ -2050,6 +2089,15 @@ export async function listTraceFailures(
     headers: buildAuthHeaders(credentials),
   });
   return z.array(traceFailureSummarySchema).parse(payload);
+}
+
+export async function listAgentRunHistory(
+  credentials: AuthCredentials,
+): Promise<AgentRunHistoryItem[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/observability/agent-runs`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(agentRunHistoryItemSchema).parse(payload);
 }
 
 type FetchJsonInit = RequestInit & {

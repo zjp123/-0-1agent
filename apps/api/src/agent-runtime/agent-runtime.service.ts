@@ -1,6 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import { AuthService } from "../auth/auth.service.js";
+import type { RequestUser } from "../auth/auth.types.js";
+import { ApprovalService } from "../governance/approval.service.js";
 import { MemoryContextService } from "../memory-context/memory-context.service.js";
 import type { BuildContextRequest } from "../memory-context/memory-context.types.js";
 import type {
@@ -16,6 +18,7 @@ import { RagService } from "../rag/rag.service.js";
 import type { RetrieveKnowledgeInput } from "../rag/rag.types.js";
 import { ToolRegistryService } from "../tools/tool-registry.service.js";
 import type {
+  ToolCallResponse,
   ToolDefinition,
   ToolExecutionContext,
 } from "../tools/tool.types.js";
@@ -27,6 +30,7 @@ import type {
   AgentExecutionPlanStage,
   AgentExecutionPlanStep,
   AgentExecutionPlanStepStatus,
+  AgentRunPreflight,
   AgentRuntimeStep,
   AgentStopReason,
 } from "./agent-runtime.types.js";
@@ -64,6 +68,8 @@ export class AgentRuntimeService {
     private readonly workflow: WorkflowService,
     @Inject(AuthService)
     private readonly auth: AuthService,
+    @Inject(ApprovalService)
+    private readonly approvals: ApprovalService,
     @Inject(ObservabilityService)
     private readonly observability: ObservabilityService,
   ) {}
@@ -98,6 +104,17 @@ export class AgentRuntimeService {
     const steps: AgentRuntimeStep[] = [];
     const usage = this.emptyUsage();
     const plan = this.createExecutionPlan(options);
+    const preflight = this.buildPreflight(options);
+    this.recordTrace(options, "agent.preflight.completed", {
+      allowed: preflight.allowed,
+      checkCount: preflight.checks.length,
+      failedCheckCount: preflight.checks.filter((check) => check.status === "failed").length,
+      warningCheckCount: preflight.checks.filter((check) => check.status === "warning").length,
+      lowRiskToolCount: preflight.toolRisk.low,
+      mediumRiskToolCount: preflight.toolRisk.medium,
+      highRiskToolCount: preflight.toolRisk.high,
+      criticalRiskToolCount: preflight.toolRisk.critical,
+    });
     const loopGuard = {
       totalToolCalls: 0,
       consecutiveEmptyModelOutputs: 0,
@@ -340,8 +357,11 @@ export class AgentRuntimeService {
       }
 
       const toolContext = this.buildToolContext(options);
-      const toolResponses = await Promise.all(
-        modelResponse.toolCalls.map(async (toolCall) => {
+      const toolResponses: Array<{
+        toolCall: ModelToolCall;
+        toolResponse: ToolCallResponse;
+      }> = [];
+      for (const toolCall of modelResponse.toolCalls) {
           const toolPlanStep = this.startPlanStep(
             options,
             plan,
@@ -349,6 +369,69 @@ export class AgentRuntimeService {
             step,
             toolCall.name,
           );
+          const definition = this.tools
+            .listDefinitions()
+            .find((candidate) => candidate.name === toolCall.name);
+          if (definition && this.requiresApproval(definition.riskLevel)) {
+            const approvalRequest = await this.createToolApprovalRequest(
+              options,
+              toolCall.name,
+              this.parseToolArguments(toolCall.arguments),
+              definition.riskLevel,
+            );
+            this.completePlanStep(options, toolPlanStep, "skipped", {
+              summary: `${toolCall.name} requires approval`,
+              metadata: {
+                loopStep: step,
+                toolName: toolCall.name,
+                source: definition.source,
+                riskLevel: definition.riskLevel,
+                approvalRequestId: approvalRequest.id,
+              },
+            });
+            this.recordTrace(options, "tool.completed", {
+              step,
+              toolName: toolCall.name,
+              source: definition.source,
+              riskLevel: definition.riskLevel,
+              status: "denied",
+              latencyMs: 0,
+              hasStructuredOutput: false,
+              requiredPermissionCount: definition.requiredPermissions.length,
+              approvalRequired: true,
+              approvalRequestId: approvalRequest.id,
+            });
+            steps.push({
+              type: "tool",
+              step,
+              toolName: toolCall.name,
+              source: definition.source,
+              riskLevel: definition.riskLevel,
+              requiredPermissions: definition.requiredPermissions,
+              status: "denied",
+              contentPreview: `Approval required before executing ${toolCall.name}.`,
+              approvalRequestId: approvalRequest.id,
+              latencyMs: 0,
+              audit: {
+                requestId: options.requestId,
+                toolName: toolCall.name,
+                source: definition.source,
+                riskLevel: definition.riskLevel,
+                status: "denied",
+                startedAt: new Date().toISOString(),
+                endedAt: new Date().toISOString(),
+                latencyMs: 0,
+                inputPreview: this.truncate(toolCall.arguments, 500),
+                resultPreview: "Approval required",
+                error: "Approval required",
+                requiredPermissions: definition.requiredPermissions,
+                ...(options.userId ? { userId: options.userId } : {}),
+                ...(options.tenantId ? { tenantId: options.tenantId } : {}),
+              },
+            });
+            stopReason = "approval_required";
+            break;
+          }
           const toolResponse = await this.tools.execute({
             name: toolCall.name,
             arguments: this.parseToolArguments(toolCall.arguments),
@@ -401,12 +484,15 @@ export class AgentRuntimeService {
             runtimeToolStep.structuredOutput = toolResponse.data;
           }
           steps.push(runtimeToolStep);
-          return {
+          toolResponses.push({
             toolCall,
             toolResponse,
-          };
-        }),
-      );
+          });
+        }
+
+      if (stopReason === "approval_required") {
+        break;
+      }
 
       for (const { toolCall, toolResponse } of toolResponses) {
         messages.push({
@@ -477,6 +563,65 @@ export class AgentRuntimeService {
       context.tenantId = options.tenantId;
     }
     return context;
+  }
+
+  private buildPreflight(options: AgentRunOptions): AgentRunPreflight {
+    const toolRisk: AgentRunPreflight["toolRisk"] = {
+      low: 0,
+      medium: 0,
+      high: 0,
+      critical: 0,
+    };
+    for (const definition of this.tools.listDefinitions()) {
+      toolRisk[definition.riskLevel] += 1;
+    }
+    const checks: AgentRunPreflight["checks"] = [
+      {
+        name: "tenant_context",
+        status: options.tenantId ? "passed" : "warning",
+        summary: options.tenantId ? "Tenant context resolved." : "Run has no tenant context.",
+      },
+      {
+        name: "agent_permission",
+        status: options.permissions.includes("agent:run") ? "passed" : "failed",
+        summary: options.permissions.includes("agent:run")
+          ? "Actor has agent:run."
+          : "Actor is missing agent:run.",
+      },
+      {
+        name: "tool_permission",
+        status: options.permissions.includes("tools:execute") ? "passed" : "warning",
+        summary: options.permissions.includes("tools:execute")
+          ? "Actor can execute tools when the model requests them."
+          : "Tool calls may be denied because tools:execute is missing.",
+      },
+      {
+        name: "tool_risk_catalog",
+        status: toolRisk.high + toolRisk.critical > 0 ? "warning" : "passed",
+        summary:
+          toolRisk.high + toolRisk.critical > 0
+            ? "High or critical risk tools are registered."
+            : "No high or critical risk tools are registered.",
+      },
+      {
+        name: "quota_request_check",
+        status: "passed",
+        summary: "Request quota is enforced before runtime execution by AgentRuntimeController.",
+      },
+    ];
+    const preflight: AgentRunPreflight = {
+      requestId: options.requestId,
+      allowed: checks.every((check) => check.status !== "failed"),
+      checks,
+      toolRisk,
+    };
+    if (options.tenantId) {
+      preflight.tenantId = options.tenantId;
+    }
+    if (options.userId) {
+      preflight.userId = options.userId;
+    }
+    return preflight;
   }
 
   private buildSourceSummary(
@@ -696,6 +841,9 @@ export class AgentRuntimeService {
     if (stopReason === "model_error") {
       return "Agent stopped because the model request failed.";
     }
+    if (stopReason === "approval_required") {
+      return "Agent stopped because a high-risk tool requires approval before execution.";
+    }
     if (stopReason === "max_tool_calls") {
       return "Agent stopped because the maximum number of tool calls was reached.";
     }
@@ -732,6 +880,47 @@ export class AgentRuntimeService {
     }
 
     return undefined;
+  }
+
+  private requiresApproval(riskLevel: ToolDefinition["riskLevel"]): boolean {
+    return riskLevel === "high" || riskLevel === "critical";
+  }
+
+  private async createToolApprovalRequest(
+    options: AgentRunOptions,
+    toolName: string,
+    toolArguments: Record<string, unknown>,
+    riskLevel: ToolDefinition["riskLevel"],
+  ): Promise<{ id: string }> {
+    if (!options.tenantId || !options.userId) {
+      return { id: `approval-unavailable-${options.requestId}` };
+    }
+    const actor: RequestUser = {
+      tenantId: options.tenantId,
+      userId: options.userId,
+      roles: [],
+      permissions: options.permissions as RequestUser["permissions"],
+      authType: "service_token",
+    };
+    const request = await this.approvals.createRequest(
+      {
+        action: "tool.execute",
+        resourceType: "tool",
+        resourceId: toolName,
+        reason: `Approve ${riskLevel} risk tool execution for Agent request ${options.requestId}.`,
+        payload: {
+          requestId: options.requestId,
+          toolName,
+          arguments: toolArguments,
+        },
+        metadata: {
+          riskLevel,
+          createdBy: "agent-runtime",
+        },
+      },
+      actor,
+    );
+    return { id: request.id };
   }
 
   private toolCallSignature(toolCall: ModelToolCall): string {

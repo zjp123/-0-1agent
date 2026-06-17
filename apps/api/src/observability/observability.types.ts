@@ -3,6 +3,8 @@ import type { ModelUsage } from "../model-gateway/model-gateway.types.js";
 import type { ToolStatus } from "../tools/tool.types.js";
 
 export type TraceEventType =
+  | "agent.preflight.completed"
+  | "agent.usage.recorded"
   | "agent.run.started"
   | "agent.plan.created"
   | "agent.plan.step.started"
@@ -70,6 +72,23 @@ export type TraceFailureSummary = {
   lastFailureType: TraceEventType;
   lastTimestamp: string;
   lastError?: string;
+};
+
+export type AgentRunHistoryItem = {
+  requestId: string;
+  tenantId?: string;
+  userId?: string;
+  status: "completed" | "failed" | "approval_required" | "unknown";
+  stopReason?: string;
+  durationMs?: number;
+  stepCount?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  preflightAllowed?: boolean;
+  usageRecorded?: boolean;
+  startedAt?: string;
+  completedAt?: string;
 };
 
 export interface TraceStore {

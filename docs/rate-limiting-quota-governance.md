@@ -12,6 +12,8 @@
 - 支持 tenant / user / global 维度
 - 支持 request quota
 - 支持 LLM token quota
+- Agent usage trace
+- Agent run history 查询入口
 - 管理端 quota policy API
 - 高成本接口接入限流
 
@@ -169,6 +171,46 @@ GET /api/governance/quota/events
 
 `POST /api/agent/run` 在请求前做 request quota，在模型返回后按 `usage.totalTokens` 做 token quota。
 
+Agent Runtime Controller 在 token quota 处理后会写入：
+
+```text
+agent.usage.recorded
+```
+
+trace attributes：
+
+```text
+status=recorded | skipped_zero_tokens
+promptTokens
+completionTokens
+totalTokens
+model
+```
+
+Observability 提供 Agent run history 聚合接口：
+
+```http
+GET /api/observability/agent-runs
+```
+
+该接口按 tenant 读取 trace store，并按 requestId 聚合：
+
+```text
+status
+stopReason
+durationMs
+stepCount
+promptTokens
+completionTokens
+totalTokens
+preflightAllowed
+usageRecorded
+startedAt
+completedAt
+```
+
+Web Observability 页面已展示最近 Agent Runs，可点击 requestId 打开 timeline。
+
 `POST /api/knowledge/ingest` 使用内容长度估算 tokenCost：
 
 ```text
@@ -187,6 +229,9 @@ ceil(content.length / 4)
 - agent/tools/knowledge 高成本接口接入
 - 默认 request quota
 - 默认 token quota
+- Agent usage trace
+- Observability Agent run history API
+- Web Observability 最近 Agent Runs 入口
 - Drizzle migration
 
 未完成：
@@ -196,6 +241,7 @@ ceil(content.length / 4)
 - quota event 分页和过滤
 - 按 tool name 的精细策略
 - 与 billing/cost 系统联动
+- 真实 cost ledger
 - 限流指标 Prometheus 导出
 
 ## 验证

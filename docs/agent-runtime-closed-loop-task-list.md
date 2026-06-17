@@ -69,12 +69,12 @@
 
 ## Phase 6 - 安全、配额与治理闭环
 
-- [ ] Agent run 前执行 quota / permission preflight。
-- [ ] 高风险工具调用支持 approval-required 状态。
-- [ ] 记录 token/cost usage 到可查询存储。
-- [ ] 增加 tenant/user 维度 run history。
+- [x] Agent run 前执行 quota / permission preflight。
+- [x] 高风险工具调用支持 approval-required 状态。
+- [x] 记录 token usage 到可查询存储。
+- [x] 增加 tenant/user 维度 run history。
 - [ ] 增加审计事件与安全页面联动。
-- [ ] 更新 Auth/Security 文档。
+- [x] 更新 Auth/Security 文档。
 
 ## 当前状态
 
@@ -90,9 +90,10 @@
 - Observability request timeline、recent failures 和 Agent Chat trace 跳转。
 - Tool structured output、riskLevel、requiredPermissions 展示。
 - RAG source metadata、answer source summary 和 Agent Chat 引用卡片。
+- Agent preflight trace、usage trace、approval-required tool stop reason 和 Agent run history。
 
 当前缺口：
 
-- 高风险工具调用还没有 approval-required 中断状态。
-- Security/quota/governance 还没有在 Agent run 前形成完整 preflight 和审计闭环。
-- Agent run、Workflow、Evaluation、Observability、Tools/RAG 主闭环已打通；下一步进入安全、配额与治理闭环。
+- Security 页面还没有展示 approval requests、agent run history 和治理审计汇总。
+- cost 仍是 token usage 级别，还没有接真实计费单价和 billing ledger。
+- Agent run、Workflow、Evaluation、Observability、Tools/RAG、基础治理主闭环已打通；下一步建议补 Security/Governance Web 页面联动和审批恢复执行。

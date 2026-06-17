@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 
 import { TRACE_STORE } from "./observability.constants.js";
 import type {
+  AgentRunHistoryItem,
   TraceEvent,
   TraceEventType,
   TraceFailureSummary,
@@ -119,6 +120,57 @@ export class ObservabilityService {
     return [...summaries.values()].slice(0, query.limit ?? 20);
   }
 
+  async agentRunHistory(query: {
+    tenantId: string;
+    limit?: number;
+  }): Promise<AgentRunHistoryItem[]> {
+    const events = await this.traceStore.list({
+      tenantId: query.tenantId,
+      limit: 1_000,
+    });
+    const runs = new Map<string, AgentRunHistoryItem>();
+
+    for (const event of events) {
+      if (!event.type.startsWith("agent.")) {
+        continue;
+      }
+      const run = runs.get(event.requestId) ?? {
+        requestId: event.requestId,
+        status: "unknown" as const,
+      };
+      if (event.tenantId) {
+        run.tenantId = event.tenantId;
+      }
+      if (event.userId) {
+        run.userId = event.userId;
+      }
+      if (!run.startedAt || event.timestamp < run.startedAt) {
+        run.startedAt = event.timestamp;
+      }
+      if (!run.completedAt || event.timestamp > run.completedAt) {
+        run.completedAt = event.timestamp;
+      }
+      if (event.type === "agent.preflight.completed") {
+        run.preflightAllowed = event.attributes.allowed === true;
+      }
+      if (event.type === "agent.usage.recorded") {
+        run.usageRecorded = true;
+      }
+      if (event.type === "agent.run.completed") {
+        this.applyRunCompletedEvent(run, event);
+      }
+      runs.set(event.requestId, run);
+    }
+
+    return [...runs.values()]
+      .sort(
+        (left, right) =>
+          new Date(right.completedAt ?? right.startedAt ?? 0).getTime() -
+          new Date(left.completedAt ?? left.startedAt ?? 0).getTime(),
+      )
+      .slice(0, query.limit ?? 100);
+  }
+
   getStatus(): ObservabilityStatus {
     return {
       store: "postgres",
@@ -158,5 +210,38 @@ export class ObservabilityService {
   private failureMessage(event: TraceEvent): string | undefined {
     const message = event.attributes.message ?? event.attributes.error ?? event.attributes.stopReason;
     return typeof message === "string" ? message : undefined;
+  }
+
+  private applyRunCompletedEvent(run: AgentRunHistoryItem, event: TraceEvent): void {
+    const stopReason = event.attributes.stopReason;
+    if (typeof stopReason === "string") {
+      run.stopReason = stopReason;
+      if (stopReason === "model_error") {
+        run.status = "failed";
+      } else if (stopReason === "approval_required") {
+        run.status = "approval_required";
+      } else {
+        run.status = "completed";
+      }
+    }
+    if (event.durationMs !== undefined) {
+      run.durationMs = event.durationMs;
+    }
+    const stepCount = event.attributes.stepCount;
+    if (typeof stepCount === "number") {
+      run.stepCount = stepCount;
+    }
+    const promptTokens = event.attributes.promptTokens;
+    if (typeof promptTokens === "number") {
+      run.promptTokens = promptTokens;
+    }
+    const completionTokens = event.attributes.completionTokens;
+    if (typeof completionTokens === "number") {
+      run.completionTokens = completionTokens;
+    }
+    const totalTokens = event.attributes.totalTokens;
+    if (typeof totalTokens === "number") {
+      run.totalTokens = totalTokens;
+    }
   }
 }

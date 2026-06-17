@@ -11,6 +11,7 @@
 - approve / reject / cancel API
 - approval audit events
 - 高风险 secret 操作审批接入
+- 高风险 Agent tool execution approval-required 接入
 
 ## 新增文件
 
@@ -96,6 +97,7 @@ tenant_id + action + resource_type + enabled
 ```text
 secrets.secret.read_value + secret_value
 secrets.secret.rotate + secret_value
+tool.execute + tool
 ```
 
 运行时校验规则：
@@ -197,6 +199,26 @@ GET /api/secrets/:secretId/value?approvalId=approval-request-id
 }
 ```
 
+### Agent Tool 操作接入
+
+Agent Runtime 会检查工具定义中的 `riskLevel`：
+
+```text
+low / medium: 直接进入 Tool Registry 执行
+high / critical: 自动创建 approval request，并停止当前 Agent run
+```
+
+当高风险工具触发审批时：
+
+- Agent run stopReason 为 `approval_required`
+- tool step status 为 `denied`
+- tool step 带 `approvalRequestId`
+- Execution Plan 的 tool step 标记为 `skipped`
+- Observability `tool.completed` trace 带 `approvalRequired=true`
+- approval request payload 会保存 requestId、toolName、arguments
+
+当前这是“中断并留痕”模式，尚未实现审批通过后的自动恢复执行。
+
 ## 审计动作
 
 当前写入的 action：
@@ -212,6 +234,14 @@ Secret 高风险动作仍写入原有审计动作：
 - `secrets.secret.read_value`
 - `secrets.secret.rotate`
 
+Agent 高风险工具会写入：
+
+- `approval.request.create`
+
+并通过 Observability 记录：
+
+- `tool.completed`，attributes 中包含 `approvalRequired` 和 `approvalRequestId`
+
 ## 当前边界
 
 已完成：
@@ -226,12 +256,15 @@ Secret 高风险动作仍写入原有审计动作：
 - approval audit events
 - secret value read 审批接入
 - secret rotation 审批接入
+- high / critical risk tool approval-required 中断
+- 自动创建 tool approval request
+- Agent Chat 展示 approvalRequestId
 - Drizzle migration
 
 未完成：
 
 - workflow 自动暂停 / 恢复审批节点
-- tool execution 通用审批接入
+- approval 后恢复 Agent run
 - approval delegation / escalation
 - approval request 分页和筛选
 - approval consumption marking

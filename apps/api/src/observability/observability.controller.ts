@@ -8,6 +8,7 @@ import type { RequestUser } from "../auth/auth.types.js";
 import { ListTracesDto } from "./dto/list-traces.dto.js";
 import { ObservabilityService } from "./observability.service.js";
 import type {
+  AgentRunHistoryItem,
   TraceEvent,
   TraceFailureSummary,
   TraceQuery,
@@ -63,6 +64,16 @@ export class ObservabilityController {
     return this.observability.recentFailures({
       tenantId: user.tenantId,
       limit: 20,
+    });
+  }
+
+  @Get("agent-runs")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("observability:read")
+  listAgentRuns(@CurrentUser() user: RequestUser): Promise<AgentRunHistoryItem[]> {
+    return this.observability.agentRunHistory({
+      tenantId: user.tenantId,
+      limit: 100,
     });
   }
 }

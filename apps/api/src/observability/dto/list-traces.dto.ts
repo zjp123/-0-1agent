@@ -4,6 +4,8 @@ import { Type } from "class-transformer";
 import type { TraceEventType } from "../observability.types.js";
 
 const TRACE_EVENT_TYPES: TraceEventType[] = [
+  "agent.preflight.completed",
+  "agent.usage.recorded",
   "agent.run.started",
   "agent.plan.created",
   "agent.plan.step.started",

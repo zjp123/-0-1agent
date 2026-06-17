@@ -16,10 +16,12 @@ import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   getTraceTimeline,
+  listAgentRunHistory,
   listTraceFailures,
   listTraceEvents,
   TRACE_EVENT_TYPES,
   type AuthCredentials,
+  type AgentRunHistoryItem,
   type TraceEvent,
   type TraceFailureSummary,
   type TraceTimeline,
@@ -70,6 +72,7 @@ export function ObservabilityDashboard() {
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [timeline, setTimeline] = useState<TraceTimeline | undefined>();
   const [failures, setFailures] = useState<TraceFailureSummary[]>([]);
+  const [agentRuns, setAgentRuns] = useState<AgentRunHistoryItem[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [requestId, setRequestId] = useState(searchParams.get("requestId") ?? "");
   const [typeFilter, setTypeFilter] = useState<"all" | TraceEventType>("all");
@@ -104,8 +107,10 @@ export function ObservabilityDashboard() {
         limit,
       });
       const nextFailures = await listTraceFailures(credentials);
+      const nextAgentRuns = await listAgentRunHistory(credentials);
       setEvents(nextEvents);
       setFailures(nextFailures);
+      setAgentRuns(nextAgentRuns);
       setTimeline(undefined);
       setSelectedEventId((current) => current || nextEvents[0]?.id || "");
       setSuccessMessage(`Loaded ${nextEvents.length} trace event(s).`);
@@ -154,6 +159,27 @@ export function ObservabilityDashboard() {
       setSuccessMessage(`Loaded failed request timeline with ${nextTimeline.summary.eventCount} event(s).`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load failed request timeline.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openAgentRunTimeline(run: AgentRunHistoryItem): Promise<void> {
+    setRequestId(run.requestId);
+    if (!hasCredentials) {
+      return;
+    }
+    setLoading(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const nextTimeline = await getTraceTimeline(credentials, run.requestId);
+      setTimeline(nextTimeline);
+      setEvents(nextTimeline.events);
+      setSelectedEventId(nextTimeline.events[0]?.id ?? "");
+      setSuccessMessage(`Loaded agent run timeline with ${nextTimeline.summary.eventCount} event(s).`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load agent run timeline.");
     } finally {
       setLoading(false);
     }
@@ -340,6 +366,32 @@ export function ObservabilityDashboard() {
                   </li>
                 ))}
                 {failures.length === 0 ? <li>No recent failures.</li> : null}
+              </ul>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Agent Runs</h2>
+              <p className="section-card-description">Recent runs grouped by requestId.</p>
+            </div>
+            <div className="section-card-body">
+              <ul className="compact-list api-security-list">
+                {agentRuns.slice(0, 10).map((run) => (
+                  <li key={run.requestId}>
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => void openAgentRunTimeline(run)}
+                    >
+                      {run.requestId}
+                    </button>
+                    <StatusBadge tone={run.status === "failed" ? "danger" : run.status === "approval_required" ? "warning" : "success"}>
+                      {run.stopReason ?? run.status}
+                    </StatusBadge>
+                  </li>
+                ))}
+                {agentRuns.length === 0 ? <li>No agent runs loaded.</li> : null}
               </ul>
             </div>
           </section>

@@ -44,6 +44,8 @@ type TraceEvent = {
 已支持：
 
 - `agent.run.started`
+- `agent.preflight.completed`
+- `agent.usage.recorded`
 - `agent.plan.created`
 - `agent.plan.step.started`
 - `agent.plan.step.completed`
@@ -144,6 +146,31 @@ lastError
 
 该接口用于 Web Observability 的 `Recent Failures` 入口，点击失败请求可以直接加载对应 request timeline。
 
+### 查询 Agent run history
+
+```http
+GET /api/observability/agent-runs
+```
+
+按 tenant 从 trace store 聚合最近 Agent runs：
+
+```text
+requestId
+status
+stopReason
+durationMs
+stepCount
+promptTokens
+completionTokens
+totalTokens
+preflightAllowed
+usageRecorded
+startedAt
+completedAt
+```
+
+该接口用于 Web Observability 的 `Agent Runs` 入口，点击 requestId 可以打开对应 timeline。
+
 ### Indexing Prometheus Metrics
 
 ```http
@@ -170,6 +197,9 @@ GET /api/knowledge/reindex/worker/prometheus
 - recent failures API
 - Workflow/Evaluation trace 接入
 - Agent execution plan trace 接入
+- Agent preflight trace
+- Agent usage trace
+- Agent run history API
 
 未完成：
 
