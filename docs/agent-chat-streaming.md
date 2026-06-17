@@ -101,7 +101,10 @@ http://localhost:3001/agent-chat
 - 支持 Clear 清空当前对话。
 - 后续请求会把已有 user/assistant 消息作为 history 传给后端。
 - 展示 context sources，可用于查看 RAG/context 注入情况。
+- 展示 answer source summary，用于快速查看最终答案引用摘要。
+- 展示 RAG knowledge source 卡片，包含 document/chunk/source metadata。
 - 展示 model/tool timeline。
+- 展示 tool outputs 卡片，包含结构化 output、风险等级和 required permissions。
 - 侧边栏 Agent Chat 导航可点击。
 
 ## 401 与长错误布局保护
@@ -232,6 +235,30 @@ Web check passed
 - 同一 `toolName + normalized arguments` 重复 3 次时，停止为 `repeated_tool_call`。
 - 第一次空模型输出不会立刻失败，会向上下文加入一次轻量提醒，让模型有一次恢复机会。
 - loop guard 触发时会更新 Execution Plan step 为 `failed`，并在 final answer 中返回可理解停止说明。
+
+验证：
+
+```text
+API check passed
+Web check passed
+```
+
+## Tools/RAG 生产增强记录
+
+记录日期：2026-06-17
+
+目标：让 Agent Chat 不再只展示文本化结果，而是能展示可排查、可治理、可回放的工具输出和 RAG 引用。
+
+实现：
+
+- ToolDefinition 新增 `riskLevel` 和 `outputSchema`。
+- ToolCallResponse 新增 `source`、`riskLevel`、`requiredPermissions`。
+- Agent runtime tool step 新增 `structuredOutput`，并在 Run Details 展示 `Tool Outputs`。
+- `tool.completed` trace 增加工具来源、风险等级、结构化输出标记。
+- RAG `retrieveAsContext()` 返回模型消息和 structured source metadata。
+- Memory Context 的 retrieved knowledge source 支持 metadata。
+- Agent run result 新增 `sourceSummary`，只保留已进入上下文的知识引用摘要。
+- Agent Chat 新增 `Answer Source Summary` 和 `Knowledge Sources` 卡片。
 
 验证：
 

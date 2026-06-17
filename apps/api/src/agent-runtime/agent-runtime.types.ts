@@ -6,9 +6,12 @@ import type {
 } from "../model-gateway/model-gateway.types.js";
 import type { BuildContextResult } from "../memory-context/memory-context.types.js";
 import type {
+  JsonObject,
   ToolAuditEvent,
   ToolCallResponse,
   ToolExecutionContext,
+  ToolRiskLevel,
+  ToolSource,
 } from "../tools/tool.types.js";
 
 export type AgentStopReason =
@@ -95,8 +98,12 @@ export type AgentRuntimeStep =
       type: "tool";
       step: number;
       toolName: string;
+      source: ToolSource;
+      riskLevel: ToolRiskLevel;
+      requiredPermissions: string[];
       status: ToolCallResponse["status"];
       contentPreview: string;
+      structuredOutput?: JsonObject;
       latencyMs: number;
       audit: ToolAuditEvent;
     };
@@ -104,6 +111,16 @@ export type AgentRuntimeStep =
 export type AgentRunResult = {
   requestId: string;
   answer: string;
+  sourceSummary: {
+    id: string;
+    title?: string;
+    sourceType?: string;
+    sourceUri?: string;
+    documentId?: string;
+    chunkId?: string;
+    score?: number;
+    retrievalMode?: string;
+  }[];
   stopReason: AgentStopReason;
   plan: AgentExecutionPlan;
   steps: AgentRuntimeStep[];

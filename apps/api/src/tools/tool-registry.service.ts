@@ -58,6 +58,7 @@ export class ToolRegistryService {
         status: "not_found",
         startedAt,
         source: "builtin",
+        riskLevel: "low",
         content: `Tool not found: ${request.name}`,
         requiredPermissions: [],
       });
@@ -72,6 +73,7 @@ export class ToolRegistryService {
         status: "denied",
         startedAt,
         source: handler.definition.source,
+        riskLevel: handler.definition.riskLevel,
         content: `Missing permissions: ${missingPermissions.join(", ")}`,
         requiredPermissions: handler.definition.requiredPermissions,
       });
@@ -87,6 +89,7 @@ export class ToolRegistryService {
         status: "validation_error",
         startedAt,
         source: handler.definition.source,
+        riskLevel: handler.definition.riskLevel,
         content: validation.errors.join("; "),
         requiredPermissions: handler.definition.requiredPermissions,
       });
@@ -103,6 +106,7 @@ export class ToolRegistryService {
         status: "success",
         startedAt,
         source: handler.definition.source,
+        riskLevel: handler.definition.riskLevel,
         content: this.truncate(result.content, handler.definition.maxResultLength),
         data: result.data,
         requiredPermissions: handler.definition.requiredPermissions,
@@ -114,6 +118,7 @@ export class ToolRegistryService {
         status,
         startedAt,
         source: handler.definition.source,
+        riskLevel: handler.definition.riskLevel,
         content: this.errorMessage(error),
         requiredPermissions: handler.definition.requiredPermissions,
       });
@@ -159,6 +164,7 @@ export class ToolRegistryService {
     status: ToolStatus;
     startedAt: Date;
     source: ToolDefinition["source"];
+    riskLevel: ToolDefinition["riskLevel"];
     content: string;
     requiredPermissions: string[];
     data?: ToolExecutionResult["data"];
@@ -169,6 +175,7 @@ export class ToolRegistryService {
       requestId: input.request.context.requestId,
       toolName: input.request.name,
       source: input.source,
+      riskLevel: input.riskLevel,
       status: input.status,
       startedAt: input.startedAt.toISOString(),
       endedAt: endedAt.toISOString(),
@@ -192,6 +199,9 @@ export class ToolRegistryService {
 
     const response: ToolCallResponse = {
       toolName: input.request.name,
+      source: input.source,
+      riskLevel: input.riskLevel,
+      requiredPermissions: input.requiredPermissions,
       status: input.status,
       content: input.content,
       latencyMs,

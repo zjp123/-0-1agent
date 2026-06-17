@@ -26,6 +26,7 @@ import type {
   KnowledgeSearchResult,
   KnowledgeStore,
   RetrieveKnowledgeInput,
+  RetrievedKnowledgeContext,
 } from "./rag.types.js";
 
 const VECTOR_CANDIDATE_MULTIPLIER = 3;
@@ -340,17 +341,47 @@ export class RagService {
   async retrieveAsContextMessages(
     input: RetrieveKnowledgeInput,
   ): Promise<ModelMessage[]> {
+    const context = await this.retrieveAsContext(input);
+    return context.messages;
+  }
+
+  async retrieveAsContext(
+    input: RetrieveKnowledgeInput,
+  ): Promise<RetrievedKnowledgeContext> {
     const results = await this.retrieve(input);
     if (results.length === 0) {
-      return [];
+      return {
+        messages: [],
+        sources: [],
+        results: [],
+      };
     }
 
-    return [
-      {
-        role: "system",
-        content: this.formatResults(results),
-      },
-    ];
+    return {
+      messages: [
+        {
+          role: "system",
+          content: this.formatResults(results),
+        },
+      ],
+      sources: results.map((result, index) => ({
+        id: result.chunk.id,
+        metadata: {
+          documentId: result.chunk.documentId,
+          chunkId: result.chunk.id,
+          chunkIndex: result.chunk.index,
+          title: result.chunk.title,
+          sourceType: result.chunk.sourceType,
+          sourceUri: result.chunk.sourceUri ?? null,
+          score: result.score,
+          retrievalMode: result.retrievalMode ?? "keyword",
+          matchedTerms: result.matchedTerms.join(", "),
+          citationIndex: index + 1,
+          tags: result.chunk.tags.join(", "),
+        },
+      })),
+      results,
+    };
   }
 
   getStatus(): RagStatus {

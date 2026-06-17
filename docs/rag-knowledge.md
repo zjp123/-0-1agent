@@ -102,6 +102,8 @@ apps/api/src/vector-store/
 - keyword scoring
 - hybrid scoring
 - source citation message
+- structured source metadata
+- Agent answer source summary
 - Agent Runtime 自动检索接入
 
 ## API
@@ -150,12 +152,48 @@ GET /api/knowledge/documents
 `POST /api/agent/run` 会从认证上下文读取 `tenantId`，然后：
 
 1. 使用用户消息作为 query
-2. 调用 `RagService.retrieveAsContextMessages()`
-3. 将检索结果作为 `retrievedKnowledge`
-4. 交给 `MemoryContextService.buildContext()`
+2. 调用 `RagService.retrieveAsContext()`
+3. 将检索结果拆成模型可读的 `messages` 和系统可读的 `sources`
+4. 将 `retrievedKnowledge` 和 `retrievedKnowledgeSources` 交给 `MemoryContextService.buildContext()`
 5. 在上下文预算允许时注入模型消息
+6. 在 Agent run result 中返回 `context.sources` 和 `sourceSummary`
 
 这意味着 RAG 检索结果会出现在 Agent 响应的 `context.sources` 中，便于排查是否被纳入上下文。
+
+`context.sources` 中的 retrieved knowledge 会包含结构化 metadata：
+
+```text
+documentId
+chunkId
+chunkIndex
+title
+sourceType
+sourceUri
+score
+retrievalMode
+matchedTerms
+citationIndex
+tags
+```
+
+`sourceSummary` 是面向最终答案的引用摘要，只保留已进入上下文的知识来源：
+
+```text
+id
+title
+sourceType
+sourceUri
+documentId
+chunkId
+score
+retrievalMode
+```
+
+Web Agent Chat 会展示：
+
+- `Context Sources`：所有上下文层的纳入/丢弃情况。
+- `Answer Source Summary`：最终答案保留的引用摘要。
+- `Knowledge Sources`：RAG 文档/chunk/source metadata 卡片。
 
 ## 当前检索策略
 
@@ -207,22 +245,24 @@ GET /api/knowledge/documents
 - `rag.indexing.failed` trace
 - Agent Runtime 接入
 - Memory & Context 注入点
+- retrieved knowledge source metadata
+- Agent run `sourceSummary`
+- Web Agent Chat 引用卡片
 
 未完成：
 
 - PDF / docx / webpage parser
 - wiki connector
-- hybrid search
 - rerank
 - source permission model
 - retrieval evaluation
 
 ## 下一步
 
-建议下一步实现 `Indexing Job Reliability`：
+建议下一步实现 `Source Governance / Evaluation`：
 
-1. indexing 失败重试
-2. dead-letter
-3. worker heartbeat
-4. job cancel API
-5. 并发控制
+1. source-level permission model
+2. rerank
+3. retrieval evaluation cases
+4. source freshness / stale detection
+5. 引用可点击跳转到 Knowledge document detail

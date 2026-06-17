@@ -12,6 +12,7 @@ export class CurrentTimeTool implements ToolHandler {
     name: "current_time",
     description: "Return the current server time in a requested IANA timezone.",
     source: "builtin" as const,
+    riskLevel: "low" as const,
     inputSchema: {
       type: "object" as const,
       additionalProperties: false,
@@ -22,6 +23,25 @@ export class CurrentTimeTool implements ToolHandler {
         },
       },
       required: ["timeZone"],
+    },
+    outputSchema: {
+      type: "object" as const,
+      additionalProperties: false,
+      properties: {
+        iso: {
+          type: "string" as const,
+          description: "Current server time in ISO 8601 format.",
+        },
+        timeZone: {
+          type: "string" as const,
+          description: "Requested IANA timezone.",
+        },
+        formatted: {
+          type: "string" as const,
+          description: "Localized formatted time.",
+        },
+      },
+      required: ["iso", "timeZone", "formatted"],
     },
     timeoutMs: 1_000,
     maxResultLength: 1_000,

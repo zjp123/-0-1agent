@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Query, UseGuards } from "@nestjs/common";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -7,7 +7,12 @@ import { PermissionsGuard } from "../auth/permissions.guard.js";
 import type { RequestUser } from "../auth/auth.types.js";
 import { ListTracesDto } from "./dto/list-traces.dto.js";
 import { ObservabilityService } from "./observability.service.js";
-import type { TraceEvent, TraceQuery } from "./observability.types.js";
+import type {
+  TraceEvent,
+  TraceFailureSummary,
+  TraceQuery,
+  TraceTimeline,
+} from "./observability.types.js";
 
 @Controller("observability")
 export class ObservabilityController {
@@ -36,5 +41,28 @@ export class ObservabilityController {
       traceQuery.limit = query.limit;
     }
     return this.observability.list(traceQuery);
+  }
+
+  @Get("traces/:requestId/timeline")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("observability:read")
+  getTraceTimeline(
+    @Param("requestId") requestId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<TraceTimeline> {
+    return this.observability.timeline({
+      requestId,
+      tenantId: user.tenantId,
+    });
+  }
+
+  @Get("failures")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("observability:read")
+  listRecentFailures(@CurrentUser() user: RequestUser): Promise<TraceFailureSummary[]> {
+    return this.observability.recentFailures({
+      tenantId: user.tenantId,
+      limit: 20,
+    });
   }
 }

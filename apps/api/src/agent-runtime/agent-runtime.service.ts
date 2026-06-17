@@ -133,15 +133,17 @@ export class AgentRuntimeService {
       if (options.userId) {
         retrievalInput.userId = options.userId;
       }
-      const retrievedKnowledge = await this.rag.retrieveAsContextMessages(
+      const retrievedKnowledge = await this.rag.retrieveAsContext(
         retrievalInput,
       );
-      retrievedKnowledgeCount = retrievedKnowledge.length;
+      retrievedKnowledgeCount = retrievedKnowledge.results.length;
       this.recordTrace(options, "rag.retrieved", {
-        resultMessageCount: retrievedKnowledge.length,
+        resultMessageCount: retrievedKnowledge.messages.length,
+        resultCount: retrievedKnowledge.results.length,
       });
-      if (retrievedKnowledge.length > 0) {
-        contextRequest.retrievedKnowledge = retrievedKnowledge;
+      if (retrievedKnowledge.messages.length > 0) {
+        contextRequest.retrievedKnowledge = retrievedKnowledge.messages;
+        contextRequest.retrievedKnowledgeSources = retrievedKnowledge.sources;
       }
     }
     if (options.systemPrompt) {
@@ -361,7 +363,10 @@ export class AgentRuntimeService {
               metadata: {
                 loopStep: step,
                 toolName: toolResponse.toolName,
+                source: toolResponse.source,
+                riskLevel: toolResponse.riskLevel,
                 latencyMs: toolResponse.latencyMs,
+                hasStructuredOutput: Boolean(toolResponse.data),
               },
             },
           );
@@ -371,20 +376,31 @@ export class AgentRuntimeService {
             {
               step,
               toolName: toolResponse.toolName,
+              source: toolResponse.source,
+              riskLevel: toolResponse.riskLevel,
               status: toolResponse.status,
               latencyMs: toolResponse.latencyMs,
+              hasStructuredOutput: Boolean(toolResponse.data),
+              requiredPermissionCount: toolResponse.requiredPermissions.length,
             },
             toolResponse.latencyMs,
           );
-          steps.push({
+          const runtimeToolStep: AgentRuntimeStep = {
             type: "tool",
             step,
             toolName: toolResponse.toolName,
+            source: toolResponse.source,
+            riskLevel: toolResponse.riskLevel,
+            requiredPermissions: toolResponse.requiredPermissions,
             status: toolResponse.status,
             contentPreview: this.truncate(toolResponse.content, 500),
             latencyMs: toolResponse.latencyMs,
             audit: toolResponse.audit,
-          });
+          };
+          if (toolResponse.data) {
+            runtimeToolStep.structuredOutput = toolResponse.data;
+          }
+          steps.push(runtimeToolStep);
           return {
             toolCall,
             toolResponse,
@@ -433,6 +449,7 @@ export class AgentRuntimeService {
     return {
       requestId: options.requestId,
       answer,
+      sourceSummary: this.buildSourceSummary(context.sources),
       stopReason,
       plan,
       steps,
@@ -460,6 +477,41 @@ export class AgentRuntimeService {
       context.tenantId = options.tenantId;
     }
     return context;
+  }
+
+  private buildSourceSummary(
+    sources: AgentRunResult["context"]["sources"],
+  ): AgentRunResult["sourceSummary"] {
+    return sources
+      .filter((source) => source.layer === "retrieved_knowledge" && source.included)
+      .map((source) => {
+        const metadata = source.metadata ?? {};
+        const summary: AgentRunResult["sourceSummary"][number] = {
+          id: source.id,
+        };
+        if (typeof metadata.title === "string") {
+          summary.title = metadata.title;
+        }
+        if (typeof metadata.sourceType === "string") {
+          summary.sourceType = metadata.sourceType;
+        }
+        if (typeof metadata.sourceUri === "string") {
+          summary.sourceUri = metadata.sourceUri;
+        }
+        if (typeof metadata.documentId === "string") {
+          summary.documentId = metadata.documentId;
+        }
+        if (typeof metadata.chunkId === "string") {
+          summary.chunkId = metadata.chunkId;
+        }
+        if (typeof metadata.score === "number") {
+          summary.score = metadata.score;
+        }
+        if (typeof metadata.retrievalMode === "string") {
+          summary.retrievalMode = metadata.retrievalMode;
+        }
+        return summary;
+      });
   }
 
   private createExecutionPlan(options: AgentRunOptions): AgentExecutionPlan {

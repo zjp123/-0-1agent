@@ -3,6 +3,7 @@ export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export type JsonObject = { [key: string]: JsonValue };
 
 export type ToolSource = "builtin" | "mcp";
+export type ToolRiskLevel = "low" | "medium" | "high" | "critical";
 
 export type ToolStatus =
   | "success"
@@ -33,7 +34,9 @@ export type ToolDefinition = {
   name: string;
   description: string;
   source: ToolSource;
+  riskLevel: ToolRiskLevel;
   inputSchema: ToolInputSchema;
+  outputSchema?: ToolInputSchema;
   timeoutMs: number;
   maxResultLength: number;
   requiredPermissions: string[];
@@ -64,6 +67,7 @@ export type ToolAuditEvent = {
   requestId: string;
   toolName: string;
   source: ToolSource;
+  riskLevel: ToolRiskLevel;
   status: ToolStatus;
   startedAt: string;
   endedAt: string;
@@ -78,6 +82,9 @@ export type ToolAuditEvent = {
 
 export type ToolCallResponse = {
   toolName: string;
+  source: ToolSource;
+  riskLevel: ToolRiskLevel;
+  requiredPermissions: string[];
   status: ToolStatus;
   content: string;
   data?: JsonObject;

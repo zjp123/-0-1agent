@@ -108,6 +108,7 @@ export class AgentRuntimeController {
       writeEvent("result", {
         requestId: result.requestId,
         stopReason: result.stopReason,
+        sourceSummary: result.sourceSummary,
         plan: result.plan,
         steps: result.steps,
         context: result.context,

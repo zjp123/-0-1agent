@@ -1,6 +1,7 @@
 "use client";
 
 import { RotateCcw, SendHorizonal, Square } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { ProtectedOperationHint } from "@/components/auth/protected-operation-hint";
@@ -14,6 +15,7 @@ import {
   type AgentMessage,
   type AgentRunContext,
   type AgentRunStep,
+  type AgentSourceSummary,
   type AgentStreamEvent,
 } from "@/lib/api/client";
 
@@ -31,6 +33,7 @@ type RunSnapshot = {
 };
 
 type RunMetadata = {
+  requestId: string;
   stopReason: string;
   durationMs: number;
   usage: {
@@ -38,6 +41,7 @@ type RunMetadata = {
     completionTokens: number;
     totalTokens: number;
   };
+  sourceSummary: AgentSourceSummary[];
   plan?: AgentExecutionPlan;
   steps: AgentRunStep[];
   context: AgentRunContext;
@@ -169,9 +173,11 @@ export function AgentChat() {
 
     if (event.event === "result") {
       setMetadata({
+        requestId: event.data.requestId,
         stopReason: event.data.stopReason,
         durationMs: event.data.durationMs,
         usage: event.data.usage,
+        sourceSummary: event.data.sourceSummary ?? [],
         plan: event.data.plan,
         steps: event.data.steps,
         context: event.data.context,
@@ -310,6 +316,23 @@ function normalizeStreamError(error: unknown): string {
   return error.message;
 }
 
+function riskTone(riskLevel: string) {
+  if (riskLevel === "critical" || riskLevel === "high") {
+    return "danger" as const;
+  }
+  if (riskLevel === "medium") {
+    return "warning" as const;
+  }
+  return "success" as const;
+}
+
+function formatSourceValue(value: string | number | boolean | null | undefined): string {
+  if (value === undefined || value === null || value === "") {
+    return "none";
+  }
+  return String(value);
+}
+
 function RunMetadataPanel({
   metadata,
   errorMessage,
@@ -339,6 +362,16 @@ function RunMetadataPanel({
           <div>
             <dt className="label">Stop reason</dt>
             <dd className="detail-value">{metadata?.stopReason ?? "not reported"}</dd>
+          </div>
+          <div>
+            <dt className="label">Trace</dt>
+            <dd className="detail-value">
+              {metadata ? (
+                <Link href={`/observability?requestId=${metadata.requestId}`}>Open timeline</Link>
+              ) : (
+                "not reported"
+              )}
+            </dd>
           </div>
           <div>
             <dt className="label">Context</dt>
@@ -372,6 +405,57 @@ function RunMetadataPanel({
           )) ?? <li>No sources yet.</li>}
         </ul>
 
+        <h3 className="subsection-title">Answer Source Summary</h3>
+        <div className="knowledge-source-list">
+          {metadata?.sourceSummary.map((source) => (
+            <article key={source.id} className="knowledge-source-card">
+              <div className="dependency-name">{source.title ?? source.id}</div>
+              <div className="dependency-detail">
+                {source.sourceType ?? "unknown"} / {source.retrievalMode ?? "unknown"} / score {source.score ?? "none"}
+              </div>
+              <div className="dependency-detail">URI: {source.sourceUri ?? "none"}</div>
+            </article>
+          )) ?? <div className="empty-state">No answer sources yet.</div>}
+          {metadata && metadata.sourceSummary.length === 0 ? (
+            <div className="empty-state">No answer sources yet.</div>
+          ) : null}
+        </div>
+
+        <h3 className="subsection-title">Knowledge Sources</h3>
+        <div className="knowledge-source-list">
+          {metadata?.context.sources
+            .filter((source) => source.layer === "retrieved_knowledge")
+            .map((source) => (
+              <article key={source.id} className="knowledge-source-card">
+                <div className="tool-output-header">
+                  <div>
+                    <div className="dependency-name">
+                      {formatSourceValue(source.metadata?.title) || source.id}
+                    </div>
+                    <div className="dependency-detail">
+                      {formatSourceValue(source.metadata?.sourceType)} / chunk {formatSourceValue(source.metadata?.chunkIndex)}
+                    </div>
+                  </div>
+                  <StatusBadge tone={source.included ? "success" : "warning"}>
+                    {source.included ? "included" : "dropped"}
+                  </StatusBadge>
+                </div>
+                <div className="dependency-detail">
+                  Score: {formatSourceValue(source.metadata?.score)} / Mode: {formatSourceValue(source.metadata?.retrievalMode)}
+                </div>
+                <div className="dependency-detail">
+                  URI: {formatSourceValue(source.metadata?.sourceUri)}
+                </div>
+                <div className="dependency-detail">
+                  Document: {formatSourceValue(source.metadata?.documentId)} / Chunk: {formatSourceValue(source.metadata?.chunkId)}
+                </div>
+              </article>
+            )) ?? <div className="empty-state">No knowledge sources yet.</div>}
+          {metadata && !metadata.context.sources.some((source) => source.layer === "retrieved_knowledge") ? (
+            <div className="empty-state">No knowledge sources yet.</div>
+          ) : null}
+        </div>
+
         <h3 className="subsection-title">Timeline</h3>
         <ol className="event-list">
           {metadata?.steps.map((step, index) => (
@@ -382,6 +466,34 @@ function RunMetadataPanel({
             </li>
           )) ?? <li>No steps yet.</li>}
         </ol>
+
+        <h3 className="subsection-title">Tool Outputs</h3>
+        <div className="tool-output-list">
+          {metadata?.steps
+            .filter((step) => step.type === "tool")
+            .map((step, index) => (
+              <article key={`${step.toolName}-${step.step}-${index}`} className="tool-output-card">
+                <div className="tool-output-header">
+                  <div>
+                    <div className="dependency-name">{step.toolName}</div>
+                    <div className="dependency-detail">
+                      {step.source} / {step.status} / {step.latencyMs} ms
+                    </div>
+                  </div>
+                  <StatusBadge tone={riskTone(step.riskLevel)}>{step.riskLevel}</StatusBadge>
+                </div>
+                <div className="dependency-detail">
+                  Permissions: {step.requiredPermissions.length > 0 ? step.requiredPermissions.join(", ") : "none"}
+                </div>
+                <pre className="code-block api-json-preview">
+                  {JSON.stringify(step.structuredOutput ?? { content: step.contentPreview }, null, 2)}
+                </pre>
+              </article>
+            )) ?? <div className="empty-state">No tool outputs yet.</div>}
+          {metadata && !metadata.steps.some((step) => step.type === "tool") ? (
+            <div className="empty-state">No tool outputs yet.</div>
+          ) : null}
+        </div>
 
         <h3 className="subsection-title">Stream Events</h3>
         <ol className="event-list">

@@ -51,21 +51,21 @@
 
 ## Phase 4 - Observability 调用链闭环
 
-- [ ] 按 requestId 聚合 agent/model/tool/rag/workflow/evaluation trace。
-- [ ] 新增 trace timeline API。
-- [ ] Web Observability 增加 request timeline 视图。
-- [ ] Agent Chat Run Details 可跳转到对应 trace timeline。
-- [ ] 增加错误聚合和最近失败请求入口。
-- [ ] 更新 Observability 文档。
+- [x] 按 requestId 聚合 agent/model/tool/rag/workflow/evaluation trace。
+- [x] 新增 trace timeline API。
+- [x] Web Observability 增加 request timeline 视图。
+- [x] Agent Chat Run Details 可跳转到对应 trace timeline。
+- [x] 增加错误聚合和最近失败请求入口。
+- [x] 更新 Observability 文档。
 
 ## Phase 5 - 工具与 RAG 生产能力增强
 
-- [ ] 工具调用结果增加结构化 output，避免只能读纯文本。
-- [ ] 增加工具权限/风险级别展示。
-- [ ] RAG 引用结果返回 document/chunk/source metadata。
-- [ ] Agent final answer 中保留 sources 引用摘要。
-- [ ] Web Agent Chat 展示引用卡片。
-- [ ] 更新 Tools/RAG 文档。
+- [x] 工具调用结果增加结构化 output，避免只能读纯文本。
+- [x] 增加工具权限/风险级别展示。
+- [x] RAG 引用结果返回 document/chunk/source metadata。
+- [x] Agent final answer 中保留 sources 引用摘要。
+- [x] Web Agent Chat 展示引用卡片。
+- [x] 更新 Tools/RAG 文档。
 
 ## Phase 6 - 安全、配额与治理闭环
 
@@ -87,10 +87,12 @@
 - Workflow 存储、step 状态和 schedule/run 记录。
 - Evaluation case/run 基础能力。
 - Web Console 登录和主要页面。
+- Observability request timeline、recent failures 和 Agent Chat trace 跳转。
+- Tool structured output、riskLevel、requiredPermissions 展示。
+- RAG source metadata、answer source summary 和 Agent Chat 引用卡片。
 
 当前缺口：
 
-- Workflow 还不能真正驱动 Agent 自动执行。
-- Evaluation 还没有成为真实 Agent 质量门禁。
-- Observability 还没有 requestId timeline 闭环。
-- Agent run 已有显式 execution plan 和基础 loop guard；下一步要让 Workflow 真正驱动 Agent 自动执行。
+- 高风险工具调用还没有 approval-required 中断状态。
+- Security/quota/governance 还没有在 Agent run 前形成完整 preflight 和审计闭环。
+- Agent run、Workflow、Evaluation、Observability、Tools/RAG 主闭环已打通；下一步进入安全、配额与治理闭环。

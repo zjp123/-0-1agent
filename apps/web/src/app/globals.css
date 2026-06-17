@@ -815,11 +815,17 @@ pre {
 
 .event-list {
   display: grid;
+  min-width: 0;
   gap: 0.375rem;
   margin: 1rem 0 0;
   padding-left: 1.25rem;
   color: #475569;
   font-size: 0.875rem;
+}
+
+.event-list li {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .details-grid.single {
@@ -1016,10 +1022,27 @@ pre {
 
 .api-json-preview {
   max-height: 24rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .api-security-list li {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.link-button {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  padding: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
 }
 
 .security-layout {
@@ -1201,6 +1224,29 @@ pre {
 .tool-detail {
   display: grid;
   gap: 1rem;
+}
+
+.tool-output-list,
+.knowledge-source-list {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.tool-output-card,
+.knowledge-source-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.875rem;
+}
+
+.tool-output-header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .code-block {

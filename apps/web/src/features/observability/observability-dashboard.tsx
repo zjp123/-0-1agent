@@ -9,15 +9,20 @@ import {
   Search,
   Wrench,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
+  getTraceTimeline,
+  listTraceFailures,
   listTraceEvents,
   TRACE_EVENT_TYPES,
   type AuthCredentials,
   type TraceEvent,
+  type TraceFailureSummary,
+  type TraceTimeline,
   type TraceEventType,
 } from "@/lib/api/client";
 
@@ -59,11 +64,14 @@ function averageDuration(events: TraceEvent[]): number {
 }
 
 export function ObservabilityDashboard() {
+  const searchParams = useSearchParams();
   const [apiKey, setApiKey] = useState("");
   const [serviceToken, setServiceToken] = useState("");
   const [events, setEvents] = useState<TraceEvent[]>([]);
+  const [timeline, setTimeline] = useState<TraceTimeline | undefined>();
+  const [failures, setFailures] = useState<TraceFailureSummary[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
-  const [requestId, setRequestId] = useState("");
+  const [requestId, setRequestId] = useState(searchParams.get("requestId") ?? "");
   const [typeFilter, setTypeFilter] = useState<"all" | TraceEventType>("all");
   const [limit, setLimit] = useState(100);
   const [loading, setLoading] = useState(false);
@@ -95,11 +103,57 @@ export function ObservabilityDashboard() {
         type: typeFilter === "all" ? undefined : typeFilter,
         limit,
       });
+      const nextFailures = await listTraceFailures(credentials);
       setEvents(nextEvents);
+      setFailures(nextFailures);
+      setTimeline(undefined);
       setSelectedEventId((current) => current || nextEvents[0]?.id || "");
       setSuccessMessage(`Loaded ${nextEvents.length} trace event(s).`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load trace events.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadTimeline(): Promise<void> {
+    if (!hasCredentials || !requestId.trim()) {
+      setErrorMessage("Enter a request ID before loading a trace timeline.");
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const nextTimeline = await getTraceTimeline(credentials, requestId.trim());
+      setTimeline(nextTimeline);
+      setEvents(nextTimeline.events);
+      setSelectedEventId(nextTimeline.events[0]?.id ?? "");
+      setSuccessMessage(`Loaded request timeline with ${nextTimeline.summary.eventCount} event(s).`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load trace timeline.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openFailureTimeline(failure: TraceFailureSummary): Promise<void> {
+    setRequestId(failure.requestId);
+    if (!hasCredentials) {
+      return;
+    }
+    setLoading(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const nextTimeline = await getTraceTimeline(credentials, failure.requestId);
+      setTimeline(nextTimeline);
+      setEvents(nextTimeline.events);
+      setSelectedEventId(nextTimeline.events[0]?.id ?? "");
+      setSuccessMessage(`Loaded failed request timeline with ${nextTimeline.summary.eventCount} event(s).`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load failed request timeline.");
     } finally {
       setLoading(false);
     }
@@ -223,6 +277,15 @@ export function ObservabilityDashboard() {
                   className="text-input"
                 />
               </label>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void loadTimeline()}
+                disabled={loading || !hasCredentials || !requestId.trim()}
+              >
+                <Route className="icon-sm" aria-hidden="true" />
+                Load Timeline
+              </button>
             </div>
           </section>
 
@@ -256,9 +319,80 @@ export function ObservabilityDashboard() {
               </ul>
             </div>
           </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Recent Failures</h2>
+              <p className="section-card-description">Failed requests grouped by requestId.</p>
+            </div>
+            <div className="section-card-body">
+              <ul className="compact-list api-security-list">
+                {failures.map((failure) => (
+                  <li key={failure.requestId}>
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => void openFailureTimeline(failure)}
+                    >
+                      {failure.requestId}
+                    </button>
+                    <StatusBadge tone="danger">{failure.failureCount}</StatusBadge>
+                  </li>
+                ))}
+                {failures.length === 0 ? <li>No recent failures.</li> : null}
+              </ul>
+            </div>
+          </section>
         </aside>
 
         <div className="observability-main">
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Request Timeline</h2>
+              <p className="section-card-description">Chronological trace for one requestId.</p>
+            </div>
+            <div className="section-card-body">
+              {timeline ? (
+                <>
+                  <dl className="details-grid">
+                    <div>
+                      <dt className="label">Request</dt>
+                      <dd className="detail-value">{timeline.requestId}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Events</dt>
+                      <dd className="detail-value">{timeline.summary.eventCount}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Failures</dt>
+                      <dd className="detail-value">{timeline.summary.failureCount}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Duration</dt>
+                      <dd className="detail-value">{timeline.summary.durationMs ?? 0} ms</dd>
+                    </div>
+                  </dl>
+                  <div className="subsection-title">Event Mix</div>
+                  <div className="badge-row">
+                    {Object.entries(timeline.summary.eventMix).map(([name, count]) => (
+                      <StatusBadge key={name}>{`${name}: ${count}`}</StatusBadge>
+                    ))}
+                  </div>
+                  <ol className="event-list">
+                    {timeline.events.map((event, index) => (
+                      <li key={event.id}>
+                        {index + 1}. {event.type}
+                        {event.durationMs !== undefined ? `, ${event.durationMs} ms` : ""} / {formatDate(event.timestamp)}
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              ) : (
+                <div className="empty-state">Enter a request ID and load a timeline.</div>
+              )}
+            </div>
+          </section>
+
           <section className="section-card">
             <div className="section-card-header">
               <h2 className="section-card-title">Trace Events</h2>

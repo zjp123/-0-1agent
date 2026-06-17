@@ -51,6 +51,27 @@ export type TraceQuery = {
   limit?: number;
 };
 
+export type TraceTimeline = {
+  requestId: string;
+  events: TraceEvent[];
+  summary: {
+    eventCount: number;
+    failureCount: number;
+    firstTimestamp?: string;
+    lastTimestamp?: string;
+    durationMs?: number;
+    eventMix: Record<string, number>;
+  };
+};
+
+export type TraceFailureSummary = {
+  requestId: string;
+  failureCount: number;
+  lastFailureType: TraceEventType;
+  lastTimestamp: string;
+  lastError?: string;
+};
+
 export interface TraceStore {
   append(event: TraceEvent): Promise<void> | void;
   list(query?: TraceQuery): Promise<TraceEvent[]> | TraceEvent[];

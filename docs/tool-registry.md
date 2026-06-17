@@ -38,7 +38,9 @@ type ToolDefinition = {
   name: string;
   description: string;
   source: "builtin" | "mcp";
+  riskLevel: "low" | "medium" | "high" | "critical";
   inputSchema: ToolInputSchema;
+  outputSchema?: ToolInputSchema;
   timeoutMs: number;
   maxResultLength: number;
   requiredPermissions: string[];
@@ -61,6 +63,9 @@ type ToolCallRequest = {
 ```ts
 type ToolCallResponse = {
   toolName: string;
+  source: "builtin" | "mcp";
+  riskLevel: "low" | "medium" | "high" | "critical";
+  requiredPermissions: string[];
   status: ToolStatus;
   content: string;
   data?: JsonObject;
@@ -68,6 +73,13 @@ type ToolCallResponse = {
   audit: ToolAuditEvent;
 };
 ```
+
+说明：
+
+- `content` 是给模型继续推理使用的文本结果。
+- `data` 是给 Web、审计、评估、回放使用的结构化结果。
+- `riskLevel` 用于后续审批、人机协同和安全策略。
+- `outputSchema` 描述结构化结果的契约，便于工具接入方和前端展示。
 
 ## 执行链路
 
@@ -156,6 +168,7 @@ POST /api/tools/execute
 - requestId
 - toolName
 - source
+- riskLevel
 - status
 - startedAt
 - endedAt
@@ -169,6 +182,27 @@ POST /api/tools/execute
 
 当前 audit 只随响应返回，后续需要接入 Observability 模块持久化。
 
+## Agent Runtime 接入
+
+Agent Runtime 现在会把工具调用的生产级元数据透出到 run result：
+
+- `source`
+- `riskLevel`
+- `requiredPermissions`
+- `status`
+- `latencyMs`
+- `structuredOutput`
+- `audit`
+
+同时 `tool.completed` trace 会记录工具来源、风险等级、是否有结构化输出和 required permission 数量，方便在 Observability timeline 中排查。
+
+Web Agent Chat 的 Run Details 会展示 `Tool Outputs` 卡片：
+
+- 工具名称、来源、状态、耗时
+- 风险等级 badge
+- 所需权限
+- 结构化 JSON 输出；没有结构化结果时 fallback 到文本 preview
+
 ## 当前边界
 
 已完成：
@@ -180,6 +214,10 @@ POST /api/tools/execute
 - 执行超时
 - 结果截断
 - 审计事件结构
+- 工具风险等级
+- 工具 output schema
+- 工具 structured output 透传
+- Agent Chat 工具输出卡片
 - 内置 `current_time`
 - 内置 `calculator`
 - 工具列表 API
@@ -188,19 +226,18 @@ POST /api/tools/execute
 未完成：
 
 - MCP adapter
-- 工具权限与 Auth/RBAC 联动
+- 高风险工具 approval-required 中断态
 - 审计持久化
 - 工具结果脱敏策略
 - 工具并行执行编排
-- 工具调用指标和 trace
+- 更完整的工具调用指标
 
 ## 下一步
 
-建议下一步实现 `Agent Runtime` 基础版：
+建议下一步实现 `Tool Governance`：
 
-1. 接收用户消息
-2. 通过 Model Gateway 调用模型
-3. 识别 tool calls
-4. 通过 Tool Registry 执行工具
-5. 支持多步 ReAct 循环
-6. 设置 max steps、max duration 和失败恢复策略
+1. 高风险工具执行前返回 `approval-required`
+2. Web 展示审批请求
+3. 审批通过后恢复 Agent run
+4. 对工具结果做字段级脱敏
+5. 持久化工具 audit event

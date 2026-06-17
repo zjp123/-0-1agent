@@ -59,6 +59,15 @@ export type KnowledgeSearchResult = {
   };
 };
 
+export type RetrievedKnowledgeContext = {
+  messages: import("../model-gateway/model-gateway.types.js").ModelMessage[];
+  sources: {
+    id: string;
+    metadata: Record<string, string | number | boolean | null>;
+  }[];
+  results: KnowledgeSearchResult[];
+};
+
 export type KnowledgeIngestResult = {
   document: KnowledgeDocument;
   chunks: KnowledgeChunk[];

@@ -49,13 +49,15 @@ export class MemoryContextService {
     for (const [index, message] of knowledge.entries()) {
       const tokens = this.estimateMessageTokens(message);
       const included = usedTokens + tokens + userTokens <= budget.availableInputTokens;
+      const sourceMetadata = request.retrievedKnowledgeSources?.[index];
       sources.push(
         this.source(
           "retrieved_knowledge",
-          `knowledge-${index}`,
+          sourceMetadata?.id ?? `knowledge-${index}`,
           tokens,
           included,
           included ? "fits budget" : "dropped by token budget",
+          sourceMetadata?.metadata,
         ),
       );
       if (included) {
@@ -187,14 +189,19 @@ export class MemoryContextService {
     tokens: number,
     included: boolean,
     reason: string,
+    metadata?: Record<string, string | number | boolean | null>,
   ): ContextSource {
-    return {
+    const source: ContextSource = {
       layer,
       id,
       tokens,
       included,
       reason,
     };
+    if (metadata) {
+      source.metadata = metadata;
+    }
+    return source;
   }
 
   private defaultSystemPrompt(): string {

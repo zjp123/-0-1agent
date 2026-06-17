@@ -18,6 +18,12 @@ export type ContextSource = {
   tokens: number;
   included: boolean;
   reason: string;
+  metadata?: Record<string, string | number | boolean | null>;
+};
+
+export type RetrievedKnowledgeContextSource = {
+  id: string;
+  metadata: Record<string, string | number | boolean | null>;
 };
 
 export type BuildContextRequest = {
@@ -25,6 +31,7 @@ export type BuildContextRequest = {
   history?: ModelMessage[];
   userMessage: string;
   retrievedKnowledge?: ModelMessage[];
+  retrievedKnowledgeSources?: RetrievedKnowledgeContextSource[];
   maxTokens?: number;
   reservedResponseTokens?: number;
 };

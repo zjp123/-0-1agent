@@ -13,6 +13,7 @@ export class CalculatorTool implements ToolHandler {
     name: "calculator",
     description: "Evaluate a basic arithmetic expression with a safe parser.",
     source: "builtin" as const,
+    riskLevel: "low" as const,
     inputSchema: {
       type: "object" as const,
       additionalProperties: false,
@@ -23,6 +24,21 @@ export class CalculatorTool implements ToolHandler {
         },
       },
       required: ["expression"],
+    },
+    outputSchema: {
+      type: "object" as const,
+      additionalProperties: false,
+      properties: {
+        expression: {
+          type: "string" as const,
+          description: "Original arithmetic expression.",
+        },
+        result: {
+          type: "number" as const,
+          description: "Evaluated numeric result.",
+        },
+      },
+      required: ["expression", "result"],
     },
     timeoutMs: 1_000,
     maxResultLength: 1_000,

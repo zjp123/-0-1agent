@@ -43,6 +43,7 @@ export type AgentStreamEvent =
       data: {
         requestId: string;
         stopReason: string;
+        sourceSummary?: AgentSourceSummary[];
         plan?: AgentExecutionPlan;
         steps: AgentRunStep[];
         context: AgentRunContext;
@@ -119,8 +120,12 @@ export type AgentRunStep =
       type: "tool";
       step: number;
       toolName: string;
+      source: "builtin" | "mcp";
+      riskLevel: "low" | "medium" | "high" | "critical";
+      requiredPermissions: string[];
       status: string;
       contentPreview: string;
+      structuredOutput?: Record<string, unknown>;
       latencyMs: number;
     };
 
@@ -137,15 +142,34 @@ export type AgentRunContext = {
     tokens: number;
     included: boolean;
     reason: string;
+    metadata?: Record<string, string | number | boolean | null>;
   }>;
   droppedMessages: number;
+};
+
+export type AgentSourceSummary = {
+  id: string;
+  title?: string;
+  sourceType?: string;
+  sourceUri?: string;
+  documentId?: string;
+  chunkId?: string;
+  score?: number;
+  retrievalMode?: string;
 };
 
 export type ToolDefinition = {
   name: string;
   description: string;
   source: "builtin" | "mcp";
+  riskLevel: "low" | "medium" | "high" | "critical";
   inputSchema: {
+    type: "object";
+    properties: Record<string, unknown>;
+    required?: string[];
+    additionalProperties?: boolean;
+  };
+  outputSchema?: {
     type: "object";
     properties: Record<string, unknown>;
     required?: string[];
@@ -158,6 +182,9 @@ export type ToolDefinition = {
 
 export type ToolCallResponse = {
   toolName: string;
+  source: "builtin" | "mcp";
+  riskLevel: "low" | "medium" | "high" | "critical";
+  requiredPermissions: string[];
   status: string;
   content: string;
   data?: Record<string, unknown>;
@@ -798,16 +825,44 @@ export type TraceEvent = {
   attributes: Record<string, string | number | boolean | null>;
 };
 
+export type TraceTimeline = {
+  requestId: string;
+  events: TraceEvent[];
+  summary: {
+    eventCount: number;
+    failureCount: number;
+    firstTimestamp?: string;
+    lastTimestamp?: string;
+    durationMs?: number;
+    eventMix: Record<string, number>;
+  };
+};
+
+export type TraceFailureSummary = {
+  requestId: string;
+  failureCount: number;
+  lastFailureType: TraceEventType;
+  lastTimestamp: string;
+  lastError?: string;
+};
+
 const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
   name: z.string(),
   description: z.string(),
   source: z.enum(["builtin", "mcp"]),
+  riskLevel: z.enum(["low", "medium", "high", "critical"]),
   inputSchema: z.object({
     type: z.literal("object"),
     properties: z.record(z.string(), z.unknown()),
     required: z.array(z.string()).optional(),
     additionalProperties: z.boolean().optional(),
   }),
+  outputSchema: z.object({
+    type: z.literal("object"),
+    properties: z.record(z.string(), z.unknown()),
+    required: z.array(z.string()).optional(),
+    additionalProperties: z.boolean().optional(),
+  }).optional(),
   timeoutMs: z.number(),
   maxResultLength: z.number(),
   requiredPermissions: z.array(z.string()),
@@ -815,6 +870,9 @@ const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
 
 const toolCallResponseSchema: z.ZodType<ToolCallResponse> = z.object({
   toolName: z.string(),
+  source: z.enum(["builtin", "mcp"]),
+  riskLevel: z.enum(["low", "medium", "high", "critical"]),
+  requiredPermissions: z.array(z.string()),
   status: z.string(),
   content: z.string(),
   data: z.record(z.string(), z.unknown()).optional(),
@@ -823,6 +881,7 @@ const toolCallResponseSchema: z.ZodType<ToolCallResponse> = z.object({
     requestId: z.string(),
     toolName: z.string(),
     source: z.string(),
+    riskLevel: z.enum(["low", "medium", "high", "critical"]),
     status: z.string(),
     startedAt: z.string(),
     endedAt: z.string(),
@@ -1317,6 +1376,27 @@ const traceEventSchema: z.ZodType<TraceEvent> = z.object({
     z.string(),
     z.union([z.string(), z.number(), z.boolean(), z.null()]),
   ),
+});
+
+const traceTimelineSchema: z.ZodType<TraceTimeline> = z.object({
+  requestId: z.string(),
+  events: z.array(traceEventSchema),
+  summary: z.object({
+    eventCount: z.number(),
+    failureCount: z.number(),
+    firstTimestamp: z.string().optional(),
+    lastTimestamp: z.string().optional(),
+    durationMs: z.number().optional(),
+    eventMix: z.record(z.string(), z.number()),
+  }),
+});
+
+const traceFailureSummarySchema: z.ZodType<TraceFailureSummary> = z.object({
+  requestId: z.string(),
+  failureCount: z.number(),
+  lastFailureType: traceEventTypeSchema,
+  lastTimestamp: z.string(),
+  lastError: z.string().optional(),
 });
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
@@ -1951,6 +2031,25 @@ export async function listTraceEvents(
     headers: buildAuthHeaders(credentials),
   });
   return z.array(traceEventSchema).parse(payload);
+}
+
+export async function getTraceTimeline(
+  credentials: AuthCredentials,
+  requestId: string,
+): Promise<TraceTimeline> {
+  const payload = await fetchJson(`${apiBaseUrl}/observability/traces/${requestId}/timeline`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return traceTimelineSchema.parse(payload);
+}
+
+export async function listTraceFailures(
+  credentials: AuthCredentials,
+): Promise<TraceFailureSummary[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/observability/failures`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(traceFailureSummarySchema).parse(payload);
 }
 
 type FetchJsonInit = RequestInit & {
