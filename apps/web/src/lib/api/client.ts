@@ -614,6 +614,21 @@ export type WorkflowStepExecutionResult = {
   };
 };
 
+export type ExecuteWorkflowPendingStepsInput = AuthCredentials & {
+  workflowId: string;
+  instruction?: string;
+  continueOnFailure?: boolean;
+  maxStepsPerAgentRun?: number;
+  maxWorkflowSteps?: number;
+  maxDurationMsPerAgentRun?: number;
+};
+
+export type WorkflowPendingStepsExecutionResult = {
+  workflow: Workflow;
+  results: WorkflowStepExecutionResult[];
+  stoppedOnFailure: boolean;
+};
+
 export type CreateWorkflowScheduleInput = AuthCredentials & {
   workflowId: string;
   name: string;
@@ -1115,6 +1130,12 @@ const workflowStepExecutionResultSchema: z.ZodType<WorkflowStepExecutionResult> 
       ),
     }),
   }),
+});
+
+const workflowPendingStepsExecutionResultSchema: z.ZodType<WorkflowPendingStepsExecutionResult> = z.object({
+  workflow: workflowSchema,
+  results: z.array(workflowStepExecutionResultSchema),
+  stoppedOnFailure: z.boolean(),
 });
 
 const workflowScheduleSchema: z.ZodType<WorkflowSchedule> = z.object({
@@ -1653,6 +1674,26 @@ export async function executeWorkflowStep(
     },
   );
   return workflowStepExecutionResultSchema.parse(payload);
+}
+
+export async function executeWorkflowPendingSteps(
+  input: ExecuteWorkflowPendingStepsInput,
+): Promise<WorkflowPendingStepsExecutionResult> {
+  const payload = await fetchJson(
+    `${apiBaseUrl}/agent/workflows/${input.workflowId}/execute-pending`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(input, true),
+      body: JSON.stringify({
+        instruction: input.instruction || undefined,
+        continueOnFailure: input.continueOnFailure,
+        maxStepsPerAgentRun: input.maxStepsPerAgentRun,
+        maxWorkflowSteps: input.maxWorkflowSteps,
+        maxDurationMsPerAgentRun: input.maxDurationMsPerAgentRun,
+      }),
+    },
+  );
+  return workflowPendingStepsExecutionResultSchema.parse(payload);
 }
 
 export async function getWorkflowSchedulerStatus(

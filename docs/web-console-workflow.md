@@ -16,6 +16,7 @@
 首版将“运行 workflow”拆成两类能力：
 
 - 执行选中的 workflow step，后端会调用 Agent Runtime 并自动回写 step 状态。
+- 执行全部 pending steps，按 step order 顺序调用 Agent Runtime，默认遇到失败停止。
 - 创建 workflow schedule。
 - 手动 trigger schedule，生成 schedule run。
 - 更新 workflow step 状态，推进执行状态。
@@ -47,6 +48,7 @@
 - `POST /api/workflows`
 - `PATCH /api/workflows/{workflowId}/steps/{stepId}`
 - `POST /api/agent/workflows/{workflowId}/steps/{stepId}/execute`
+- `POST /api/agent/workflows/{workflowId}/execute-pending`
 - `GET /api/workflows/scheduler/status`
 - `GET /api/workflows/schedules`
 - `POST /api/workflows/schedules`
@@ -68,6 +70,7 @@
 - 查看 selected workflow steps。
 - 更新 step status、output、error。
 - 执行选中 step：将 step 转换为 Agent task，调用 Agent Runtime，按结果自动写回 `completed` / `failed`、`output` 和 `error`。
+- 执行 pending steps：按 step order 顺序执行所有 pending steps，默认遇到失败停止。
 - 创建 interval/cron schedule。
 - 手动 trigger schedule，生成 schedule run。
 - 查看 schedule list、runs 和 scheduler capabilities。
@@ -84,7 +87,7 @@ curl --max-time 10 -fsS http://localhost:3001/workflows
 
 ## 后续增强
 
-- 增加执行全部 pending steps。
+- 增加执行全部时的进度流式展示。
 - 增加 schedule run complete/failed/cancel 操作。
 - 增加 workflow 详情页和事件时间线。
 - 增加 step 拖拽排序和依赖关系配置。
@@ -99,12 +102,14 @@ curl --max-time 10 -fsS http://localhost:3001/workflows
 ```text
 apps/api/src/agent-runtime/workflow-run-executor.service.ts
 apps/api/src/agent-runtime/dto/execute-workflow-step.dto.ts
+apps/api/src/agent-runtime/dto/execute-workflow-pending-steps.dto.ts
 ```
 
 新增接口：
 
 ```text
 POST /api/agent/workflows/{workflowId}/steps/{stepId}/execute
+POST /api/agent/workflows/{workflowId}/execute-pending
 ```
 
 执行流程：
@@ -118,6 +123,17 @@ POST /api/agent/workflows/{workflowId}/steps/{stepId}/execute
   -> 其他 stopReason 时 step failed，并记录 error
   -> 写入 workflow.step.execution.* trace
   -> Web Workflows 刷新当前 step output/error/status
+```
+
+执行 pending steps：
+
+```text
+读取 workflow pending steps
+  -> 按 order 升序执行
+  -> 每个 step 复用单步 executor
+  -> 默认 continueOnFailure=false
+  -> 任一步骤 failed 时停止后续 pending steps
+  -> 返回最终 workflow、每个 step 的 agentRun 摘要、stoppedOnFailure
 ```
 
 验证：

@@ -21,10 +21,12 @@ import {
   AgentRuntimeService,
 } from "./agent-runtime.service.js";
 import { ExecuteWorkflowStepDto } from "./dto/execute-workflow-step.dto.js";
+import { ExecuteWorkflowPendingStepsDto } from "./dto/execute-workflow-pending-steps.dto.js";
 import { RunAgentDto } from "./dto/run-agent.dto.js";
 import type { AgentRunOptions, AgentRunResult } from "./agent-runtime.types.js";
 import {
   WorkflowRunExecutorService,
+  type WorkflowPendingStepsExecutionResult,
   type WorkflowStepExecutionResult,
 } from "./workflow-run-executor.service.js";
 
@@ -127,6 +129,17 @@ export class AgentRuntimeController {
     @CurrentUser() user: RequestUser,
   ): Promise<WorkflowStepExecutionResult> {
     return this.workflowExecutor.executeStep(workflowId, stepId, body, user);
+  }
+
+  @Post("workflows/:workflowId/execute-pending")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("workflow:manage")
+  executeWorkflowPendingSteps(
+    @Param("workflowId") workflowId: string,
+    @Body() body: ExecuteWorkflowPendingStepsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<WorkflowPendingStepsExecutionResult> {
+    return this.workflowExecutor.executePendingSteps(workflowId, body, user);
   }
 
   private toRunOptions(body: RunAgentDto, user: RequestUser): AgentRunOptions {

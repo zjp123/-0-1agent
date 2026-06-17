@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   createWorkflow,
   createWorkflowSchedule,
+  executeWorkflowPendingSteps,
   executeWorkflowStep,
   getWorkflowSchedulerStatus,
   listWorkflowScheduleRuns,
@@ -258,6 +259,50 @@ export function WorkflowWorkbench() {
       );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to execute workflow step.");
+    } finally {
+      setExecutingStep(false);
+    }
+  }
+
+  async function executePendingSteps(): Promise<void> {
+    if (!hasCredentials || !selectedWorkflow) {
+      setErrorMessage("Select a workflow before executing pending steps.");
+      return;
+    }
+
+    setExecutingStep(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const result = await executeWorkflowPendingSteps({
+        ...credentials,
+        workflowId: selectedWorkflow.id,
+        instruction: stepOutput.trim() || undefined,
+        continueOnFailure: false,
+        maxStepsPerAgentRun: 4,
+        maxWorkflowSteps: 10,
+      });
+      setData((current) => ({
+        ...current,
+        workflows: current.workflows.map((workflow) =>
+          workflow.id === result.workflow.id ? result.workflow : workflow,
+        ),
+      }));
+      setSelectedWorkflowId(result.workflow.id);
+      const lastResult = result.results[result.results.length - 1];
+      if (lastResult) {
+        setSelectedStepId(lastResult.step.id);
+        setStepStatus(lastResult.step.status);
+        setStepOutput(lastResult.step.output ?? "");
+        setStepError(lastResult.step.error ?? "");
+      }
+      setSuccessMessage(
+        `Executed ${result.results.length} pending step${result.results.length === 1 ? "" : "s"}${
+          result.stoppedOnFailure ? " and stopped on failure" : ""
+        }.`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to execute pending workflow steps.");
     } finally {
       setExecutingStep(false);
     }
@@ -566,6 +611,15 @@ export function WorkflowWorkbench() {
               >
                 <Play className="icon-sm" aria-hidden="true" />
                 Execute Step
+              </button>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void executePendingSteps()}
+                disabled={executingStep || updatingStep || !hasCredentials || !selectedWorkflow}
+              >
+                <Play className="icon-sm" aria-hidden="true" />
+                Execute Pending
               </button>
             </div>
             <div className="section-card-body workflow-steps-layout">

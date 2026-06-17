@@ -93,6 +93,7 @@ Workflow 现在可以执行选中的 step，并通过 Agent Runtime 自动产出
 
 ```text
 POST /api/agent/workflows/:workflowId/steps/:stepId/execute
+POST /api/agent/workflows/:workflowId/execute-pending
 ```
 
 行为：
@@ -103,6 +104,7 @@ POST /api/agent/workflows/:workflowId/steps/:stepId/execute
 - `stopReason=final_answer` 时将 step 置为 `completed`。
 - 其他 stopReason 时将 step 置为 `failed`，并写入 `error`。
 - 写入 `workflow.step.execution.started` / `completed` / `failed` trace。
+- 执行 pending steps 时按 `order` 顺序执行，默认遇到失败停止。
 
 ## 状态推导
 

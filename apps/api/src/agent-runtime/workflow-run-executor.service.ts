@@ -5,6 +5,7 @@ import { ObservabilityService } from "../observability/observability.service.js"
 import { WorkflowService } from "../workflow/workflow.service.js";
 import type { Workflow, WorkflowStep } from "../workflow/workflow.types.js";
 import { AgentRuntimeService } from "./agent-runtime.service.js";
+import type { ExecuteWorkflowPendingStepsDto } from "./dto/execute-workflow-pending-steps.dto.js";
 import type { ExecuteWorkflowStepDto } from "./dto/execute-workflow-step.dto.js";
 import type { AgentRunResult } from "./agent-runtime.types.js";
 
@@ -15,6 +16,12 @@ export type WorkflowStepExecutionResult = {
     AgentRunResult,
     "requestId" | "answer" | "stopReason" | "durationMs" | "usage" | "plan"
   >;
+};
+
+export type WorkflowPendingStepsExecutionResult = {
+  workflow: Workflow;
+  results: WorkflowStepExecutionResult[];
+  stoppedOnFailure: boolean;
 };
 
 @Injectable()
@@ -44,18 +51,79 @@ export class WorkflowRunExecutorService {
       throw new NotFoundException("Workflow step not found");
     }
 
+    return this.executeWorkflowStep(workflow, step, body, user);
+  }
+
+  async executePendingSteps(
+    workflowId: string,
+    body: ExecuteWorkflowPendingStepsDto,
+    user: RequestUser,
+  ): Promise<WorkflowPendingStepsExecutionResult> {
+    const workflow = await this.workflow.get(user.tenantId, workflowId);
+    if (!workflow) {
+      throw new NotFoundException("Workflow not found");
+    }
+
+    const pendingSteps = workflow.steps
+      .filter((step) => step.status === "pending")
+      .sort((left, right) => left.order - right.order)
+      .slice(0, body.maxWorkflowSteps ?? 10);
+    const results: WorkflowStepExecutionResult[] = [];
+    let currentWorkflow = workflow;
+    let stoppedOnFailure = false;
+
+    for (const step of pendingSteps) {
+      const currentStep = currentWorkflow.steps.find((item) => item.id === step.id) ?? step;
+      const stepBody: ExecuteWorkflowStepDto = {};
+      if (body.instruction !== undefined) {
+        stepBody.instruction = body.instruction;
+      }
+      if (body.maxStepsPerAgentRun !== undefined) {
+        stepBody.maxSteps = body.maxStepsPerAgentRun;
+      }
+      if (body.maxDurationMsPerAgentRun !== undefined) {
+        stepBody.maxDurationMs = body.maxDurationMsPerAgentRun;
+      }
+      const result = await this.executeWorkflowStep(
+        currentWorkflow,
+        currentStep,
+        stepBody,
+        user,
+      );
+      results.push(result);
+      currentWorkflow = result.workflow;
+
+      if (result.step.status === "failed" && !body.continueOnFailure) {
+        stoppedOnFailure = true;
+        break;
+      }
+    }
+
+    return {
+      workflow: currentWorkflow,
+      results,
+      stoppedOnFailure,
+    };
+  }
+
+  private async executeWorkflowStep(
+    workflow: Workflow,
+    step: WorkflowStep,
+    body: ExecuteWorkflowStepDto,
+    user: RequestUser,
+  ): Promise<WorkflowStepExecutionResult> {
     await this.workflow.updateStep({
       tenantId: user.tenantId,
-      workflowId,
-      stepId,
+      workflowId: workflow.id,
+      stepId: step.id,
       userId: user.userId,
       status: "running",
     });
 
     const requestId = crypto.randomUUID();
     this.recordTrace(user, requestId, "workflow.step.execution.started", {
-      workflowId,
-      stepId,
+      workflowId: workflow.id,
+      stepId: step.id,
       stepTitle: step.title,
     });
 
@@ -72,8 +140,8 @@ export class WorkflowRunExecutorService {
     const completedStatus = agentRun.stopReason === "final_answer" ? "completed" : "failed";
     const updatedWorkflow = await this.workflow.updateStep({
       tenantId: user.tenantId,
-      workflowId,
-      stepId,
+      workflowId: workflow.id,
+      stepId: step.id,
       userId: user.userId,
       status: completedStatus,
       output: agentRun.answer,
@@ -85,7 +153,7 @@ export class WorkflowRunExecutorService {
       throw new NotFoundException("Workflow or step not found after execution");
     }
 
-    const updatedStep = updatedWorkflow.steps.find((item) => item.id === stepId);
+    const updatedStep = updatedWorkflow.steps.find((item) => item.id === step.id);
     if (!updatedStep) {
       throw new NotFoundException("Workflow step not found after execution");
     }
@@ -97,8 +165,8 @@ export class WorkflowRunExecutorService {
         ? "workflow.step.execution.completed"
         : "workflow.step.execution.failed",
       {
-        workflowId,
-        stepId,
+        workflowId: workflow.id,
+        stepId: step.id,
         stopReason: agentRun.stopReason,
         durationMs: agentRun.durationMs,
         totalTokens: agentRun.usage.totalTokens,
