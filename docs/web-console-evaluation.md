@@ -53,6 +53,7 @@
 - 创建 evaluation case，支持 `agent_response`、`rag_retrieval`、`tool_execution`。
 - 输入 expected output 和 tags。
 - 选择 case 后运行 evaluation。
+- 选择 case 后可直接运行 Agent evaluation，由 Agent Runtime 生成 actual output 后自动评分。
 - 展示 deterministic `string_contains` evaluator 的 status、score、notes。
 - 展示 pass rate、case 数量、run 数量、passed run 数量。
 
@@ -69,7 +70,45 @@ curl --max-time 10 -fsS http://localhost:3001/evaluations
 ## 后续增强
 
 - 增加从 Agent Chat 结果一键创建 eval run。
+- 增加批量运行 evaluation cases。
 - 增加按 case/type/tag 筛选 runs。
 - 增加 evaluator 扩展：LLM judge、exact match、JSON schema、tool output assertions。
 - 增加趋势图和通过率统计。
 - 增加 CI regression suite 入口。
+
+## Agent Evaluation 记录
+
+记录日期：2026-06-17
+
+新增后端：
+
+```text
+apps/api/src/agent-runtime/evaluation-agent-runner.service.ts
+apps/api/src/agent-runtime/dto/run-agent-evaluation.dto.ts
+```
+
+新增接口：
+
+```text
+POST /api/agent/evaluations/cases/{caseId}/run
+```
+
+执行流程：
+
+```text
+选择 evaluation case
+  -> 用 case.input 构造 Agent task
+  -> 调用 Agent Runtime
+  -> 将 Agent answer 作为 actualOutput
+  -> 调用 EvaluationService 评分并保存 run
+  -> notes 记录 agentRequestId / stopReason / duration / token usage
+  -> 写入 evaluation.agent.run.* trace
+  -> Web 展示 run status、score 和 actual output
+```
+
+验证：
+
+```text
+API check passed
+Web check passed
+```

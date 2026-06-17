@@ -28,7 +28,10 @@ export type TraceEventType =
   | "workflow.schedule.run.failed"
   | "workflow.step.execution.started"
   | "workflow.step.execution.completed"
-  | "workflow.step.execution.failed";
+  | "workflow.step.execution.failed"
+  | "evaluation.agent.run.started"
+  | "evaluation.agent.run.completed"
+  | "evaluation.agent.run.failed";
 
 export type TraceEvent = {
   id: string;

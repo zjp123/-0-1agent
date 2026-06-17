@@ -22,8 +22,13 @@ import {
 } from "./agent-runtime.service.js";
 import { ExecuteWorkflowStepDto } from "./dto/execute-workflow-step.dto.js";
 import { ExecuteWorkflowPendingStepsDto } from "./dto/execute-workflow-pending-steps.dto.js";
+import { RunAgentEvaluationDto } from "./dto/run-agent-evaluation.dto.js";
 import { RunAgentDto } from "./dto/run-agent.dto.js";
 import type { AgentRunOptions, AgentRunResult } from "./agent-runtime.types.js";
+import {
+  EvaluationAgentRunnerService,
+  type AgentEvaluationRunResult,
+} from "./evaluation-agent-runner.service.js";
 import {
   WorkflowRunExecutorService,
   type WorkflowPendingStepsExecutionResult,
@@ -39,6 +44,8 @@ export class AgentRuntimeController {
     private readonly quota: QuotaService,
     @Inject(WorkflowRunExecutorService)
     private readonly workflowExecutor: WorkflowRunExecutorService,
+    @Inject(EvaluationAgentRunnerService)
+    private readonly evaluationAgentRunner: EvaluationAgentRunnerService,
   ) {}
 
   @Get("capabilities")
@@ -140,6 +147,17 @@ export class AgentRuntimeController {
     @CurrentUser() user: RequestUser,
   ): Promise<WorkflowPendingStepsExecutionResult> {
     return this.workflowExecutor.executePendingSteps(workflowId, body, user);
+  }
+
+  @Post("evaluations/cases/:caseId/run")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("evaluation:manage")
+  runEvaluationCaseWithAgent(
+    @Param("caseId") caseId: string,
+    @Body() body: RunAgentEvaluationDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<AgentEvaluationRunResult> {
+    return this.evaluationAgentRunner.runCaseWithAgent(caseId, body, user);
   }
 
   private toRunOptions(body: RunAgentDto, user: RequestUser): AgentRunOptions {

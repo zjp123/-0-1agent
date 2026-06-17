@@ -4,7 +4,7 @@
 
 Evaluation 模块负责沉淀 Agent 平台的回归评估能力。它用于记录评估用例、执行评估、保存评分结果，为后续模型、工具、RAG 和 Agent Runtime 的质量回归提供基础。
 
-当前阶段先实现 deterministic 的基础评估链路，不接 LLM Judge，不自动运行 Agent。这样可以先稳定数据模型和 API。
+当前阶段先实现 deterministic 的基础评估链路，并已支持通过 Agent Runtime 自动运行 `agent_response` 类 case。评分器仍为 deterministic `string_contains`，暂不接 LLM Judge。
 
 当前 EvaluationStore 已迁移到 PostgreSQL，持久化说明见 [evaluation-persistence.md](./evaluation-persistence.md)。
 
@@ -22,6 +22,10 @@ apps/api/src/evaluation/
   dto/
     create-evaluation-case.dto.ts
     run-evaluation.dto.ts
+
+apps/api/src/agent-runtime/
+  evaluation-agent-runner.service.ts
+  dto/run-agent-evaluation.dto.ts
 ```
 
 ## 核心模型
@@ -124,6 +128,21 @@ POST /api/evaluations/cases/:caseId/runs
 }
 ```
 
+### 通过 Agent Runtime 运行评估
+
+```http
+POST /api/agent/evaluations/cases/:caseId/run
+```
+
+行为：
+
+- 读取 evaluation case 的 `input`。
+- 调用 Agent Runtime 生成实际输出。
+- 将 Agent answer 保存为 `actualOutput`。
+- 使用 `string_contains` 对 `actualOutput` 和 `expectedOutput` 评分。
+- 在 notes 中记录 `agentRequestId`、`agentStopReason`、duration 和 token usage。
+- 写入 `evaluation.agent.run.started` / `completed` / `failed` trace。
+
 ### 列出评估运行
 
 ```http
@@ -147,26 +166,22 @@ Evaluation 使用认证上下文中的 `tenantId`。
 - 创建评估用例
 - 列出评估用例
 - 运行基础评估
+- 通过 Agent Runtime 运行评估
 - 列出评估运行
 - Auth 权限接入
 - 租户隔离
 
 未完成：
 
-- 自动调用 Agent Runtime 执行 case
 - LLM Judge
 - 多评分维度
 - 数据集批量运行
 - 评估报告
 - 结果趋势统计
-- 持久化数据库
 - CI 回归门禁
 
 ## 下一步
 
-建议下一步实现 `Database / Infrastructure` 基础版：
-
-1. 加 Docker Compose
-2. 加 PostgreSQL / Redis / Qdrant 服务定义
+建议下一步实现批量运行 evaluation cases，并将失败样本结构化为 regression report。
 3. 设计 Drizzle schema
 4. 将当前 in-memory store 逐步替换为持久化实现

@@ -686,6 +686,29 @@ export type RunEvaluationCaseInput = AuthCredentials & {
   actualOutput: string;
 };
 
+export type RunAgentEvaluationCaseInput = AuthCredentials & {
+  caseId: string;
+  instruction?: string;
+  maxSteps?: number;
+  maxDurationMs?: number;
+};
+
+export type AgentEvaluationRunResult = {
+  evaluationRun: EvaluationRun;
+  agentRun: {
+    requestId: string;
+    answer: string;
+    stopReason: string;
+    durationMs: number;
+    usage: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+    };
+    plan: AgentExecutionPlan;
+  };
+};
+
 export type TraceEventType =
   | "agent.run.started"
   | "agent.plan.created"
@@ -712,7 +735,10 @@ export type TraceEventType =
   | "workflow.schedule.run.failed"
   | "workflow.step.execution.started"
   | "workflow.step.execution.completed"
-  | "workflow.step.execution.failed";
+  | "workflow.step.execution.failed"
+  | "evaluation.agent.run.started"
+  | "evaluation.agent.run.completed"
+  | "evaluation.agent.run.failed";
 
 export const TRACE_EVENT_TYPES: TraceEventType[] = [
   "agent.run.started",
@@ -741,6 +767,9 @@ export const TRACE_EVENT_TYPES: TraceEventType[] = [
   "workflow.step.execution.started",
   "workflow.step.execution.completed",
   "workflow.step.execution.failed",
+  "evaluation.agent.run.started",
+  "evaluation.agent.run.completed",
+  "evaluation.agent.run.failed",
 ];
 
 export type TraceEvent = {
@@ -1214,6 +1243,42 @@ const evaluationRunSchema: z.ZodType<EvaluationRun> = z.object({
   evaluator: z.literal("string_contains"),
   notes: z.array(z.string()),
   createdAt: z.string(),
+});
+
+const agentEvaluationRunResultSchema: z.ZodType<AgentEvaluationRunResult> = z.object({
+  evaluationRun: evaluationRunSchema,
+  agentRun: z.object({
+    requestId: z.string(),
+    answer: z.string(),
+    stopReason: z.string(),
+    durationMs: z.number(),
+    usage: z.object({
+      promptTokens: z.number(),
+      completionTokens: z.number(),
+      totalTokens: z.number(),
+    }),
+    plan: z.object({
+      id: z.string(),
+      requestId: z.string(),
+      status: z.enum(["running", "completed", "failed"]),
+      strategy: z.literal("react"),
+      createdAt: z.string(),
+      completedAt: z.string().optional(),
+      steps: z.array(
+        z.object({
+          id: z.string(),
+          stage: z.enum(["context", "planning", "model", "tool", "finalize"]),
+          title: z.string(),
+          status: z.enum(["pending", "running", "completed", "failed", "skipped"]),
+          startedAt: z.string().optional(),
+          completedAt: z.string().optional(),
+          durationMs: z.number().optional(),
+          summary: z.string().optional(),
+          metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+        }),
+      ),
+    }),
+  }),
 });
 
 const traceEventTypeSchema = z.enum(TRACE_EVENT_TYPES);
@@ -1796,6 +1861,21 @@ export async function runEvaluationCase(
     }),
   });
   return evaluationRunSchema.parse(payload);
+}
+
+export async function runAgentEvaluationCase(
+  input: RunAgentEvaluationCaseInput,
+): Promise<AgentEvaluationRunResult> {
+  const payload = await fetchJson(`${apiBaseUrl}/agent/evaluations/cases/${input.caseId}/run`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      instruction: input.instruction || undefined,
+      maxSteps: input.maxSteps,
+      maxDurationMs: input.maxDurationMs,
+    }),
+  });
+  return agentEvaluationRunResultSchema.parse(payload);
 }
 
 export async function listEvaluationRuns(

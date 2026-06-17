@@ -25,6 +25,9 @@ const TRACE_EVENT_TYPES: TraceEventType[] = [
   "workflow.step.execution.started",
   "workflow.step.execution.completed",
   "workflow.step.execution.failed",
+  "evaluation.agent.run.started",
+  "evaluation.agent.run.completed",
+  "evaluation.agent.run.failed",
 ];
 
 export class ListTracesDto {

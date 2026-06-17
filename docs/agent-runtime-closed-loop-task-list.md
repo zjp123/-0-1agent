@@ -42,12 +42,12 @@
 
 ## Phase 3 - Evaluation 接入真实 Agent Run
 
-- [ ] Evaluation run 可选择调用真实 Agent Runtime，而不是只评估手动 actualOutput。
+- [x] Evaluation run 可选择调用真实 Agent Runtime，而不是只评估手动 actualOutput。
 - [ ] 支持批量运行 evaluation cases。
-- [ ] 每次 evaluation run 关联 requestId 和 trace。
+- [x] 每次 evaluation run 关联 requestId 和 trace。
 - [ ] 失败样本记录 prompt、actual、expected、score、reason。
-- [ ] Web Evaluations 增加真实 Agent run 模式。
-- [ ] 更新 Evaluation 文档。
+- [x] Web Evaluations 增加真实 Agent run 模式。
+- [x] 更新 Evaluation 文档。
 
 ## Phase 4 - Observability 调用链闭环
 

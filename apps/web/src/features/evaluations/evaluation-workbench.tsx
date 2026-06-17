@@ -16,6 +16,7 @@ import {
   createEvaluationCase,
   listEvaluationCases,
   listEvaluationRuns,
+  runAgentEvaluationCase,
   runEvaluationCase,
   type AuthCredentials,
   type EvaluationCase,
@@ -174,6 +175,34 @@ export function EvaluationWorkbench() {
     }
   }
 
+  async function submitAgentRun(): Promise<void> {
+    if (!hasCredentials || !selectedCase) {
+      setErrorMessage("Select an evaluation case before running Agent evaluation.");
+      return;
+    }
+
+    setRunningCase(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const result = await runAgentEvaluationCase({
+        ...credentials,
+        caseId: selectedCase.id,
+        instruction: actualOutput.trim() || undefined,
+        maxSteps: 4,
+      });
+      setActualOutput(result.agentRun.answer);
+      setSuccessMessage(
+        `Agent evaluation ${result.evaluationRun.status} with score ${result.evaluationRun.score}. Stop reason: ${result.agentRun.stopReason}.`,
+      );
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to run Agent evaluation.");
+    } finally {
+      setRunningCase(false);
+    }
+  }
+
   function selectCase(nextCase: EvaluationCase): void {
     setSelectedCaseId(nextCase.id);
     setActualOutput(nextCase.expectedOutput);
@@ -319,7 +348,7 @@ export function EvaluationWorkbench() {
           <section className="section-card">
             <div className="section-card-header">
               <h2 className="section-card-title">Run Case</h2>
-              <p className="section-card-description">Paste actual model/tool/RAG output and score it.</p>
+              <p className="section-card-description">Score pasted output or run the selected case through Agent Runtime.</p>
             </div>
             <div className="section-card-body auth-form">
               <label>
@@ -343,6 +372,15 @@ export function EvaluationWorkbench() {
               >
                 <Play className="icon-sm" aria-hidden="true" />
                 Run Evaluation
+              </button>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void submitAgentRun()}
+                disabled={runningCase || !hasCredentials || !selectedCase}
+              >
+                <Play className="icon-sm" aria-hidden="true" />
+                Run Agent Evaluation
               </button>
             </div>
           </section>

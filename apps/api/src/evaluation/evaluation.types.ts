@@ -45,6 +45,7 @@ export type RunEvaluationInput = {
   tenantId: string;
   caseId: string;
   actualOutput: string;
+  notes?: string[];
 };
 
 export interface EvaluationStore {

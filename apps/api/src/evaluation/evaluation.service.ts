@@ -34,6 +34,10 @@ export class EvaluationService {
     return this.store.listRuns(tenantId, caseId);
   }
 
+  getCase(tenantId: string, caseId: string): Promise<EvaluationCase | undefined> {
+    return this.store.getCase(tenantId, caseId);
+  }
+
   async run(input: RunEvaluationInput): Promise<EvaluationRun> {
     const evaluationCase = await this.store.getCase(input.tenantId, input.caseId);
     if (!evaluationCase) {
@@ -53,8 +57,8 @@ export class EvaluationService {
       expectedOutput: evaluationCase.expectedOutput,
       evaluator: "string_contains",
       notes: passed
-        ? ["Actual output contains expected output."]
-        : ["Actual output does not contain expected output."],
+        ? ["Actual output contains expected output.", ...(input.notes ?? [])]
+        : ["Actual output does not contain expected output.", ...(input.notes ?? [])],
       createdAt: new Date().toISOString(),
     };
 
