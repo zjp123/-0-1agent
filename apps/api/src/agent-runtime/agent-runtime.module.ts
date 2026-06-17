@@ -10,6 +10,7 @@ import { ToolsModule } from "../tools/tools.module.js";
 import { WorkflowModule } from "../workflow/workflow.module.js";
 import { AgentRuntimeController } from "./agent-runtime.controller.js";
 import { AgentRuntimeService } from "./agent-runtime.service.js";
+import { WorkflowRunExecutorService } from "./workflow-run-executor.service.js";
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { AgentRuntimeService } from "./agent-runtime.service.js";
     ObservabilityModule,
   ],
   controllers: [AgentRuntimeController],
-  providers: [AgentRuntimeService],
-  exports: [AgentRuntimeService],
+  providers: [AgentRuntimeService, WorkflowRunExecutorService],
+  exports: [AgentRuntimeService, WorkflowRunExecutorService],
 })
 export class AgentRuntimeModule {}

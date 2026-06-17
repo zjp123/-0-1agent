@@ -589,6 +589,31 @@ export type UpdateWorkflowStepInput = AuthCredentials & {
   error?: string;
 };
 
+export type ExecuteWorkflowStepInput = AuthCredentials & {
+  workflowId: string;
+  stepId: string;
+  instruction?: string;
+  maxSteps?: number;
+  maxDurationMs?: number;
+};
+
+export type WorkflowStepExecutionResult = {
+  workflow: Workflow;
+  step: WorkflowStep;
+  agentRun: {
+    requestId: string;
+    answer: string;
+    stopReason: string;
+    durationMs: number;
+    usage: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+    };
+    plan: AgentExecutionPlan;
+  };
+};
+
 export type CreateWorkflowScheduleInput = AuthCredentials & {
   workflowId: string;
   name: string;
@@ -669,7 +694,10 @@ export type TraceEventType =
   | "orchestration.run.completed"
   | "workflow.schedule.created"
   | "workflow.schedule.run.created"
-  | "workflow.schedule.run.failed";
+  | "workflow.schedule.run.failed"
+  | "workflow.step.execution.started"
+  | "workflow.step.execution.completed"
+  | "workflow.step.execution.failed";
 
 export const TRACE_EVENT_TYPES: TraceEventType[] = [
   "agent.run.started",
@@ -695,6 +723,9 @@ export const TRACE_EVENT_TYPES: TraceEventType[] = [
   "workflow.schedule.created",
   "workflow.schedule.run.created",
   "workflow.schedule.run.failed",
+  "workflow.step.execution.started",
+  "workflow.step.execution.completed",
+  "workflow.step.execution.failed",
 ];
 
 export type TraceEvent = {
@@ -1047,6 +1078,43 @@ const workflowSchema: z.ZodType<Workflow> = z.object({
   events: z.array(workflowEventSchema),
   createdAt: z.string(),
   updatedAt: z.string(),
+});
+
+const workflowStepExecutionResultSchema: z.ZodType<WorkflowStepExecutionResult> = z.object({
+  workflow: workflowSchema,
+  step: workflowStepSchema,
+  agentRun: z.object({
+    requestId: z.string(),
+    answer: z.string(),
+    stopReason: z.string(),
+    durationMs: z.number(),
+    usage: z.object({
+      promptTokens: z.number(),
+      completionTokens: z.number(),
+      totalTokens: z.number(),
+    }),
+    plan: z.object({
+      id: z.string(),
+      requestId: z.string(),
+      status: z.enum(["running", "completed", "failed"]),
+      strategy: z.literal("react"),
+      createdAt: z.string(),
+      completedAt: z.string().optional(),
+      steps: z.array(
+        z.object({
+          id: z.string(),
+          stage: z.enum(["context", "planning", "model", "tool", "finalize"]),
+          title: z.string(),
+          status: z.enum(["pending", "running", "completed", "failed", "skipped"]),
+          startedAt: z.string().optional(),
+          completedAt: z.string().optional(),
+          durationMs: z.number().optional(),
+          summary: z.string().optional(),
+          metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+        }),
+      ),
+    }),
+  }),
 });
 
 const workflowScheduleSchema: z.ZodType<WorkflowSchedule> = z.object({
@@ -1567,6 +1635,24 @@ export async function updateWorkflowStep(
     },
   );
   return workflowSchema.parse(payload);
+}
+
+export async function executeWorkflowStep(
+  input: ExecuteWorkflowStepInput,
+): Promise<WorkflowStepExecutionResult> {
+  const payload = await fetchJson(
+    `${apiBaseUrl}/agent/workflows/${input.workflowId}/steps/${input.stepId}/execute`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(input, true),
+      body: JSON.stringify({
+        instruction: input.instruction || undefined,
+        maxSteps: input.maxSteps,
+        maxDurationMs: input.maxDurationMs,
+      }),
+    },
+  );
+  return workflowStepExecutionResultSchema.parse(payload);
 }
 
 export async function getWorkflowSchedulerStatus(

@@ -24,6 +24,10 @@ apps/api/src/workflow/
     create-workflow-schedule.dto.ts
     claim-workflow-schedules.dto.ts
     complete-workflow-schedule-run.dto.ts
+
+apps/api/src/agent-runtime/
+  workflow-run-executor.service.ts
+  dto/execute-workflow-step.dto.ts
 ```
 
 ## 核心模型
@@ -80,6 +84,25 @@ Step 状态：
 - `failed`
 - `skipped`
 - `waiting_for_approval`
+
+## Agent Step Executor
+
+Workflow 现在可以执行选中的 step，并通过 Agent Runtime 自动产出结果。
+
+接口：
+
+```text
+POST /api/agent/workflows/:workflowId/steps/:stepId/execute
+```
+
+行为：
+
+- 将 step 状态置为 `running`。
+- 用 workflow title、goal、step title、step description 生成 Agent task。
+- 调用 Agent Runtime。
+- `stopReason=final_answer` 时将 step 置为 `completed`。
+- 其他 stopReason 时将 step 置为 `failed`，并写入 `error`。
+- 写入 `workflow.step.execution.started` / `completed` / `failed` trace。
 
 ## 状态推导
 

@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Inject, Post, Res, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import type { Response } from "express";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
@@ -11,8 +20,13 @@ import {
   AgentCapabilitySnapshot,
   AgentRuntimeService,
 } from "./agent-runtime.service.js";
+import { ExecuteWorkflowStepDto } from "./dto/execute-workflow-step.dto.js";
 import { RunAgentDto } from "./dto/run-agent.dto.js";
 import type { AgentRunOptions, AgentRunResult } from "./agent-runtime.types.js";
+import {
+  WorkflowRunExecutorService,
+  type WorkflowStepExecutionResult,
+} from "./workflow-run-executor.service.js";
 
 @Controller("agent")
 export class AgentRuntimeController {
@@ -21,6 +35,8 @@ export class AgentRuntimeController {
     private readonly agentRuntime: AgentRuntimeService,
     @Inject(QuotaService)
     private readonly quota: QuotaService,
+    @Inject(WorkflowRunExecutorService)
+    private readonly workflowExecutor: WorkflowRunExecutorService,
   ) {}
 
   @Get("capabilities")
@@ -99,6 +115,18 @@ export class AgentRuntimeController {
     } finally {
       response.end();
     }
+  }
+
+  @Post("workflows/:workflowId/steps/:stepId/execute")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("workflow:manage")
+  executeWorkflowStep(
+    @Param("workflowId") workflowId: string,
+    @Param("stepId") stepId: string,
+    @Body() body: ExecuteWorkflowStepDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<WorkflowStepExecutionResult> {
+    return this.workflowExecutor.executeStep(workflowId, stepId, body, user);
   }
 
   private toRunOptions(body: RunAgentDto, user: RequestUser): AgentRunOptions {

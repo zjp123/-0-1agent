@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   createWorkflow,
   createWorkflowSchedule,
+  executeWorkflowStep,
   getWorkflowSchedulerStatus,
   listWorkflowScheduleRuns,
   listWorkflowSchedules,
@@ -110,6 +111,7 @@ export function WorkflowWorkbench() {
   const [creatingWorkflow, setCreatingWorkflow] = useState(false);
   const [creatingSchedule, setCreatingSchedule] = useState(false);
   const [updatingStep, setUpdatingStep] = useState(false);
+  const [executingStep, setExecutingStep] = useState(false);
   const [triggeringSchedule, setTriggeringSchedule] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [successMessage, setSuccessMessage] = useState<string | undefined>();
@@ -220,6 +222,44 @@ export function WorkflowWorkbench() {
       setErrorMessage(error instanceof Error ? error.message : "Failed to update workflow step.");
     } finally {
       setUpdatingStep(false);
+    }
+  }
+
+  async function executeSelectedStep(): Promise<void> {
+    if (!hasCredentials || !selectedWorkflow || !selectedStep) {
+      setErrorMessage("Select a workflow step before executing it.");
+      return;
+    }
+
+    setExecutingStep(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const result = await executeWorkflowStep({
+        ...credentials,
+        workflowId: selectedWorkflow.id,
+        stepId: selectedStep.id,
+        instruction: stepOutput.trim() || undefined,
+        maxSteps: 4,
+      });
+      setData((current) => ({
+        ...current,
+        workflows: current.workflows.map((workflow) =>
+          workflow.id === result.workflow.id ? result.workflow : workflow,
+        ),
+      }));
+      setSelectedWorkflowId(result.workflow.id);
+      setSelectedStepId(result.step.id);
+      setStepStatus(result.step.status);
+      setStepOutput(result.step.output ?? "");
+      setStepError(result.step.error ?? "");
+      setSuccessMessage(
+        `Executed step ${result.step.title}. Agent stop reason: ${result.agentRun.stopReason}.`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to execute workflow step.");
+    } finally {
+      setExecutingStep(false);
     }
   }
 
@@ -513,10 +553,19 @@ export function WorkflowWorkbench() {
                 type="button"
                 className="refresh-button"
                 onClick={() => void submitStepUpdate()}
-                disabled={updatingStep || !hasCredentials || !selectedStep}
+                disabled={updatingStep || executingStep || !hasCredentials || !selectedStep}
               >
                 <CheckCircle2 className="icon-sm" aria-hidden="true" />
                 Update Step
+              </button>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void executeSelectedStep()}
+                disabled={executingStep || updatingStep || !hasCredentials || !selectedStep}
+              >
+                <Play className="icon-sm" aria-hidden="true" />
+                Execute Step
               </button>
             </div>
             <div className="section-card-body workflow-steps-layout">

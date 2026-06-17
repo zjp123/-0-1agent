@@ -25,7 +25,10 @@ export type TraceEventType =
   | "orchestration.run.completed"
   | "workflow.schedule.created"
   | "workflow.schedule.run.created"
-  | "workflow.schedule.run.failed";
+  | "workflow.schedule.run.failed"
+  | "workflow.step.execution.started"
+  | "workflow.step.execution.completed"
+  | "workflow.step.execution.failed";
 
 export type TraceEvent = {
   id: string;

@@ -31,13 +31,14 @@
 
 ## Phase 2 - Workflow Run Executor
 
-- [ ] 新增 workflow run executor service。
-- [ ] 支持从 workflow step 生成 Agent task。
-- [ ] 执行 step 时调用 Agent Runtime。
-- [ ] 根据 Agent Runtime 结果自动更新 workflow step 状态。
-- [ ] 支持 step 失败记录 error，并写入 trace。
-- [ ] Web Workflows 增加“执行下一步/执行全部”入口。
-- [ ] 更新 Workflow 文档。
+- [x] 新增 workflow run executor service。
+- [x] 支持从 workflow step 生成 Agent task。
+- [x] 执行 step 时调用 Agent Runtime。
+- [x] 根据 Agent Runtime 结果自动更新 workflow step 状态。
+- [x] 支持 step 失败记录 error，并写入 trace。
+- [x] Web Workflows 增加执行选中 step 入口。
+- [ ] Web Workflows 增加执行全部 pending steps 入口。
+- [x] 更新 Workflow 文档。
 
 ## Phase 3 - Evaluation 接入真实 Agent Run
 
