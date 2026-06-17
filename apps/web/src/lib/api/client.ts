@@ -336,6 +336,27 @@ export type SecurityAnomalyEventList = {
   nextOffset?: number;
 };
 
+export type ApprovalRequest = {
+  id: string;
+  tenantId: string;
+  policyId?: string;
+  requestedBy: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  requiredApprovals: number;
+  approvals: Array<Record<string, unknown>>;
+  reason: string;
+  rejectionReason?: string;
+  payload: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  expiresAt?: string;
+  decidedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CreateAuthRoleInput = AuthCredentials & {
   name: string;
   permissions: Permission[];
@@ -1012,6 +1033,27 @@ const securityAnomalyEventListSchema: z.ZodType<SecurityAnomalyEventList> = z.ob
   limit: z.number(),
   offset: z.number(),
   nextOffset: z.number().optional(),
+});
+
+const approvalRequestSchema: z.ZodType<ApprovalRequest> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  policyId: z.string().optional(),
+  requestedBy: z.string(),
+  action: z.string(),
+  resourceType: z.string(),
+  resourceId: z.string().optional(),
+  status: z.enum(["pending", "approved", "rejected", "cancelled"]),
+  requiredApprovals: z.number(),
+  approvals: z.array(z.record(z.string(), z.unknown())),
+  reason: z.string(),
+  rejectionReason: z.string().optional(),
+  payload: z.record(z.string(), z.unknown()),
+  metadata: z.record(z.string(), z.unknown()),
+  expiresAt: z.string().optional(),
+  decidedAt: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
 
 const apiDocOperationSchema: z.ZodType<ApiDocOperation> = z.object({
@@ -1731,6 +1773,31 @@ export async function acknowledgeSecurityAnomaly(input: AuthCredentials & {
     },
   );
   return securityAnomalyEventSchema.parse(payload);
+}
+
+export async function listApprovalRequests(
+  credentials: AuthCredentials,
+): Promise<ApprovalRequest[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/governance/approval/requests`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(approvalRequestSchema).parse(payload);
+}
+
+export async function decideApprovalRequest(input: AuthCredentials & {
+  requestId: string;
+  decision: "approve" | "reject";
+  comment?: string;
+}): Promise<ApprovalRequest> {
+  const payload = await fetchJson(
+    `${apiBaseUrl}/governance/approval/requests/${input.requestId}/${input.decision}`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(input, true),
+      body: JSON.stringify({ comment: input.comment || undefined }),
+    },
+  );
+  return approvalRequestSchema.parse(payload);
 }
 
 export async function getApiDocumentationSummary(): Promise<ApiDocumentationSummary> {

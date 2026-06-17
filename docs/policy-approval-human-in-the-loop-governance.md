@@ -219,6 +219,8 @@ high / critical: 自动创建 approval request，并停止当前 Agent run
 
 当前这是“中断并留痕”模式，尚未实现审批通过后的自动恢复执行。
 
+Web Security 页面已接入 approval request 列表和 approve / reject 操作；Agent Chat 会展示 `approvalRequestId`，Security 页面可完成审批决策，Observability timeline 可按 requestId 回看触发审批的 Agent run。
+
 ## 审计动作
 
 当前写入的 action：
@@ -259,6 +261,7 @@ Agent 高风险工具会写入：
 - high / critical risk tool approval-required 中断
 - 自动创建 tool approval request
 - Agent Chat 展示 approvalRequestId
+- Web Security approval requests approve / reject
 - Drizzle migration
 
 未完成：

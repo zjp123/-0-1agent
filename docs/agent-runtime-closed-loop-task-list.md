@@ -73,7 +73,7 @@
 - [x] 高风险工具调用支持 approval-required 状态。
 - [x] 记录 token usage 到可查询存储。
 - [x] 增加 tenant/user 维度 run history。
-- [ ] 增加审计事件与安全页面联动。
+- [x] 增加审计事件与安全页面联动。
 - [x] 更新 Auth/Security 文档。
 
 ## 当前状态
@@ -91,9 +91,10 @@
 - Tool structured output、riskLevel、requiredPermissions 展示。
 - RAG source metadata、answer source summary 和 Agent Chat 引用卡片。
 - Agent preflight trace、usage trace、approval-required tool stop reason 和 Agent run history。
+- Security 页面 approval requests、Agent run governance、audit/anomaly 联动。
 
 当前缺口：
 
-- Security 页面还没有展示 approval requests、agent run history 和治理审计汇总。
 - cost 仍是 token usage 级别，还没有接真实计费单价和 billing ledger。
-- Agent run、Workflow、Evaluation、Observability、Tools/RAG、基础治理主闭环已打通；下一步建议补 Security/Governance Web 页面联动和审批恢复执行。
+- Approval request 通过后还不能恢复原 Agent run。
+- Agent run、Workflow、Evaluation、Observability、Tools/RAG、基础治理主闭环已打通；下一步建议做审批恢复执行、会话/运行持久化和真实 cost ledger。

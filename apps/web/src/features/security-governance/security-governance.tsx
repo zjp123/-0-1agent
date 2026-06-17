@@ -8,6 +8,7 @@ import {
   RefreshCcw,
   ShieldCheck,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { useEffectiveCredentials } from "@/components/auth/session-provider";
@@ -16,6 +17,9 @@ import {
   acknowledgeSecurityAnomaly,
   ALL_PERMISSIONS,
   createAuthRole,
+  decideApprovalRequest,
+  listAgentRunHistory,
+  listApprovalRequests,
   listAuthAuditEvents,
   listAuthRoles,
   listSecurityAnomalies,
@@ -23,6 +27,8 @@ import {
   type AuthAuditEvent,
   type AuthCredentials,
   type AuthRole,
+  type AgentRunHistoryItem,
+  type ApprovalRequest,
   type Permission,
   type SecurityAnomalyEvent,
   type ServiceToken,
@@ -33,6 +39,8 @@ type SecurityData = {
   serviceTokens: ServiceToken[];
   auditEvents: AuthAuditEvent[];
   anomalies: SecurityAnomalyEvent[];
+  approvalRequests: ApprovalRequest[];
+  agentRuns: AgentRunHistoryItem[];
 };
 
 const emptyData: SecurityData = {
@@ -40,6 +48,8 @@ const emptyData: SecurityData = {
   serviceTokens: [],
   auditEvents: [],
   anomalies: [],
+  approvalRequests: [],
+  agentRuns: [],
 };
 
 function formatDate(value?: string): string {
@@ -62,6 +72,26 @@ function severityTone(severity: SecurityAnomalyEvent["severity"]) {
   return "neutral" as const;
 }
 
+function approvalTone(status: ApprovalRequest["status"]) {
+  if (status === "approved") {
+    return "success" as const;
+  }
+  if (status === "pending") {
+    return "warning" as const;
+  }
+  return "danger" as const;
+}
+
+function runTone(status: AgentRunHistoryItem["status"]) {
+  if (status === "failed") {
+    return "danger" as const;
+  }
+  if (status === "approval_required") {
+    return "warning" as const;
+  }
+  return "success" as const;
+}
+
 export function SecurityGovernance() {
   const [apiKey, setApiKey] = useState("");
   const [serviceToken, setServiceToken] = useState("");
@@ -69,6 +99,7 @@ export function SecurityGovernance() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [acknowledgingId, setAcknowledgingId] = useState<string | undefined>();
+  const [decidingApprovalId, setDecidingApprovalId] = useState<string | undefined>();
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [successMessage, setSuccessMessage] = useState<string | undefined>();
   const [roleName, setRoleName] = useState("");
@@ -80,6 +111,7 @@ export function SecurityGovernance() {
     "observability:read",
   ]);
   const [ackComment, setAckComment] = useState("Acknowledged from Web security console.");
+  const [approvalComment, setApprovalComment] = useState("Reviewed from Web security console.");
 
   const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
 
@@ -88,6 +120,8 @@ export function SecurityGovernance() {
   const activeCriticalAnomalies = data.anomalies.filter(
     (event) => event.severity === "critical" && !event.acknowledged,
   );
+  const pendingApprovals = data.approvalRequests.filter((request) => request.status === "pending");
+  const approvalRequiredRuns = data.agentRuns.filter((run) => run.status === "approval_required");
 
   async function refresh(): Promise<void> {
     if (!hasCredentials) {
@@ -101,17 +135,21 @@ export function SecurityGovernance() {
     setErrorMessage(undefined);
     setSuccessMessage(undefined);
     try {
-      const [roles, serviceTokens, auditEvents, anomalies] = await Promise.all([
+      const [roles, serviceTokens, auditEvents, anomalies, approvalRequests, agentRuns] = await Promise.all([
         listAuthRoles(credentials),
         listServiceTokens(credentials),
         listAuthAuditEvents(credentials, { limit: 25 }),
         listSecurityAnomalies(credentials, { limit: 25 }),
+        listApprovalRequests(credentials),
+        listAgentRunHistory(credentials),
       ]);
       setData({
         roles,
         serviceTokens,
         auditEvents: auditEvents.items,
         anomalies: anomalies.items,
+        approvalRequests,
+        agentRuns,
       });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load security governance data.");
@@ -188,6 +226,31 @@ export function SecurityGovernance() {
     }
   }
 
+  async function decideApproval(requestId: string, decision: "approve" | "reject"): Promise<void> {
+    if (!hasCredentials) {
+      setErrorMessage("Enter an API key or service token before deciding an approval request.");
+      return;
+    }
+
+    setDecidingApprovalId(requestId);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      await decideApprovalRequest({
+        ...credentials,
+        requestId,
+        decision,
+        comment: approvalComment.trim() || undefined,
+      });
+      setSuccessMessage(`Approval request ${decision}d.`);
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to decide approval request.");
+    } finally {
+      setDecidingApprovalId(undefined);
+    }
+  }
+
   return (
     <div className="security-page">
       <div className="dashboard-header">
@@ -246,6 +309,24 @@ export function SecurityGovernance() {
           </div>
           <div className="metric-body">
             <div className="metric-value">{data.auditEvents.length}</div>
+          </div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Pending Approvals</span>
+            <ShieldCheck className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{pendingApprovals.length}</div>
+          </div>
+        </div>
+        <div className="metric-tile">
+          <div className="metric-head">
+            <span className="label">Approval Runs</span>
+            <AlertTriangle className="icon-sm" aria-hidden="true" />
+          </div>
+          <div className="metric-body">
+            <div className="metric-value">{approvalRequiredRuns.length}</div>
           </div>
         </div>
       </section>
@@ -400,6 +481,110 @@ export function SecurityGovernance() {
                 </article>
               ))}
               {data.anomalies.length === 0 ? <div className="empty-state">No security anomalies loaded.</div> : null}
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Approval Requests</h2>
+              <p className="section-card-description">Human-in-the-loop governance for high-risk operations.</p>
+            </div>
+            <div className="section-card-body anomaly-list">
+              <label>
+                <span className="label">Decision comment</span>
+                <input
+                  value={approvalComment}
+                  onChange={(event) => setApprovalComment(event.target.value)}
+                  className="text-input"
+                />
+              </label>
+              {data.approvalRequests.map((request) => (
+                <article key={request.id} className="anomaly-item">
+                  <div className="anomaly-head">
+                    <div>
+                      <div className="dependency-name">{request.action}</div>
+                      <div className="dependency-detail">
+                        {request.resourceType} / {request.resourceId ?? "none"} / {formatDate(request.createdAt)}
+                      </div>
+                      <div className="dependency-detail">{request.reason}</div>
+                    </div>
+                    <div className="badge-row">
+                      <StatusBadge tone={approvalTone(request.status)}>{request.status}</StatusBadge>
+                      <StatusBadge>{`${request.approvals.length}/${request.requiredApprovals}`}</StatusBadge>
+                    </div>
+                  </div>
+                  <pre className="code-block compact-code">{JSON.stringify(request.payload, null, 2)}</pre>
+                  {request.status === "pending" ? (
+                    <div className="button-row">
+                      <button
+                        type="button"
+                        className="refresh-button"
+                        onClick={() => void decideApproval(request.id, "approve")}
+                        disabled={decidingApprovalId === request.id || !hasCredentials}
+                      >
+                        <CheckCircle2 className="icon-sm" aria-hidden="true" />
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="refresh-button"
+                        onClick={() => void decideApproval(request.id, "reject")}
+                        disabled={decidingApprovalId === request.id || !hasCredentials}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+              {data.approvalRequests.length === 0 ? <div className="empty-state">No approval requests loaded.</div> : null}
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Agent Run Governance</h2>
+              <p className="section-card-description">Recent Agent runs with preflight, usage, and approval state.</p>
+            </div>
+            <div className="section-card-body">
+              <div className="dependency-table-wrap">
+                <table className="dependency-table">
+                  <thead>
+                    <tr>
+                      <th>Request</th>
+                      <th>Status</th>
+                      <th>Usage</th>
+                      <th>Completed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.agentRuns.slice(0, 25).map((run) => (
+                      <tr key={run.requestId}>
+                        <td>
+                          <Link className="link-button" href={`/observability?requestId=${run.requestId}`}>
+                            {run.requestId}
+                          </Link>
+                          <div className="dependency-detail">
+                            preflight {run.preflightAllowed === false ? "blocked" : "ok"} / usage {run.usageRecorded ? "recorded" : "none"}
+                          </div>
+                        </td>
+                        <td>
+                          <StatusBadge tone={runTone(run.status)}>{run.stopReason ?? run.status}</StatusBadge>
+                        </td>
+                        <td>{run.totalTokens ?? 0} tokens</td>
+                        <td>{formatDate(run.completedAt)}</td>
+                      </tr>
+                    ))}
+                    {data.agentRuns.length === 0 ? (
+                      <tr>
+                        <td colSpan={4}>
+                          <div className="table-empty">No agent runs loaded.</div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
 
