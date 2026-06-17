@@ -17,6 +17,42 @@ export type AgentStopReason =
   | "max_duration"
   | "model_error";
 
+export type AgentExecutionPlanStage =
+  | "context"
+  | "planning"
+  | "model"
+  | "tool"
+  | "finalize";
+
+export type AgentExecutionPlanStepStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export type AgentExecutionPlanStep = {
+  id: string;
+  stage: AgentExecutionPlanStage;
+  title: string;
+  status: AgentExecutionPlanStepStatus;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  summary?: string;
+  metadata?: Record<string, string | number | boolean | null>;
+};
+
+export type AgentExecutionPlan = {
+  id: string;
+  requestId: string;
+  status: "running" | "completed" | "failed";
+  strategy: "react";
+  createdAt: string;
+  completedAt?: string;
+  steps: AgentExecutionPlanStep[];
+};
+
 export type AgentRunOptions = {
   requestId: string;
   userId?: string;
@@ -66,6 +102,7 @@ export type AgentRunResult = {
   requestId: string;
   answer: string;
   stopReason: AgentStopReason;
+  plan: AgentExecutionPlan;
   steps: AgentRuntimeStep[];
   messages: ModelMessage[];
   context: Pick<

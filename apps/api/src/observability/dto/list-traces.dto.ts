@@ -5,6 +5,9 @@ import type { TraceEventType } from "../observability.types.js";
 
 const TRACE_EVENT_TYPES: TraceEventType[] = [
   "agent.run.started",
+  "agent.plan.created",
+  "agent.plan.step.started",
+  "agent.plan.step.completed",
   "agent.context.built",
   "rag.retrieved",
   "model.completed",

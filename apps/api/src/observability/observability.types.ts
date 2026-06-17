@@ -4,6 +4,9 @@ import type { ToolStatus } from "../tools/tool.types.js";
 
 export type TraceEventType =
   | "agent.run.started"
+  | "agent.plan.created"
+  | "agent.plan.step.started"
+  | "agent.plan.step.completed"
   | "agent.context.built"
   | "rag.retrieved"
   | "rag.vector.failed"

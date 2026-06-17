@@ -2,6 +2,7 @@
 
 import { RotateCcw, SendHorizonal, Square } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { ProtectedOperationHint } from "@/components/auth/protected-operation-hint";
 import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
@@ -9,6 +10,7 @@ import { notify } from "@/components/notifications/toast-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   runAgentStream,
+  type AgentExecutionPlan,
   type AgentMessage,
   type AgentRunContext,
   type AgentRunStep,
@@ -36,6 +38,7 @@ type RunMetadata = {
     completionTokens: number;
     totalTokens: number;
   };
+  plan?: AgentExecutionPlan;
   steps: AgentRunStep[];
   context: AgentRunContext;
 };
@@ -169,6 +172,7 @@ export function AgentChat() {
         stopReason: event.data.stopReason,
         durationMs: event.data.durationMs,
         usage: event.data.usage,
+        plan: event.data.plan,
         steps: event.data.steps,
         context: event.data.context,
       });
@@ -253,7 +257,11 @@ export function AgentChat() {
           <section className="section-card">
             <div className="section-card-header">
               <h2 className="section-card-title">Auth</h2>
-              <p className="section-card-description">Use one local credential for the stream request.</p>
+              <p className="section-card-description">
+                {usingSession
+                  ? "Stream requests use your signed-in Web Console session."
+                  : "Enter one local credential for the stream request."}
+              </p>
             </div>
             <div className="section-card-body auth-form">
               <ProtectedOperationHint
@@ -261,15 +269,13 @@ export function AgentChat() {
                 permissions={["agent:run"]}
                 title="Agent run permission"
               />
-              {usingSession ? <div className="alert alert-success">Using signed-in Web Console session.</div> : null}
-              <label>
-                <span className="label">API key</span>
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" disabled={usingSession} />
-              </label>
-              <label>
-                <span className="label">Service token</span>
-                <input value={serviceToken} onChange={(event) => setServiceToken(event.target.value)} className="text-input" disabled={usingSession} />
-              </label>
+              <LocalCredentialFields
+                apiKey={apiKey}
+                serviceToken={serviceToken}
+                usingSession={usingSession}
+                onApiKeyChange={setApiKey}
+                onServiceTokenChange={setServiceToken}
+              />
             </div>
           </section>
 
@@ -343,6 +349,17 @@ function RunMetadataPanel({
             </dd>
           </div>
         </dl>
+
+        <h3 className="subsection-title">Execution Plan</h3>
+        <ol className="event-list">
+          {metadata?.plan?.steps.map((step, index) => (
+            <li key={step.id}>
+              {index + 1}. {step.stage}: {step.status}
+              {step.durationMs !== undefined ? `, ${step.durationMs} ms` : ""}
+              {step.summary ? ` - ${step.summary}` : ""}
+            </li>
+          )) ?? <li>No execution plan yet.</li>}
+        </ol>
 
         <h3 className="subsection-title">Context Sources</h3>
         <ul className="compact-list">

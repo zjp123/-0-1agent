@@ -43,6 +43,7 @@ export type AgentStreamEvent =
       data: {
         requestId: string;
         stopReason: string;
+        plan?: AgentExecutionPlan;
         steps: AgentRunStep[];
         context: AgentRunContext;
         usage: {
@@ -78,6 +79,26 @@ export type RunAgentStreamInput = {
 export type AgentMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
+};
+
+export type AgentExecutionPlan = {
+  id: string;
+  requestId: string;
+  status: "running" | "completed" | "failed";
+  strategy: "react";
+  createdAt: string;
+  completedAt?: string;
+  steps: Array<{
+    id: string;
+    stage: "context" | "planning" | "model" | "tool" | "finalize";
+    title: string;
+    status: "pending" | "running" | "completed" | "failed" | "skipped";
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    summary?: string;
+    metadata?: Record<string, string | number | boolean | null>;
+  }>;
 };
 
 export type AgentRunStep =
@@ -627,6 +648,9 @@ export type RunEvaluationCaseInput = AuthCredentials & {
 
 export type TraceEventType =
   | "agent.run.started"
+  | "agent.plan.created"
+  | "agent.plan.step.started"
+  | "agent.plan.step.completed"
   | "agent.context.built"
   | "rag.retrieved"
   | "rag.vector.failed"
@@ -649,6 +673,9 @@ export type TraceEventType =
 
 export const TRACE_EVENT_TYPES: TraceEventType[] = [
   "agent.run.started",
+  "agent.plan.created",
+  "agent.plan.step.started",
+  "agent.plan.step.completed",
   "agent.context.built",
   "rag.retrieved",
   "rag.vector.failed",

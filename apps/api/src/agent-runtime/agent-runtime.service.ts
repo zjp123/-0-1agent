@@ -22,6 +22,10 @@ import { WorkflowService } from "../workflow/workflow.service.js";
 import type {
   AgentRunOptions,
   AgentRunResult,
+  AgentExecutionPlan,
+  AgentExecutionPlanStage,
+  AgentExecutionPlanStep,
+  AgentExecutionPlanStepStatus,
   AgentRuntimeStep,
   AgentStopReason,
 } from "./agent-runtime.types.js";
@@ -87,13 +91,20 @@ export class AgentRuntimeService {
     const maxDurationMs = options.maxDurationMs ?? 60_000;
     const steps: AgentRuntimeStep[] = [];
     const usage = this.emptyUsage();
+    const plan = this.createExecutionPlan(options);
     this.recordTrace(options, "agent.run.started", {
       maxSteps,
       maxDurationMs,
       hasTenant: Boolean(options.tenantId),
       hasHistory: Boolean(options.messages?.length),
     });
+    this.recordTrace(options, "agent.plan.created", {
+      planId: plan.id,
+      strategy: plan.strategy,
+      stepCount: plan.steps.length,
+    });
 
+    const contextPlanStep = this.startPlanStep(options, plan, "context");
     const contextRequest: BuildContextRequest = {
       userMessage: options.userMessage,
     };
@@ -133,6 +144,14 @@ export class AgentRuntimeService {
     }
 
     const context = this.memoryContext.buildContext(contextRequest);
+    this.completePlanStep(options, contextPlanStep, "completed", {
+      summary: `${context.sources.filter((source) => source.included).length}/${context.sources.length} context sources included`,
+      metadata: {
+        estimatedInputTokens: context.estimatedInputTokens,
+        droppedMessages: context.droppedMessages,
+        retrievedKnowledgeCount,
+      },
+    });
     this.recordTrace(options, "agent.context.built", {
       estimatedInputTokens: context.estimatedInputTokens,
       droppedMessages: context.droppedMessages,
@@ -145,6 +164,15 @@ export class AgentRuntimeService {
     const toolDefinitions = this.tools
       .listDefinitions()
       .map((definition) => this.toModelToolDefinition(definition));
+    const planningPlanStep = this.startPlanStep(options, plan, "planning");
+    this.completePlanStep(options, planningPlanStep, "completed", {
+      summary: `${toolDefinitions.length} tools available for ReAct loop`,
+      metadata: {
+        maxSteps,
+        maxDurationMs,
+        toolDefinitionCount: toolDefinitions.length,
+      },
+    });
 
     let answer = "";
     let stopReason: AgentStopReason = "max_steps";
@@ -155,6 +183,7 @@ export class AgentRuntimeService {
         break;
       }
 
+      const modelPlanStep = this.startPlanStep(options, plan, "model", step);
       const modelRequest: ModelRequest = {
         messages,
         tools: toolDefinitions,
@@ -174,12 +203,29 @@ export class AgentRuntimeService {
         modelResponse = await this.modelGateway.generateText(modelRequest);
       } catch {
         stopReason = "model_error";
+        this.completePlanStep(options, modelPlanStep, "failed", {
+          summary: "Model request failed",
+          metadata: { loopStep: step, messageCount: messages.length },
+        });
         this.recordTrace(options, "model.failed", {
           step,
           messageCount: messages.length,
         });
         break;
       }
+      this.completePlanStep(options, modelPlanStep, "completed", {
+        summary:
+          modelResponse.toolCalls.length > 0
+            ? `${modelResponse.toolCalls.length} tool call(s) requested`
+            : "Final answer produced",
+        metadata: {
+          loopStep: step,
+          provider: modelResponse.provider,
+          model: modelResponse.model,
+          latencyMs: modelResponse.latencyMs,
+          toolCallCount: modelResponse.toolCalls.length,
+        },
+      });
       this.addUsage(usage, modelResponse.usage);
       this.recordTrace(
         options,
@@ -232,11 +278,31 @@ export class AgentRuntimeService {
       const toolContext = this.buildToolContext(options);
       const toolResponses = await Promise.all(
         modelResponse.toolCalls.map(async (toolCall) => {
+          const toolPlanStep = this.startPlanStep(
+            options,
+            plan,
+            "tool",
+            step,
+            toolCall.name,
+          );
           const toolResponse = await this.tools.execute({
             name: toolCall.name,
             arguments: this.parseToolArguments(toolCall.arguments),
             context: toolContext,
           });
+          this.completePlanStep(
+            options,
+            toolPlanStep,
+            toolResponse.status === "success" ? "completed" : "failed",
+            {
+              summary: `${toolResponse.toolName} ${toolResponse.status}`,
+              metadata: {
+                loopStep: step,
+                toolName: toolResponse.toolName,
+                latencyMs: toolResponse.latencyMs,
+              },
+            },
+          );
           this.recordTrace(
             options,
             "tool.completed",
@@ -277,7 +343,18 @@ export class AgentRuntimeService {
       answer = this.stopReasonMessage(stopReason);
     }
 
+    const finalizePlanStep = this.startPlanStep(options, plan, "finalize");
     const durationMs = Date.now() - startedAt;
+    this.completePlanStep(options, finalizePlanStep, "completed", {
+      summary: `Run finished with ${stopReason}`,
+      metadata: {
+        stopReason,
+        runtimeStepCount: steps.length,
+        totalTokens: usage.totalTokens,
+      },
+    });
+    plan.status = stopReason === "model_error" ? "failed" : "completed";
+    plan.completedAt = new Date().toISOString();
     this.recordTrace(
       options,
       "agent.run.completed",
@@ -295,6 +372,7 @@ export class AgentRuntimeService {
       requestId: options.requestId,
       answer,
       stopReason,
+      plan,
       steps,
       messages,
       context: {
@@ -320,6 +398,136 @@ export class AgentRuntimeService {
       context.tenantId = options.tenantId;
     }
     return context;
+  }
+
+  private createExecutionPlan(options: AgentRunOptions): AgentExecutionPlan {
+    return {
+      id: `${options.requestId}:plan`,
+      requestId: options.requestId,
+      status: "running",
+      strategy: "react",
+      createdAt: new Date().toISOString(),
+      steps: [
+        this.createPlanStep("context", "Build memory and RAG context"),
+        this.createPlanStep("planning", "Prepare ReAct loop controls and available tools"),
+      ],
+    };
+  }
+
+  private createPlanStep(
+    stage: AgentExecutionPlanStage,
+    title: string,
+    metadata?: Record<string, string | number | boolean | null>,
+  ): AgentExecutionPlanStep {
+    const step: AgentExecutionPlanStep = {
+      id: crypto.randomUUID(),
+      stage,
+      title,
+      status: "pending",
+    };
+    if (metadata) {
+      step.metadata = metadata;
+    }
+    return step;
+  }
+
+  private startPlanStep(
+    options: AgentRunOptions,
+    plan: AgentExecutionPlan,
+    stage: AgentExecutionPlanStage,
+    loopStep?: number,
+    label?: string,
+  ): AgentExecutionPlanStep {
+    const existing = plan.steps.find((step) => step.stage === stage && step.status === "pending");
+    const step =
+      existing ??
+      this.createPlanStep(
+        stage,
+        this.planStepTitle(stage, loopStep, label),
+        this.planStepMetadata(loopStep, label),
+      );
+
+    if (!existing) {
+      plan.steps.push(step);
+    }
+
+    step.status = "running";
+    step.startedAt = new Date().toISOString();
+    this.recordTrace(options, "agent.plan.step.started", {
+      planId: plan.id,
+      planStepId: step.id,
+      stage: step.stage,
+      title: step.title,
+      loopStep: loopStep ?? null,
+      label: label ?? null,
+    });
+    return step;
+  }
+
+  private completePlanStep(
+    options: AgentRunOptions,
+    step: AgentExecutionPlanStep,
+    status: AgentExecutionPlanStepStatus,
+    details: {
+      summary?: string;
+      metadata?: Record<string, string | number | boolean | null>;
+    } = {},
+  ): void {
+    step.status = status;
+    step.completedAt = new Date().toISOString();
+    if (step.startedAt) {
+      step.durationMs = new Date(step.completedAt).getTime() - new Date(step.startedAt).getTime();
+    }
+    if (details.summary) {
+      step.summary = details.summary;
+    }
+    if (details.metadata) {
+      step.metadata = { ...(step.metadata ?? {}), ...details.metadata };
+    }
+    this.recordTrace(
+      options,
+      "agent.plan.step.completed",
+      {
+        planStepId: step.id,
+        stage: step.stage,
+        status: step.status,
+        summary: step.summary ?? null,
+      },
+      step.durationMs,
+    );
+  }
+
+  private planStepTitle(
+    stage: AgentExecutionPlanStage,
+    loopStep?: number,
+    label?: string,
+  ): string {
+    if (stage === "model") {
+      return `Model reasoning step ${loopStep ?? "unknown"}`;
+    }
+    if (stage === "tool") {
+      return `Execute tool ${label ?? "unknown"}`;
+    }
+    if (stage === "finalize") {
+      return "Finalize answer and run metadata";
+    }
+    if (stage === "planning") {
+      return "Prepare ReAct loop controls and available tools";
+    }
+    return "Build memory and RAG context";
+  }
+
+  private planStepMetadata(
+    loopStep?: number,
+    label?: string,
+  ): Record<string, string | number | boolean | null> | undefined {
+    if (loopStep === undefined && label === undefined) {
+      return undefined;
+    }
+    return {
+      loopStep: loopStep ?? null,
+      label: label ?? null,
+    };
   }
 
   private toModelToolDefinition(definition: ToolDefinition): ModelToolDefinition {

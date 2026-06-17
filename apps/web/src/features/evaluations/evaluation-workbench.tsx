@@ -9,6 +9,7 @@ import {
   Target,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -249,20 +250,13 @@ export function EvaluationWorkbench() {
               <p className="section-card-description">Use a token with evaluation:manage.</p>
             </div>
             <div className="section-card-body auth-form">
-              {usingSession ? <div className="alert alert-success">Using signed-in Web Console session.</div> : null}
-              <label>
-                <span className="label">API key</span>
-                <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} className="text-input" disabled={usingSession} />
-              </label>
-              <label>
-                <span className="label">Service token</span>
-                <input
-                  value={serviceToken}
-                  onChange={(event) => setServiceToken(event.target.value)}
-                  className="text-input"
-                  disabled={usingSession}
-                />
-              </label>
+              <LocalCredentialFields
+                apiKey={apiKey}
+                serviceToken={serviceToken}
+                usingSession={usingSession}
+                onApiKeyChange={setApiKey}
+                onServiceTokenChange={setServiceToken}
+              />
             </div>
           </section>
 

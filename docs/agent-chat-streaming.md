@@ -154,10 +154,76 @@ error event: false
 
 当前本地 `.env` 的 `LLM_API_KEY` 仍是 placeholder 时，Agent 会返回 `stopReason=model_error` 和友好文本 `Agent stopped because the model request failed.`；这表示 stream 链路正常，真实模型调用需要配置有效 LLM key。
 
+## Web 消息区高度优化记录
+
+记录日期：2026-06-17
+
+现象：PC 端 `/agent-chat` 页面中，assistant 渲染内容只占消息面板上方一部分，下方出现大量空白；原 `.message-list` 使用 `max-height: 60vh`，在 Agent Chat 页面级布局中不能准确表达“占满剩余工作区高度”。
+
+根因：聊天主区域同时依赖固定最小高度和 `60vh` 最大高度，消息列表没有跟随 `chat-layout` / `chat-main` 的可用高度进行弹性分配。大屏和不同浏览器面板尺寸下，消息列表高度会与页面工作区脱节。
+
+修复：
+
+- `.agent-chat-page` 改为 `grid-template-rows: auto minmax(0, 1fr)`，并设置页面级 `min-height: calc(100vh - 7rem)`。
+- `.chat-layout` / `.chat-main` 增加 `min-height: 0`，允许内部滚动区域正确收缩和伸展。
+- 移除 `.message-list` 的 `max-height: 60vh` 和固定 `min-height: 24rem`，改为由父级 grid 的 `1fr` 轨道分配高度。
+- `.message-list` 保持 `overflow-y: auto`，消息内容多时只在消息区域内滚动，composer 固定在聊天面板底部。
+
+验证：
+
+```text
+1440x900 desktop viewport
+.chat-main height ~= 904px
+.message-list height ~= 719px
+.message-list max-height = none
+hasHorizontalOverflow = false
+```
+
+## Web Auth 面板模式记录
+
+记录日期：2026-06-17
+
+现象：已登录 Web Console 后，`/agent-chat` 右侧 Auth 模块中的 `API key` 和 `Service token` 输入框展示出来但无法输入，容易让人误以为表单异常。
+
+设计语义：
+
+- 已登录时，Agent Chat 优先使用当前 Web Console session 的 `Authorization: Bearer <accessToken>` 调用 stream 接口。
+- 未登录时，才允许手动输入 `API key` 或 `Service token`，作为本地开发和调试入口。
+
+修复：
+
+- 已登录状态下隐藏手动 `API key` / `Service token` 输入框。
+- Auth 卡片文案改为说明当前 stream 请求使用已登录 Web Console session。
+- 未登录状态下继续展示手动凭证输入，保持本地调试能力。
+
+## Agent Execution Plan 记录
+
+记录日期：2026-06-17
+
+目标：开始补齐 Agent 闭环中的“可追踪执行计划”，让一次 Agent run 不再只是散落的 model/tool steps，而是有明确阶段、状态、时间戳和 trace 的生产执行过程。
+
+实现：
+
+- API `AgentRunResult` 新增 `plan` 字段。
+- SSE `result` 事件新增 `plan` 字段。
+- Execution Plan 阶段包括：`context`、`planning`、`model`、`tool`、`finalize`。
+- 每个 plan step 包含：`id`、`stage`、`title`、`status`、`startedAt`、`completedAt`、`durationMs`、`summary`、`metadata`。
+- Observability 新增 trace 类型：`agent.plan.created`、`agent.plan.step.started`、`agent.plan.step.completed`。
+- Web Agent Chat 的 Run Details 新增 `Execution Plan` 展示区。
+
+验证：
+
+```text
+API check passed
+Web check passed
+```
+
 ## 关键文件
 
 ```text
 apps/api/src/agent-runtime/agent-runtime.controller.ts
+apps/api/src/agent-runtime/agent-runtime.service.ts
+apps/api/src/agent-runtime/agent-runtime.types.ts
 apps/api/src/api-docs/openapi.document.ts
 apps/web/src/lib/api/client.ts
 apps/web/src/app/agent-chat/page.tsx

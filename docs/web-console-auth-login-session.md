@@ -61,6 +61,7 @@ auth_refresh_tokens
 
 ```text
 apps/web/src/components/auth/session-provider.tsx
+apps/web/src/components/auth/local-credential-fields.tsx
 ```
 
 能力：
@@ -72,6 +73,7 @@ apps/web/src/components/auth/session-provider.tsx
 - 提供 `useEffectiveCredentials(apiKey, serviceToken)`。
 - 已登录时优先使用 `Authorization: Bearer <accessToken>`。
 - 未登录时保留手动 API key / service token 作为本地开发入口。
+- 工作台统一使用 `LocalCredentialFields`：已登录时隐藏手动 `API key` / `Service token` 输入框，未登录时才展示本地调试凭证输入。
 
 ### Login Page
 
@@ -166,6 +168,7 @@ SERVICE_TOKEN_TENANT_ID=default
 - 导航菜单权限裁剪。
 - 工作台优先使用 Bearer session。
 - 本地手动 API key / service token fallback。
+- Agent Chat、Knowledge、Tools、Workflows、Security、Evaluations、Observability 的手动凭证输入行为已统一。
 - 与 API JWT / RBAC / Session Governance 联动。
 
 后续增强：
