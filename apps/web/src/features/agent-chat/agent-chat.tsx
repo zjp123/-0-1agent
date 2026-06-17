@@ -297,6 +297,10 @@ function normalizeStreamError(error: unknown): string {
     return "Agent stream was disconnected before completion.";
   }
 
+  if (error.message.includes("Unauthorized") || error.message.includes("Invalid credentials")) {
+    return "Unauthorized: sign in or enter a valid API key / service token before sending.";
+  }
+
   return error.message;
 }
 

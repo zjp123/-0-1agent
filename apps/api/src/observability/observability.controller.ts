@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -11,7 +11,10 @@ import type { TraceEvent, TraceQuery } from "./observability.types.js";
 
 @Controller("observability")
 export class ObservabilityController {
-  constructor(private readonly observability: ObservabilityService) {}
+  constructor(
+    @Inject(ObservabilityService)
+    private readonly observability: ObservabilityService,
+  ) {}
 
   @Get("traces")
   @UseGuards(ApiKeyGuard, PermissionsGuard)

@@ -17,6 +17,7 @@ import type {
 export class PostgresIndexingJobStore implements IndexingJobStore {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
   ) {}
 

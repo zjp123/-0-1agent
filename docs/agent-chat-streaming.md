@@ -104,6 +104,56 @@ http://localhost:3001/agent-chat
 - 展示 model/tool timeline。
 - 侧边栏 Agent Chat 导航可点击。
 
+## 401 与长错误布局保护
+
+记录日期：2026-06-17
+
+问题：未登录或未填写凭据时点击 Agent Chat 的 `Send`，后端会返回 `401 Invalid credentials`。如果前端直接展示完整 JSON 错误体，长时间戳、URL path 和 JSON 字符串会撑开 `Run Details` 卡片，导致页面出现横向滚动，内容和侧边栏视觉上混在一起。
+
+处理：
+
+- `runAgentStream` 会把 HTTP JSON 错误体转换为较短的 `error: message` 文案。
+- Agent Chat 将 `Unauthorized / Invalid credentials` 归一为可理解提示：需要登录或填写有效 API key / service token。
+- CSS 对 `.alert`、`.section-card`、`.chat-layout`、`.chat-main`、`.chat-side` 增加长文本和网格溢出保护，长错误不会撑开页面。
+
+验证重点：
+
+- 未登录状态点击 `Send` 时，`Run Details` 显示简短 401 提示。
+- 页面不出现横向滚动条。
+- 左侧 sidebar、顶部 topbar 和右侧 Run Details 不发生重叠。
+
+## 登录后 stream 500 排查记录
+
+记录日期：2026-06-17
+
+现象：完成 Login 后进入 `http://localhost:3001/agent-chat`，点击 `Send`，接口返回：
+
+```text
+{"statusCode":500,"message":"Unexpected error","path":"/api/agent/run/stream"}
+```
+
+根因：Nest dev runtime (`tsx watch`) 下部分构造器元数据不稳定，少数 guard/store/controller 没有显式 `@Inject(...)`，导致运行时依赖为 `undefined`。本次链路中先后触发：
+
+- `ApiKeyGuard.authenticateJwt()` 中 `AuthService` 未注入，Bearer session 鉴权阶段抛 500。
+- `PostgresTraceStore.append()` / `PostgresKnowledgeStore.search()` 中 `IdentityService` 未注入，Agent run trace/RAG 阶段抛错。
+
+修复：
+
+- 为 `ApiKeyGuard`、`PermissionsGuard`、Postgres store、部分 controller/service 补齐显式 `@Inject(...)`。
+- 全局 `HttpExceptionFilter` 对非 HTTP 异常增加服务端日志，响应仍保持不泄漏内部 stack。
+- 清理多个旧 `npm run dev:api` 进程，重新启动一个干净的 3000 API。
+
+验证：
+
+```text
+POST /api/agent/run/stream
+HTTP 201
+SSE: started -> delta -> result -> done
+error event: false
+```
+
+当前本地 `.env` 的 `LLM_API_KEY` 仍是 placeholder 时，Agent 会返回 `stopReason=model_error` 和友好文本 `Agent stopped because the model request failed.`；这表示 stream 链路正常，真实模型调用需要配置有效 LLM key。
+
 ## 关键文件
 
 ```text

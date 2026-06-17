@@ -17,8 +17,8 @@
 ```bash
 NODE_ENV=development
 PORT=3000
-API_KEY=dev-api-key
-DATABASE_URL=postgresql://agent:agent_password@localhost:5432/agent_db
+API_KEY=replace-with-local-api-key
+DATABASE_URL=postgresql://agent:agent_password@localhost:15432/agent_db
 REDIS_URL=redis://localhost:6379
 QDRANT_URL=http://localhost:6333
 QDRANT_ENABLED=false
@@ -31,6 +31,7 @@ LLM_API_KEY=your-api-key-here
 
 - `SECRETS_MASTER_KEY` 可为空，开发环境会使用 fallback key
 - 如果没有 `API_KEY` / `JWT_SECRET` / `SERVICE_TOKEN`，开发环境会启用 dev auth
+- `API_KEY` 是本项目 API / Web Console 的登录凭证；`LLM_API_KEY` 是模型供应商凭证，两者不要混用
 
 ## Staging
 

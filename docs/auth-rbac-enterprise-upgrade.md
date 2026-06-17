@@ -127,7 +127,7 @@ x-tenant-id: optional-tenant
 配置：
 
 ```bash
-API_KEY=
+API_KEY=replace-with-local-api-key
 ```
 
 行为：
@@ -135,6 +135,7 @@ API_KEY=
 - 保留兼容
 - 默认角色为 `developer`
 - 适合内部网关、开发、迁移期调用
+- Web Console 登录页选择 `API key` 时，credential 填写的也是这个值
 
 ## Dev Fallback
 

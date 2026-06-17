@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post, UseGuards } from "@nestjs/common";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import type { RequestUser } from "../auth/auth.types.js";
@@ -18,7 +18,10 @@ import type {
 @UseGuards(ApiKeyGuard, PermissionsGuard)
 @RequirePermissions("workflow:manage")
 export class OrchestrationController {
-  constructor(private readonly orchestration: OrchestrationService) {}
+  constructor(
+    @Inject(OrchestrationService)
+    private readonly orchestration: OrchestrationService,
+  ) {}
 
   @Get("status")
   getStatus(): OrchestrationStatus {

@@ -18,6 +18,7 @@ const DEFAULT_LIMIT = 100;
 export class PostgresTraceStore implements TraceStore {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
   ) {}
 

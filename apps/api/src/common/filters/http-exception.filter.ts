@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from "@nestjs/common";
 import type { Response } from "express";
 
@@ -17,6 +18,8 @@ type ErrorBody = {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -30,6 +33,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const exceptionResponse =
       exception instanceof HttpException ? exception.getResponse() : undefined;
     const body = this.normalizeBody(status, exceptionResponse, request.url ?? "");
+    if (!(exception instanceof HttpException)) {
+      this.logger.error(
+        `Unhandled exception for ${request.url ?? "unknown path"}: ${this.errorMessage(exception)}`,
+        exception instanceof Error ? exception.stack : undefined,
+      );
+    }
 
     response.status(status).json(body);
   }
@@ -68,5 +77,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path,
     };
+  }
+
+  private errorMessage(exception: unknown): string {
+    if (exception instanceof Error) {
+      return exception.message;
+    }
+    return typeof exception === "string" ? exception : "Unknown error";
   }
 }

@@ -6,10 +6,10 @@ import {
   Brain,
   ClipboardCheck,
   FileText,
-  Gauge,
   GitBranch,
   KeyRound,
   Library,
+  LayoutDashboard,
   LogOut,
   ShieldCheck,
   Wrench,
@@ -23,7 +23,7 @@ import type { Permission } from "@/lib/api/client";
 import { webConfig } from "@/lib/config";
 
 const navigation = [
-  { label: "Dashboard", icon: Gauge, href: "/" },
+  { label: "Dashboard", icon: LayoutDashboard, href: "/" },
   { label: "API Docs", icon: FileText, href: "/api-docs" },
   { label: "Agent Chat", icon: Bot, href: "/agent-chat", permission: "agent:run" },
   { label: "Knowledge", icon: Library, href: "/knowledge", permission: "knowledge:read" },
@@ -33,7 +33,7 @@ const navigation = [
   { label: "Evaluations", icon: ClipboardCheck, href: "/evaluations", permission: "evaluation:manage" },
   { label: "Observability", icon: Activity, href: "/observability", permission: "observability:read" },
   { label: "Login", icon: KeyRound, href: "/login" },
-] satisfies Array<{ label: string; icon: typeof Gauge; href: string; permission?: Permission }>;
+] satisfies Array<{ label: string; icon: typeof LayoutDashboard; href: string; permission?: Permission }>;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();

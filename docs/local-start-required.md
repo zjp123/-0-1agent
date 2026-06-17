@@ -48,7 +48,7 @@ NEXT_PUBLIC_WEB_ENV=local
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:3000/api
 WEB_PORT=3001
 
-API_KEY=dev-api-key
+API_KEY=replace-with-local-api-key
 JWT_SECRET=development-only-jwt-secret-change-me
 JWT_ISSUER=enterprise-agent-api
 JWT_AUDIENCE=enterprise-agent-web
@@ -75,6 +75,26 @@ LLM_API_KEY=your-api-key-here
 ```
 
 如果只是测试 Web 页面、登录、Tools、Knowledge、Security 等基础能力，可以先保留 placeholder。
+
+### `API_KEY` 怎么配置
+
+`API_KEY` 是本项目后端自己的访问凭证，也是 Web 登录页选择 `API key` 时要输入的值。它不是大模型 key。
+
+本地可以自己生成一个随机值：
+
+```bash
+openssl rand -hex 32
+```
+
+然后写入根目录 `.env`：
+
+```text
+API_KEY=<上一步生成的随机值>
+```
+
+注意：修改 `.env` 后需要重启 `npm run dev:api`，后端才会读取新值。
+
+`LLM_API_KEY` 是后端调用 DeepSeek/OpenAI 兼容模型供应商时使用的 key。`API_KEY` 用来登录/调用本项目 API，`LLM_API_KEY` 用来让 Agent 真正调用大模型。
 
 ## 4. 启动基础设施
 
@@ -103,6 +123,32 @@ npm run infra:down
 ```
 
 ## 5. 启动 API
+
+首次启动、重建 Docker volume、切换数据库端口，或看到登录/写库接口 500 时，先执行数据库迁移：
+
+```bash
+DATABASE_URL=postgresql://agent:agent_password@localhost:15432/agent_db \
+DATABASE_MIGRATIONS_FOLDER=/Users/bjsttlp406/others/-0-1agent/apps/api/drizzle \
+npm run db:migrate
+```
+
+确认所有表已经迁移到 Docker Postgres：
+
+```bash
+docker exec enterprise-agent-postgres psql -U agent -d agent_db -c "select count(*) as public_table_count from information_schema.tables where table_schema='public' and table_type='BASE TABLE';"
+```
+
+当前项目应有：
+
+```text
+public_table_count = 30
+```
+
+查看完整表列表：
+
+```bash
+docker exec enterprise-agent-postgres psql -U agent -d agent_db -c "select table_schema, table_name from information_schema.tables where table_schema in ('public','drizzle') and table_type='BASE TABLE' order by table_schema, table_name;"
+```
 
 新开一个终端：
 
@@ -156,6 +202,16 @@ http://localhost:3001/login
 Credential type: Service token
 Credential: local-admin-service-token
 Tenant: default
+```
+
+也可以选择 API key 登录：
+
+```text
+Credential type: API key
+Credential: .env 里的 API_KEY
+Tenant: default
+User: api-key-user
+Device label: local-browser
 ```
 
 登录成功后，顶部栏应显示：
@@ -319,6 +375,37 @@ curl -fsS http://127.0.0.1:3000/api/health/ready
 
 ### 登录失败
 
+如果登录接口返回：
+
+```text
+{"statusCode":500,"message":"Unexpected error","path":"/api/auth/console/login"}
+```
+
+优先检查是否还没有执行数据库迁移。登录成功会写入：
+
+```text
+auth_sessions
+auth_refresh_tokens
+tenants
+users
+```
+
+如果这些表不存在，API key / service token 校验通过后也会在创建 Web Console session 时失败。
+
+检查表是否存在：
+
+```bash
+docker exec enterprise-agent-postgres psql -U agent -d agent_db -c "select table_name from information_schema.tables where table_schema='public' and table_name in ('tenants','users','auth_sessions','auth_refresh_tokens') order by table_name;"
+```
+
+缺表时重新执行：
+
+```bash
+DATABASE_URL=postgresql://agent:agent_password@localhost:15432/agent_db \
+DATABASE_MIGRATIONS_FOLDER=/Users/bjsttlp406/others/-0-1agent/apps/api/drizzle \
+npm run db:migrate
+```
+
 确认 `.env`：
 
 ```text
@@ -381,6 +468,28 @@ next-server
 ```bash
 npm run dev:web
 ```
+
+### Web 日志出现 hydration mismatch
+
+典型日志：
+
+```text
+Hydration failed because the server rendered HTML didn't match the client.
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+...
+<html
+  lang="zh-CN"
+- data-immersive-translate-page-theme="light"
+>
+```
+
+原因：浏览器插件在 React 加载前修改了页面 HTML，例如沉浸式翻译插件给 `<html>` 注入 `data-immersive-translate-page-theme` 属性。
+
+处理方式：
+
+- Web 根布局 `apps/web/src/app/layout.tsx` 在 `<html>` 上保留 `suppressHydrationWarning`。
+- 如果只有该插件属性差异，属于开发期可忽略警告，不代表 Web 业务代码渲染失败。
+- 如果日志中出现业务组件内容、表格、按钮、时间戳等不一致，再按真实 hydration 问题排查。
 
 ### Web build 遇到本机 SWC 签名问题
 

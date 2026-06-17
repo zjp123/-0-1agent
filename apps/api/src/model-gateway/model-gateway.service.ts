@@ -17,6 +17,7 @@ export type ModelGatewayStatus = {
 export class ModelGatewayService {
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(OpenAiCompatibleProvider)
     private readonly provider: OpenAiCompatibleProvider,
   ) {}
 

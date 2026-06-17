@@ -135,6 +135,7 @@ Observability  -> observability:read
 本地建议：
 
 ```text
+API_KEY=replace-with-local-api-key
 JWT_SECRET=development-only-jwt-secret-change-me
 JWT_ISSUER=enterprise-agent-api
 JWT_AUDIENCE=enterprise-agent-web
@@ -142,6 +143,10 @@ SERVICE_TOKEN=local-admin-service-token
 SERVICE_TOKEN_ROLES=admin
 SERVICE_TOKEN_TENANT_ID=default
 ```
+
+`API_KEY` 用于登录页选择 `API key` 时的 credential，也用于 curl 调用受保护 API 时的 `x-api-key`。本地可用 `openssl rand -hex 32` 生成后写入根目录 `.env`，修改后需要重启 API 服务。
+
+`LLM_API_KEY` 是 Agent 调用模型供应商的凭证，和 `API_KEY` 不是同一个东西。
 
 生产要求：
 
@@ -171,6 +176,32 @@ SERVICE_TOKEN_TENANT_ID=default
 - session 设备列表和主动撤销 UI。
 - refresh token 重放检测。
 - 更细粒度页面级强制跳转。
+
+## 本地登录 500 排查记录
+
+记录日期：2026-06-17
+
+现象：Login 页面选择 `API key`，输入正确 key 后点击登录，接口返回：
+
+```text
+{"statusCode":500,"message":"Unexpected error","path":"/api/auth/console/login"}
+```
+
+根因：本地 Docker Postgres 尚未执行数据库迁移，`tenants`、`users`、`auth_sessions`、`auth_refresh_tokens` 等表不存在。API key 校验通过后，后端需要创建 Web Console session 和 refresh token；缺表会导致 session 落库失败并返回 500。
+
+修复：
+
+```bash
+DATABASE_URL=postgresql://agent:agent_password@localhost:15432/agent_db \
+DATABASE_MIGRATIONS_FOLDER=/Users/bjsttlp406/others/-0-1agent/apps/api/drizzle \
+npm run db:migrate
+```
+
+验证：
+
+- 正确 API key 登录返回 `201 Created` 和 access/refresh token。
+- 错误 API key 返回 `401 Invalid API key`，不再表现为 500。
+- Web `fetchJson` 会把 JSON 错误体归一为短文案，登录页不直接展示原始 JSON。
 
 ## 验证
 
@@ -216,4 +247,3 @@ passed
 - `GET /api/auth/console/me`: 通过。
 - `POST /api/auth/console/refresh`: 通过，refresh 后保持 `admin` / `auth:manage`。
 - `POST /api/auth/console/logout`: 通过。
-

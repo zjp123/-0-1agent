@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Post,
   Query,
@@ -26,7 +27,7 @@ import type {
 @UseGuards(ApiKeyGuard, PermissionsGuard)
 @RequirePermissions("evaluation:manage")
 export class EvaluationController {
-  constructor(private readonly evaluation: EvaluationService) {}
+  constructor(@Inject(EvaluationService) private readonly evaluation: EvaluationService) {}
 
   @Post("cases")
   createCase(

@@ -18,6 +18,7 @@
 }
 
 body {
+  overflow-x: hidden;
   min-height: 100vh;
   margin: 0;
   background: var(--background);
@@ -47,6 +48,7 @@ pre {
 }
 
 .app-shell {
+  overflow-x: clip;
   min-height: 100vh;
   background: var(--background);
 }
@@ -112,6 +114,10 @@ pre {
   transition: background 160ms ease, color 160ms ease;
 }
 
+.nav-link svg {
+  flex: none;
+}
+
 .nav-link:hover {
   background: #f1f5f9;
   color: #020617;
@@ -123,6 +129,7 @@ pre {
 }
 
 .shell-main {
+  min-width: 0;
   min-height: 100vh;
 }
 
@@ -141,10 +148,23 @@ pre {
   backdrop-filter: blur(10px);
 }
 
+.topbar > div {
+  min-width: 0;
+}
+
 .topbar-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.875rem;
   font-weight: 650;
   color: #020617;
+}
+
+.topbar-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar-actions,
@@ -255,6 +275,9 @@ pre {
 }
 
 .alert {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   border-radius: 0.5rem;
   border: 1px solid;
   padding: 0.75rem 1rem;
@@ -414,6 +437,7 @@ pre {
 
 .metric-tile,
 .section-card {
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 0.5rem;
   background: var(--panel);
@@ -477,12 +501,14 @@ pre {
 }
 
 .section-card-description {
+  overflow-wrap: anywhere;
   margin: 0.25rem 0 0;
   color: var(--muted);
   font-size: 0.875rem;
 }
 
 .section-card-body {
+  min-width: 0;
   padding: 1.25rem;
 }
 
@@ -675,11 +701,13 @@ pre {
 
 .chat-layout {
   display: grid;
+  min-width: 0;
   gap: 1rem;
 }
 
 .chat-main {
   display: grid;
+  min-width: 0;
   min-height: 36rem;
   grid-template-rows: 1fr auto;
   overflow: hidden;
@@ -768,6 +796,7 @@ pre {
 
 .chat-side {
   display: grid;
+  min-width: 0;
   align-content: start;
   gap: 1rem;
 }

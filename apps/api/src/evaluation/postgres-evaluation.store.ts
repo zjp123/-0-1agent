@@ -18,6 +18,7 @@ import type {
 export class PostgresEvaluationStore implements EvaluationStore {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
   ) {}
 

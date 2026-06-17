@@ -28,8 +28,11 @@ import type {
 export class OrchestrationService {
   constructor(
     @Inject(DRIZZLE_DB) private readonly db: Database,
+    @Inject(IdentityService)
     private readonly identity: IdentityService,
+    @Inject(AgentRuntimeService)
     private readonly agentRuntime: AgentRuntimeService,
+    @Inject(ObservabilityService)
     private readonly observability: ObservabilityService,
   ) {}
 

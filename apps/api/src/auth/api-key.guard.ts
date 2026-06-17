@@ -37,8 +37,11 @@ export class ApiKeyGuard implements CanActivate {
   constructor(
     @Inject(ConfigService)
     private readonly config: ConfigService,
+    @Inject(AuthService)
     private readonly auth: AuthService,
+    @Inject(AuthRbacService)
     private readonly rbac: AuthRbacService,
+    @Inject(AuthSessionService)
     private readonly sessions: AuthSessionService,
   ) {}
 

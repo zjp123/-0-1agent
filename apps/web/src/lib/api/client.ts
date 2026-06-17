@@ -1183,7 +1183,7 @@ export async function runAgentStream(input: RunAgentStreamInput): Promise<void> 
 
     if (!response.ok || !response.body) {
       const message = await response.text();
-      throw new Error(message || `Agent stream failed with HTTP ${response.status}.`);
+      throw new Error(normalizeHttpErrorMessage(message, response.status, "Agent stream failed"));
     }
 
     const reader = response.body.getReader();
@@ -1219,6 +1219,29 @@ export async function runAgentStream(input: RunAgentStreamInput): Promise<void> 
     clearTimeout(timeout);
     clearTimeout(idleTimeout);
     cleanupSignals();
+  }
+}
+
+function normalizeHttpErrorMessage(
+  responseText: string,
+  status: number,
+  fallback: string,
+): string {
+  if (!responseText.trim()) {
+    return `${fallback} with HTTP ${status}.`;
+  }
+
+  try {
+    const payload = JSON.parse(responseText) as {
+      message?: unknown;
+      error?: unknown;
+    };
+    const message =
+      typeof payload.message === "string" ? payload.message : undefined;
+    const error = typeof payload.error === "string" ? payload.error : undefined;
+    return [error, message].filter(Boolean).join(": ") || `${fallback} with HTTP ${status}.`;
+  } catch {
+    return responseText;
   }
 }
 
@@ -1692,7 +1715,7 @@ async function fetchJson(url: string, init: FetchJsonInit): Promise<unknown> {
           await delay(DEFAULT_RETRY_DELAY_MS * (attempt + 1));
           continue;
         }
-        throw new Error(text || `Request failed with HTTP ${response.status}.`);
+        throw new Error(normalizeHttpErrorMessage(text, response.status, "Request failed"));
       }
       return payload;
     } catch (error) {
