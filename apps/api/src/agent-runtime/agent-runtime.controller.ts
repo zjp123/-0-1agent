@@ -23,10 +23,12 @@ import {
 import { ExecuteWorkflowStepDto } from "./dto/execute-workflow-step.dto.js";
 import { ExecuteWorkflowPendingStepsDto } from "./dto/execute-workflow-pending-steps.dto.js";
 import { RunAgentEvaluationDto } from "./dto/run-agent-evaluation.dto.js";
+import { RunAgentEvaluationBatchDto } from "./dto/run-agent-evaluation-batch.dto.js";
 import { RunAgentDto } from "./dto/run-agent.dto.js";
 import type { AgentRunOptions, AgentRunResult } from "./agent-runtime.types.js";
 import {
   EvaluationAgentRunnerService,
+  type AgentEvaluationBatchRunResult,
   type AgentEvaluationRunResult,
 } from "./evaluation-agent-runner.service.js";
 import {
@@ -158,6 +160,16 @@ export class AgentRuntimeController {
     @CurrentUser() user: RequestUser,
   ): Promise<AgentEvaluationRunResult> {
     return this.evaluationAgentRunner.runCaseWithAgent(caseId, body, user);
+  }
+
+  @Post("evaluations/run-batch")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("evaluation:manage")
+  runEvaluationBatchWithAgent(
+    @Body() body: RunAgentEvaluationBatchDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<AgentEvaluationBatchRunResult> {
+    return this.evaluationAgentRunner.runBatchWithAgent(body, user);
   }
 
   private toRunOptions(body: RunAgentDto, user: RequestUser): AgentRunOptions {

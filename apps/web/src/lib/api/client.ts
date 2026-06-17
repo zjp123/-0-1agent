@@ -709,6 +709,21 @@ export type AgentEvaluationRunResult = {
   };
 };
 
+export type RunAgentEvaluationBatchInput = AuthCredentials & {
+  caseIds?: string[];
+  instruction?: string;
+  maxSteps?: number;
+  maxCases?: number;
+  maxDurationMs?: number;
+};
+
+export type AgentEvaluationBatchRunResult = {
+  results: AgentEvaluationRunResult[];
+  total: number;
+  passed: number;
+  failed: number;
+};
+
 export type TraceEventType =
   | "agent.run.started"
   | "agent.plan.created"
@@ -1279,6 +1294,13 @@ const agentEvaluationRunResultSchema: z.ZodType<AgentEvaluationRunResult> = z.ob
       ),
     }),
   }),
+});
+
+const agentEvaluationBatchRunResultSchema: z.ZodType<AgentEvaluationBatchRunResult> = z.object({
+  results: z.array(agentEvaluationRunResultSchema),
+  total: z.number(),
+  passed: z.number(),
+  failed: z.number(),
 });
 
 const traceEventTypeSchema = z.enum(TRACE_EVENT_TYPES);
@@ -1876,6 +1898,23 @@ export async function runAgentEvaluationCase(
     }),
   });
   return agentEvaluationRunResultSchema.parse(payload);
+}
+
+export async function runAgentEvaluationBatch(
+  input: RunAgentEvaluationBatchInput,
+): Promise<AgentEvaluationBatchRunResult> {
+  const payload = await fetchJson(`${apiBaseUrl}/agent/evaluations/run-batch`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      caseIds: input.caseIds,
+      instruction: input.instruction || undefined,
+      maxSteps: input.maxSteps,
+      maxCases: input.maxCases,
+      maxDurationMs: input.maxDurationMs,
+    }),
+  });
+  return agentEvaluationBatchRunResultSchema.parse(payload);
 }
 
 export async function listEvaluationRuns(

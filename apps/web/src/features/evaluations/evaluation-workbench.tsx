@@ -16,6 +16,7 @@ import {
   createEvaluationCase,
   listEvaluationCases,
   listEvaluationRuns,
+  runAgentEvaluationBatch,
   runAgentEvaluationCase,
   runEvaluationCase,
   type AuthCredentials,
@@ -203,6 +204,38 @@ export function EvaluationWorkbench() {
     }
   }
 
+  async function submitAgentBatchRun(): Promise<void> {
+    if (!hasCredentials || data.cases.length === 0) {
+      setErrorMessage("Load evaluation cases before running Agent batch evaluation.");
+      return;
+    }
+
+    setRunningCase(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const result = await runAgentEvaluationBatch({
+        ...credentials,
+        caseIds: data.cases.map((evaluationCase) => evaluationCase.id),
+        instruction: actualOutput.trim() || undefined,
+        maxSteps: 4,
+        maxCases: 25,
+      });
+      const lastResult = result.results[result.results.length - 1];
+      if (lastResult) {
+        setActualOutput(lastResult.agentRun.answer);
+      }
+      setSuccessMessage(
+        `Agent batch evaluation finished: ${result.passed}/${result.total} passed, ${result.failed} failed.`,
+      );
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to run Agent batch evaluation.");
+    } finally {
+      setRunningCase(false);
+    }
+  }
+
   function selectCase(nextCase: EvaluationCase): void {
     setSelectedCaseId(nextCase.id);
     setActualOutput(nextCase.expectedOutput);
@@ -381,6 +414,15 @@ export function EvaluationWorkbench() {
               >
                 <Play className="icon-sm" aria-hidden="true" />
                 Run Agent Evaluation
+              </button>
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => void submitAgentBatchRun()}
+                disabled={runningCase || !hasCredentials || data.cases.length === 0}
+              >
+                <Play className="icon-sm" aria-hidden="true" />
+                Run Agent Batch
               </button>
             </div>
           </section>

@@ -43,9 +43,9 @@
 ## Phase 3 - Evaluation 接入真实 Agent Run
 
 - [x] Evaluation run 可选择调用真实 Agent Runtime，而不是只评估手动 actualOutput。
-- [ ] 支持批量运行 evaluation cases。
+- [x] 支持批量运行 evaluation cases。
 - [x] 每次 evaluation run 关联 requestId 和 trace。
-- [ ] 失败样本记录 prompt、actual、expected、score、reason。
+- [x] 失败样本记录 prompt、actual、expected、score、reason。
 - [x] Web Evaluations 增加真实 Agent run 模式。
 - [x] 更新 Evaluation 文档。
 

@@ -54,6 +54,7 @@
 - 输入 expected output 和 tags。
 - 选择 case 后运行 evaluation。
 - 选择 case 后可直接运行 Agent evaluation，由 Agent Runtime 生成 actual output 后自动评分。
+- 支持对当前 loaded cases 执行 Agent batch evaluation。
 - 展示 deterministic `string_contains` evaluator 的 status、score、notes。
 - 展示 pass rate、case 数量、run 数量、passed run 数量。
 
@@ -70,7 +71,6 @@ curl --max-time 10 -fsS http://localhost:3001/evaluations
 ## 后续增强
 
 - 增加从 Agent Chat 结果一键创建 eval run。
-- 增加批量运行 evaluation cases。
 - 增加按 case/type/tag 筛选 runs。
 - 增加 evaluator 扩展：LLM judge、exact match、JSON schema、tool output assertions。
 - 增加趋势图和通过率统计。
@@ -91,6 +91,7 @@ apps/api/src/agent-runtime/dto/run-agent-evaluation.dto.ts
 
 ```text
 POST /api/agent/evaluations/cases/{caseId}/run
+POST /api/agent/evaluations/run-batch
 ```
 
 执行流程：
@@ -104,6 +105,17 @@ POST /api/agent/evaluations/cases/{caseId}/run
   -> notes 记录 agentRequestId / stopReason / duration / token usage
   -> 写入 evaluation.agent.run.* trace
   -> Web 展示 run status、score 和 actual output
+```
+
+批量执行：
+
+```text
+点击 Run Agent Batch
+  -> Web 传入当前 loaded cases 的 caseIds
+  -> 后端逐个调用 Agent Runtime
+  -> 每个 case 保存 evaluation run
+  -> 返回 total / passed / failed
+  -> Web 刷新 runs
 ```
 
 验证：

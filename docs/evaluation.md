@@ -132,6 +132,7 @@ POST /api/evaluations/cases/:caseId/runs
 
 ```http
 POST /api/agent/evaluations/cases/:caseId/run
+POST /api/agent/evaluations/run-batch
 ```
 
 行为：
@@ -142,6 +143,20 @@ POST /api/agent/evaluations/cases/:caseId/run
 - 使用 `string_contains` 对 `actualOutput` 和 `expectedOutput` 评分。
 - 在 notes 中记录 `agentRequestId`、`agentStopReason`、duration 和 token usage。
 - 写入 `evaluation.agent.run.started` / `completed` / `failed` trace。
+
+批量运行：
+
+- `POST /api/agent/evaluations/run-batch` 可接收 `caseIds`。
+- 不传 `caseIds` 时运行当前租户可见 cases。
+- 默认最多运行 25 个 case。
+- 返回 `total`、`passed`、`failed` 和每个 case 的 Agent/Evaluation 结果。
+
+失败样本记录：
+
+- 当前先使用 `notes` 保存结构化 `key=value` 诊断信息。
+- 包含 `agentRequestId`、`agentStopReason`、duration、token usage。
+- 包含 `caseInputPreview`、`expectedPreview`、`actualPreview`。
+- 下一阶段可升级为独立 regression report 表。
 
 ### 列出评估运行
 
@@ -167,6 +182,8 @@ Evaluation 使用认证上下文中的 `tenantId`。
 - 列出评估用例
 - 运行基础评估
 - 通过 Agent Runtime 运行评估
+- 批量运行 Agent evaluation cases
+- 失败样本基础诊断 notes
 - 列出评估运行
 - Auth 权限接入
 - 租户隔离
@@ -175,7 +192,6 @@ Evaluation 使用认证上下文中的 `tenantId`。
 
 - LLM Judge
 - 多评分维度
-- 数据集批量运行
 - 评估报告
 - 结果趋势统计
 - CI 回归门禁
