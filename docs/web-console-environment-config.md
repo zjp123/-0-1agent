@@ -116,12 +116,18 @@ next build --webpack
 @next/swc-wasm-nodejs
 ```
 
+`npm run dev:web` 由 `apps/web/scripts/dev.mjs` 启动，会自动处理两件事：
+
+- 默认连接 `http://127.0.0.1:3000/api`。
+- 如果终端环境残留 E2E mock 地址 `http://127.0.0.1:3999/api`，自动改回本地真实 API。
+- 自动设置 WASM SWC fallback，避免当前 macOS/Codex Node 环境加载 native SWC 失败。
+
 本地构建推荐：
 
 ```bash
-PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH \
-NEXT_TEST_WASM_DIR=/Users/bjsttlp406/others/-0-1agent/node_modules/@next/swc-wasm-nodejs \
 npm run build:web
 ```
+
+`apps/web/scripts/build.mjs` 会自动解析 `@next/swc-wasm-nodejs` 并设置 `NEXT_TEST_WASM_DIR`，避免当前 macOS/Codex Node 环境加载 native SWC 时触发 code signing 错误。
 
 CI / 生产容器建议使用 Linux Node.js 22 镜像重新验证。

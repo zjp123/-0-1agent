@@ -61,9 +61,7 @@ passed
 本地 Web 启动：
 
 ```bash
-PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH \
-NEXT_TEST_WASM_DIR=/Users/bjsttlp406/others/-0-1agent/node_modules/@next/swc-wasm-nodejs \
-npm run dev:web
+PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run dev:web
 ```
 
 访问地址：

@@ -23,6 +23,7 @@ http://localhost:3001/tools
 - 支持执行工具。
 - 支持 `calculator` 默认测试参数。
 - 支持 `current_time` 默认测试参数。
+- 支持展示 MCP 外部工具来源，MCP 工具通过同一个 `/api/tools` 列表进入页面。
 - 展示工具执行结果。
 - 展示完整 response/audit JSON。
 
@@ -95,6 +96,13 @@ current_time
 calculator
 ```
 
+启用 MCP 示例 server 后，结果还包含：
+
+```text
+local_mcp.echo
+local_mcp.word_count
+```
+
 Calculator smoke test：
 
 ```bash
@@ -136,5 +144,4 @@ GET http://localhost:3001/tools -> 200 OK
 
 - Tools 页面与 Agent Chat tool timeline 互相跳转。
 - 增加工具调用历史。
-- 增加 MCP 工具来源展示。
 - 增加 schema-driven form，替代手写 JSON。

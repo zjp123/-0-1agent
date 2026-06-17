@@ -107,7 +107,7 @@ PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run check
 passed
 ```
 
-## 当前构建限制
+## 当前构建策略
 
 在当前 Codex macOS 环境中，`next build` 使用 Codex 自带 Node.js 加载第三方原生 `.node` 模块时会遇到 macOS code signing 限制。
 
@@ -125,17 +125,17 @@ code signature ... not valid for use in process: mapping process and mapped file
 已做的缓解：
 
 - 安装 `@next/swc-wasm-nodejs`
-- `build:web` 使用 `next build --webpack`
+- `build:web` 使用 `apps/web/scripts/build.mjs` 自动注入 `@next/swc-wasm-nodejs` fallback，并执行 `next build --webpack`
 - 显式设置 `turbopack.root`
 - 显式安装 `lightningcss-darwin-arm64`
-- `dev:web` 使用 `next dev --webpack`
+- `dev:web` 使用 `apps/web/scripts/dev.mjs` 自动注入本地 API 默认值、隔离 E2E mock API 地址，并执行 `next dev --webpack`
 - 当前本地开发关闭 Tailwind v4 PostCSS 插件，使用普通 CSS fallback，避免 Codex Node 加载 `lightningcss-darwin-arm64`
 
 当前结论：
 
 - `check:web` 已通过。
 - `dev:web` 可在当前环境启动，访问 `http://localhost:3001`。
-- `build:web` 需要在系统 Node.js、CI Linux 环境或容器环境中继续验证。
+- `build:web` 可在当前环境直接执行。
 - 该限制属于当前 Codex/macOS Node 原生模块加载环境问题，不是 Web 业务代码类型错误。
 
 ## 下一步

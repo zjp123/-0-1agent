@@ -220,12 +220,15 @@ Web Agent Chat 的 Run Details 会展示 `Tool Outputs` 卡片：
 - Agent Chat 工具输出卡片
 - 内置 `current_time`
 - 内置 `calculator`
+- MCP stdio adapter
+- MCP 工具发现：`initialize`、`tools/list`
+- MCP 工具执行：`tools/call`
+- MCP 工具统一接入现有权限、schema、timeout、result truncation、audit response
 - 工具列表 API
 - 工具执行 API
 
 未完成：
 
-- MCP adapter
 - 高风险工具 approval-required 中断态
 - 审计持久化
 - 工具结果脱敏策略
@@ -241,3 +244,53 @@ Web Agent Chat 的 Run Details 会展示 `Tool Outputs` 卡片：
 3. 审批通过后恢复 Agent run
 4. 对工具结果做字段级脱敏
 5. 持久化工具 audit event
+
+## MCP 外部工具接入
+
+MCP 默认关闭，避免未授权外部进程进入生产运行时。启用方式：
+
+```env
+MCP_ENABLED=true
+MCP_CONNECT_TIMEOUT_MS=10000
+MCP_TOOL_TIMEOUT_MS=15000
+MCP_SERVERS=[{"name":"local_mcp","command":"node","args":["tools/mcp/echo-server.mjs"],"toolNamePrefix":"local_mcp","riskLevel":"low","requiredPermissions":["tools:execute"]}]
+```
+
+配置字段：
+
+- `name`：MCP server 名称，也会作为默认工具名前缀。
+- `command` / `args`：stdio MCP server 启动命令。
+- `env`：显式传给 MCP 子进程的环境变量。
+- `toolNamePrefix`：工具名前缀，避免不同 server 工具名冲突。
+- `riskLevel`：该 server 工具默认风险等级，默认 `medium`。
+- `requiredPermissions`：该 server 工具默认权限，默认 `tools:execute`。
+- `timeoutMs`：覆盖该 server 工具执行超时。
+- `disabled`：临时禁用该 server。
+
+安全约束：
+
+- MCP 子进程不会继承 API 进程的完整环境变量。
+- 默认仅传递 `PATH`、`HOME`、`NODE_ENV` 和 server 配置里显式声明的 `env`。
+- API key、数据库密码、LLM key、secrets master key 不会自动暴露给 MCP server。
+
+本地示例 server：
+
+```text
+tools/mcp/echo-server.mjs
+```
+
+启用后，`GET /api/tools` 会额外返回：
+
+```text
+local_mcp.echo
+local_mcp.word_count
+```
+
+执行示例：
+
+```bash
+curl --max-time 10 -fsS -X POST http://127.0.0.1:3000/api/tools/execute \
+  -H 'content-type: application/json' \
+  -H 'x-service-token: local-admin-service-token' \
+  -d '{"requestId":"33333333-3333-4333-8333-333333333334","name":"local_mcp.echo","arguments":{"message":"hello from mcp"}}'
+```

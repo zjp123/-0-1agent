@@ -5,8 +5,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --webpack -p 3001",
-    "build": "next build --webpack",
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
     "start": "next start -p 3001",
     "check": "tsc -p tsconfig.json --noEmit",
     "test:e2e": "playwright test"

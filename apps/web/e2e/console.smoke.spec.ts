@@ -19,7 +19,10 @@ test("login exchanges service token for a console session", async ({ page }) => 
   await page.goto("/login");
 
   await page.getByRole("textbox", { name: "Credential" }).fill("local-admin-service-token");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await Promise.all([
+    page.waitForResponse("**/api/auth/console/login"),
+    page.getByRole("button", { name: "Sign in" }).click(),
+  ]);
 
   await expect(page).toHaveURL("/");
   await expect(page.getByText("service-token-user / default")).toBeVisible();
@@ -29,11 +32,13 @@ test("login exchanges service token for a console session", async ({ page }) => 
 test("agent chat consumes a streaming response", async ({ page }) => {
   await seedSession(page);
   await page.goto("/agent-chat");
+  await expect(page.getByText("service-token-user / default")).toBeVisible();
 
-  const streamRequest = page.waitForRequest(`${apiBaseUrl}/agent/run/stream`);
-  await page.getByRole("button", { name: "Send" }).click();
-
-  await streamRequest;
+  await expect(page.getByRole("button", { name: "Send" })).toBeEnabled();
+  await Promise.all([
+    page.waitForRequest("**/api/agent/run/stream"),
+    page.getByRole("button", { name: "Send" }).click(),
+  ]);
   await expect(page.getByText("Mock streaming answer")).toBeVisible();
   await expect(page.getByText("model step 1: mock-model")).toBeVisible();
 });
@@ -41,8 +46,10 @@ test("agent chat consumes a streaming response", async ({ page }) => {
 test("tools page loads tools and executes calculator", async ({ page }) => {
   await seedSession(page);
   await page.goto("/tools");
+  await expect(page.getByText("service-token-user / default")).toBeVisible();
 
   await expect(page.getByRole("button", { name: /calculator/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "local_mcp.echo mcp" })).toBeVisible();
   await page.getByRole("button", { name: "Execute" }).click();
 
   await expect(page.locator(".tool-result-content", { hasText: "mock calculator result" })).toBeVisible();
@@ -51,6 +58,7 @@ test("tools page loads tools and executes calculator", async ({ page }) => {
 test("knowledge page loads documents and retrieval results", async ({ page }) => {
   await seedSession(page);
   await page.goto("/knowledge");
+  await expect(page.getByText("service-token-user / default")).toBeVisible();
 
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByText("Enterprise Runbook")).toBeVisible();
@@ -62,16 +70,20 @@ test("knowledge page loads documents and retrieval results", async ({ page }) =>
 test("security page loads roles, audit, and anomalies", async ({ page }) => {
   await seedSession(page);
   await page.goto("/security");
+  await expect(page.getByText("service-token-user / default")).toBeVisible();
 
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.locator(".dependency-name", { hasText: /^admin$/ })).toBeVisible();
   await expect(page.locator(".dependency-name", { hasText: "auth.role.create" })).toBeVisible();
   await expect(page.getByText("Privilege escalation detected")).toBeVisible();
+  await expect(page.locator(".dependency-name", { hasText: "tool.execute" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "trace-request-1" })).toBeVisible();
 });
 
 test("evaluation page loads cases and runs", async ({ page }) => {
   await seedSession(page);
   await page.goto("/evaluations");
+  await expect(page.getByText("service-token-user / default")).toBeVisible();
 
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByRole("button", { name: "Smoke evaluation input" })).toBeVisible();
@@ -81,15 +93,18 @@ test("evaluation page loads cases and runs", async ({ page }) => {
 test("observability page loads trace events", async ({ page }) => {
   await seedSession(page);
   await page.goto("/observability");
+  await expect(page.getByText("service-token-user / default")).toBeVisible();
 
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByRole("table").getByText("agent.run.completed")).toBeVisible();
   await expect(page.getByRole("table").getByText("trace-request-1")).toBeVisible();
+  await expect(page.getByText("approval_required")).toBeVisible();
 });
 
 test("workflow page loads workflow and schedule status", async ({ page }) => {
   await seedSession(page);
   await page.goto("/workflows");
+  await expect(page.getByText("service-token-user / default")).toBeVisible();
 
   await page.getByRole("button", { name: "Refresh" }).click();
   await expect(page.getByText("Production Readiness")).toBeVisible();
@@ -97,7 +112,8 @@ test("workflow page loads workflow and schedule status", async ({ page }) => {
 });
 
 async function seedSession(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+  await page.goto("/");
+  await page.evaluate(() => {
     window.localStorage.setItem(
       "enterprise-agent:web-session",
       JSON.stringify({
@@ -144,7 +160,7 @@ async function mockApi(page: Page): Promise<void> {
     });
   });
 
-  await page.route(`${apiBaseUrl}/auth/console/login`, async (route) => {
+  await page.route("**/api/auth/console/login", async (route) => {
     await route.fulfill({
       json: {
         accessToken: "mock-access-token",
@@ -172,37 +188,67 @@ async function mockApi(page: Page): Promise<void> {
     });
   });
 
-  await page.route(`${apiBaseUrl}/tools`, async (route) => {
+  await page.route("**/api/tools", async (route) => {
     await route.fulfill({
       json: [
         {
           name: "calculator",
           description: "Evaluate a safe expression",
           source: "builtin",
+          riskLevel: "low",
           inputSchema: {
             type: "object",
             properties: { expression: { type: "string" } },
             required: ["expression"],
           },
+          outputSchema: {
+            type: "object",
+            properties: { result: { type: "number" } },
+            required: ["result"],
+          },
           timeoutMs: 1000,
           maxResultLength: 1000,
+          requiredPermissions: ["tools:execute"],
+        },
+        {
+          name: "local_mcp.echo",
+          description: "Echo a message from an external MCP stdio server.",
+          source: "mcp",
+          riskLevel: "low",
+          inputSchema: {
+            type: "object",
+            properties: { message: { type: "string" } },
+            required: ["message"],
+          },
+          outputSchema: {
+            type: "object",
+            properties: { message: { type: "string" } },
+            required: ["message"],
+          },
+          timeoutMs: 15000,
+          maxResultLength: 8000,
           requiredPermissions: ["tools:execute"],
         },
       ],
     });
   });
 
-  await page.route(`${apiBaseUrl}/tools/execute`, async (route) => {
+  await page.route("**/api/tools/execute", async (route) => {
     await route.fulfill({
       json: {
         toolName: "calculator",
+        source: "builtin",
+        riskLevel: "low",
+        requiredPermissions: ["tools:execute"],
         status: "success",
         content: "mock calculator result",
+        data: { result: 42 },
         latencyMs: 3,
         audit: {
           requestId: "tool-request-1",
           toolName: "calculator",
           source: "builtin",
+          riskLevel: "low",
           status: "success",
           startedAt: new Date().toISOString(),
           endedAt: new Date().toISOString(),
@@ -214,7 +260,7 @@ async function mockApi(page: Page): Promise<void> {
     });
   });
 
-  await page.route(`${apiBaseUrl}/agent/run/stream`, async (route) => {
+  await page.route("**/api/agent/run/stream", async (route) => {
     await route.fulfill({
       headers: { "content-type": "text/event-stream" },
       body: [
@@ -416,6 +462,71 @@ async function mockApi(page: Page): Promise<void> {
     });
   });
 
+  await page.route(`${apiBaseUrl}/governance/approval/requests`, async (route) => {
+    await route.fulfill({
+      json: [
+        {
+          id: "approval-1",
+          tenantId: "default",
+          requestedBy: "service-token-user",
+          action: "tool.execute",
+          resourceType: "tool",
+          resourceId: "dangerous_tool",
+          status: "pending",
+          requiredApprovals: 1,
+          approvals: [],
+          reason: "Approve high risk tool",
+          payload: { requestId: "trace-request-1", toolName: "dangerous_tool" },
+          metadata: { riskLevel: "high" },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    });
+  });
+
+  await page.route(`${apiBaseUrl}/governance/approval/requests/*/approve`, async (route) => {
+    await route.fulfill({
+      json: {
+        id: "approval-1",
+        tenantId: "default",
+        requestedBy: "service-token-user",
+        action: "tool.execute",
+        resourceType: "tool",
+        resourceId: "dangerous_tool",
+        status: "approved",
+        requiredApprovals: 1,
+        approvals: [{ actorUserId: "admin" }],
+        reason: "Approve high risk tool",
+        payload: { requestId: "trace-request-1", toolName: "dangerous_tool" },
+        metadata: { riskLevel: "high" },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  });
+
+  await page.route(`${apiBaseUrl}/governance/approval/requests/*/reject`, async (route) => {
+    await route.fulfill({
+      json: {
+        id: "approval-1",
+        tenantId: "default",
+        requestedBy: "service-token-user",
+        action: "tool.execute",
+        resourceType: "tool",
+        resourceId: "dangerous_tool",
+        status: "rejected",
+        requiredApprovals: 1,
+        approvals: [],
+        reason: "Approve high risk tool",
+        payload: { requestId: "trace-request-1", toolName: "dangerous_tool" },
+        metadata: { riskLevel: "high" },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  });
+
   await page.route(`${apiBaseUrl}/evaluations/cases`, async (route) => {
     await route.fulfill({
       json: [
@@ -468,6 +579,58 @@ async function mockApi(page: Page): Promise<void> {
           attributes: { status: "ok" },
         },
       ],
+    });
+  });
+
+  await page.route(`${apiBaseUrl}/observability/failures`, async (route) => {
+    await route.fulfill({ json: [] });
+  });
+
+  await page.route(`${apiBaseUrl}/observability/agent-runs`, async (route) => {
+    await route.fulfill({
+      json: [
+        {
+          requestId: "trace-request-1",
+          tenantId: "default",
+          userId: "admin",
+          status: "approval_required",
+          stopReason: "approval_required",
+          durationMs: 12,
+          stepCount: 2,
+          promptTokens: 3,
+          completionTokens: 4,
+          totalTokens: 7,
+          preflightAllowed: true,
+          usageRecorded: true,
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+        },
+      ],
+    });
+  });
+
+  await page.route(`${apiBaseUrl}/observability/traces/*/timeline`, async (route) => {
+    await route.fulfill({
+      json: {
+        requestId: "trace-request-1",
+        events: [
+          {
+            id: "trace-1",
+            requestId: "trace-request-1",
+            type: "agent.run.completed",
+            timestamp: new Date().toISOString(),
+            durationMs: 12,
+            userId: "admin",
+            tenantId: "default",
+            attributes: { stopReason: "approval_required" },
+          },
+        ],
+        summary: {
+          eventCount: 1,
+          failureCount: 0,
+          eventMix: { agent: 1 },
+        },
+      },
     });
   });
 

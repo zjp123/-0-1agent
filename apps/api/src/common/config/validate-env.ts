@@ -41,6 +41,8 @@ export function validateEnv(env: RawEnv): RawEnv {
     "QUOTA_DEFAULT_WINDOW_SECONDS",
     "QUOTA_DEFAULT_REQUEST_LIMIT",
     "QUOTA_DEFAULT_TOKEN_LIMIT",
+    "MCP_CONNECT_TIMEOUT_MS",
+    "MCP_TOOL_TIMEOUT_MS",
   ]) {
     const value = asString(env, key);
     if (value && !/^\d+$/.test(value)) {
@@ -73,6 +75,28 @@ export function validateEnv(env: RawEnv): RawEnv {
     )
   ) {
     throw new Error("INDEXING_WORKER_ENABLED must be a boolean");
+  }
+
+  const mcpEnabled = asString(env, "MCP_ENABLED");
+  if (
+    mcpEnabled &&
+    !["1", "0", "true", "false", "yes", "no", "on", "off"].includes(
+      mcpEnabled.toLowerCase(),
+    )
+  ) {
+    throw new Error("MCP_ENABLED must be a boolean");
+  }
+
+  const mcpServers = asString(env, "MCP_SERVERS");
+  if (mcpServers) {
+    try {
+      const parsed = JSON.parse(mcpServers) as unknown;
+      if (!Array.isArray(parsed)) {
+        throw new Error("not array");
+      }
+    } catch {
+      throw new Error("MCP_SERVERS must be a JSON array");
+    }
   }
 
   const nodeEnv = asString(env, "NODE_ENV") ?? "development";

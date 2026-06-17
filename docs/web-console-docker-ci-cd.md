@@ -181,7 +181,6 @@ Web build：
 
 ```bash
 PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH \
-NEXT_TEST_WASM_DIR=/Users/bjsttlp406/others/-0-1agent/node_modules/@next/swc-wasm-nodejs \
 npm run build:web
 ```
 
@@ -209,4 +208,3 @@ npm run compose:prod:config
 ```text
 passed
 ```
-

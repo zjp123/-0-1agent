@@ -41,6 +41,8 @@ http://127.0.0.1:3999/api
 
 当前 smoke 用例使用 Playwright `page.route()` mock API 响应，因此不依赖真实 API、PostgreSQL、Redis 或 Qdrant。这样可以在 CI 中快速验证 Web 页面、会话、权限裁剪、SSE 消费和核心交互是否回归。
 
+Web smoke 串行执行，避免 Next.js dev server 在首次编译 / Fast Refresh 期间并发页面导航互相干扰。这里验证的是控制台关键路径稳定性，不作为浏览器并发压测。
+
 ## 覆盖范围
 
 - Dashboard readiness：API、database、vector store 状态展示
@@ -67,11 +69,7 @@ npx playwright install chromium
 npm run test:e2e:web
 ```
 
-如果本机 Next 原生 SWC 模块存在签名问题，可设置 WASM SWC：
-
-```bash
-NEXT_TEST_WASM_DIR=/Users/bjsttlp406/others/-0-1agent/node_modules/@next/swc-wasm-nodejs npm run test:e2e:web
-```
+本机 Next 原生 SWC 模块存在签名问题时，Web 构建脚本会自动使用 WASM SWC fallback。E2E 直接执行 `npm run test:e2e:web` 即可。
 
 ## CI/CD
 

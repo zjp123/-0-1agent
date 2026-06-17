@@ -27,7 +27,7 @@ Phase 17 为 Web Console 沉淀生产运行手册，覆盖上线、回滚、健�
 ```bash
 npm run check:web
 npm run check -w @enterprise-agent/api
-NEXT_TEST_WASM_DIR=/Users/bjsttlp406/others/-0-1agent/node_modules/@next/swc-wasm-nodejs npm run build:web
+npm run build:web
 npm run test:e2e:web
 ```
 

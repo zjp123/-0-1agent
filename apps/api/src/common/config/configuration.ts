@@ -27,6 +27,60 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
+function parseMcpServers(value: string | undefined): Array<{
+  name: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  disabled: boolean;
+  toolNamePrefix?: string;
+  timeoutMs?: number;
+  riskLevel?: string;
+  requiredPermissions?: string[];
+}> {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+      .map((item) => ({
+        name: String(item["name"] ?? ""),
+        command: String(item["command"] ?? ""),
+        args: Array.isArray(item["args"]) ? item["args"].map(String) : [],
+        env: parseStringRecord(item["env"]),
+        disabled: item["disabled"] === true,
+        ...(typeof item["toolNamePrefix"] === "string" ? { toolNamePrefix: item["toolNamePrefix"] } : {}),
+        ...(typeof item["timeoutMs"] === "number" ? { timeoutMs: item["timeoutMs"] } : {}),
+        ...(typeof item["riskLevel"] === "string" ? { riskLevel: item["riskLevel"] } : {}),
+        ...(Array.isArray(item["requiredPermissions"])
+          ? { requiredPermissions: item["requiredPermissions"].map(String) }
+          : {}),
+      }))
+      .filter((item) => item.name && item.command);
+  } catch {
+    return [];
+  }
+}
+
+function parseStringRecord(value: unknown): Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+      .map(([key, recordValue]) => [key, recordValue]),
+  );
+}
+
 export const configuration = registerAs("app", () => ({
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number.parseInt(process.env.PORT ?? "3000", 10),
@@ -138,6 +192,12 @@ export const configuration = registerAs("app", () => ({
     ),
     rateLimitKeyPrefix:
       process.env.RATE_LIMIT_KEY_PREFIX ?? "enterprise-agent:rate-limit",
+  },
+  tools: {
+    mcpEnabled: parseBoolean(process.env.MCP_ENABLED, false),
+    mcpServers: parseMcpServers(process.env.MCP_SERVERS),
+    mcpConnectTimeoutMs: parsePositiveInt(process.env.MCP_CONNECT_TIMEOUT_MS, 10_000),
+    mcpToolTimeoutMs: parsePositiveInt(process.env.MCP_TOOL_TIMEOUT_MS, 15_000),
   },
   secrets: {
     masterKey:

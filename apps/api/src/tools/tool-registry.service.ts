@@ -1,7 +1,8 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 
 import { CalculatorTool } from "./builtin/calculator.tool.js";
 import { CurrentTimeTool } from "./builtin/current-time.tool.js";
+import { McpToolProviderService, type McpToolProviderStatus } from "./mcp/mcp-tool-provider.service.js";
 import { ToolRegistryError } from "./tool-registry.errors.js";
 import { validateToolInput } from "./tool-input.validator.js";
 import type {
@@ -17,11 +18,14 @@ import type {
 export type ToolRegistryStatus = {
   builtinTools: string[];
   mcpEnabled: boolean;
+  mcpTools: string[];
+  mcpServers: McpToolProviderStatus["servers"];
   controls: string[];
 };
 
 @Injectable()
-export class ToolRegistryService {
+export class ToolRegistryService implements OnModuleInit {
+  private readonly logger = new Logger(ToolRegistryService.name);
   private readonly handlers = new Map<string, ToolHandler>();
 
   constructor(
@@ -29,9 +33,26 @@ export class ToolRegistryService {
     currentTimeTool: CurrentTimeTool,
     @Inject(CalculatorTool)
     calculatorTool: CalculatorTool,
+    @Inject(McpToolProviderService)
+    private readonly mcpTools: McpToolProviderService,
   ) {
     this.register(currentTimeTool);
     this.register(calculatorTool);
+  }
+
+  async onModuleInit(): Promise<void> {
+    const handlers = await this.mcpTools.loadHandlers();
+    for (const handler of handlers) {
+      try {
+        this.register(handler);
+      } catch (error) {
+        this.logger.warn(
+          error instanceof Error
+            ? error.message
+            : `Failed to register MCP tool ${handler.definition.name}`,
+        );
+      }
+    }
   }
 
   register(handler: ToolHandler): void {
@@ -126,11 +147,16 @@ export class ToolRegistryService {
   }
 
   getStatus(): ToolRegistryStatus {
+    const mcpStatus = this.mcpTools.getStatus();
     return {
       builtinTools: this.listDefinitions()
         .filter((definition) => definition.source === "builtin")
         .map((definition) => definition.name),
-      mcpEnabled: false,
+      mcpEnabled: mcpStatus.enabled,
+      mcpTools: this.listDefinitions()
+        .filter((definition) => definition.source === "mcp")
+        .map((definition) => definition.name),
+      mcpServers: mcpStatus.servers,
       controls: [
         "schema validation",
         "permission checks",

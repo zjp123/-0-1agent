@@ -493,10 +493,10 @@ It can also happen if the client has a browser extension installed which messes 
 
 ### Web build 遇到本机 SWC 签名问题
 
-在当前 Codex macOS 环境可使用：
+当前已由 `apps/web/scripts/build.mjs` 自动处理 WASM SWC fallback，直接执行：
 
 ```bash
-NEXT_TEST_WASM_DIR=/Users/bjsttlp406/others/-0-1agent/node_modules/@next/swc-wasm-nodejs npm run build:web
+npm run build:web
 ```
 
 ## 12. 推荐日常启动顺序
@@ -518,6 +518,14 @@ npm run dev:api
 ```bash
 npm run dev:web
 ```
+
+本地 Web 启动脚本会默认使用：
+
+```text
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:3000/api
+```
+
+如果终端环境里残留了 Web E2E 使用的 mock 地址 `http://127.0.0.1:3999/api`，`npm run dev:web` 会自动改回本地真实 API，避免日常访问 `/tools`、`/agent-chat` 等页面误连 E2E mock 端口。
 
 浏览器打开：
 
