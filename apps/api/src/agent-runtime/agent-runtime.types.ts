@@ -15,7 +15,10 @@ export type AgentStopReason =
   | "final_answer"
   | "max_steps"
   | "max_duration"
-  | "model_error";
+  | "model_error"
+  | "max_tool_calls"
+  | "empty_model_output"
+  | "repeated_tool_call";
 
 export type AgentExecutionPlanStage =
   | "context"

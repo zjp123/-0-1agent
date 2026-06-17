@@ -218,6 +218,28 @@ API check passed
 Web check passed
 ```
 
+## Agent Loop Guard 记录
+
+记录日期：2026-06-17
+
+目标：补齐生产级 Agent loop 的基础保护，避免模型或工具调用异常时陷入无效循环。
+
+实现：
+
+- 新增停止原因：`max_tool_calls`、`empty_model_output`、`repeated_tool_call`。
+- 每次 Agent run 默认最多允许 12 次工具调用，或 `maxSteps * 3` 中较小值。
+- 模型连续 2 次返回空内容且没有工具调用时，停止为 `empty_model_output`。
+- 同一 `toolName + normalized arguments` 重复 3 次时，停止为 `repeated_tool_call`。
+- 第一次空模型输出不会立刻失败，会向上下文加入一次轻量提醒，让模型有一次恢复机会。
+- loop guard 触发时会更新 Execution Plan step 为 `failed`，并在 final answer 中返回可理解停止说明。
+
+验证：
+
+```text
+API check passed
+Web check passed
+```
+
 ## 关键文件
 
 ```text

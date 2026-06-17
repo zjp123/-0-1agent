@@ -26,7 +26,7 @@
 - [x] 将现有 ReAct 循环拆成明确阶段：context、planning、model、tool、reflection/finalize。
 - [x] 在返回结果和 SSE 中暴露 plan/step 摘要，便于 Web Run Details 展示。
 - [x] 为每个阶段写入 observability trace，支持 requestId 串联。
-- [ ] 增加 loop guard：最大工具调用次数、连续空输出保护、重复工具调用保护。
+- [x] 增加 loop guard：最大工具调用次数、连续空输出保护、重复工具调用保护。
 - [x] 更新 Agent Chat 文档和 API 文档。
 
 ## Phase 2 - Workflow Run Executor
@@ -92,4 +92,4 @@
 - Workflow 还不能真正驱动 Agent 自动执行。
 - Evaluation 还没有成为真实 Agent 质量门禁。
 - Observability 还没有 requestId timeline 闭环。
-- Agent run 已有显式 execution plan，但还缺生产级 loop guard。
+- Agent run 已有显式 execution plan 和基础 loop guard；下一步要让 Workflow 真正驱动 Agent 自动执行。

@@ -7,6 +7,7 @@ import type {
   ModelMessage,
   ModelRequest,
   ModelToolDefinition,
+  ModelToolCall,
   ModelUsage,
 } from "../model-gateway/model-gateway.types.js";
 import { ModelGatewayService } from "../model-gateway/model-gateway.service.js";
@@ -29,6 +30,10 @@ import type {
   AgentRuntimeStep,
   AgentStopReason,
 } from "./agent-runtime.types.js";
+
+const DEFAULT_MAX_TOTAL_TOOL_CALLS = 12;
+const DEFAULT_MAX_CONSECUTIVE_EMPTY_MODEL_OUTPUTS = 2;
+const DEFAULT_MAX_REPEATED_TOOL_CALLS = 3;
 
 export type AgentCapabilitySnapshot = {
   runtime: {
@@ -89,12 +94,21 @@ export class AgentRuntimeService {
     const startedAt = Date.now();
     const maxSteps = options.maxSteps ?? 6;
     const maxDurationMs = options.maxDurationMs ?? 60_000;
+    const maxTotalToolCalls = Math.min(maxSteps * 3, DEFAULT_MAX_TOTAL_TOOL_CALLS);
     const steps: AgentRuntimeStep[] = [];
     const usage = this.emptyUsage();
     const plan = this.createExecutionPlan(options);
+    const loopGuard = {
+      totalToolCalls: 0,
+      consecutiveEmptyModelOutputs: 0,
+      toolCallCounts: new Map<string, number>(),
+    };
     this.recordTrace(options, "agent.run.started", {
       maxSteps,
       maxDurationMs,
+      maxTotalToolCalls,
+      maxConsecutiveEmptyModelOutputs: DEFAULT_MAX_CONSECUTIVE_EMPTY_MODEL_OUTPUTS,
+      maxRepeatedToolCalls: DEFAULT_MAX_REPEATED_TOOL_CALLS,
       hasTenant: Boolean(options.tenantId),
       hasHistory: Boolean(options.messages?.length),
     });
@@ -170,6 +184,9 @@ export class AgentRuntimeService {
       metadata: {
         maxSteps,
         maxDurationMs,
+        maxTotalToolCalls,
+        maxConsecutiveEmptyModelOutputs: DEFAULT_MAX_CONSECUTIVE_EMPTY_MODEL_OUTPUTS,
+        maxRepeatedToolCalls: DEFAULT_MAX_REPEATED_TOOL_CALLS,
         toolDefinitionCount: toolDefinitions.length,
       },
     });
@@ -263,6 +280,12 @@ export class AgentRuntimeService {
       }
       steps.push(modelStep);
 
+      if (modelResponse.content.trim().length === 0 && modelResponse.toolCalls.length === 0) {
+        loopGuard.consecutiveEmptyModelOutputs += 1;
+      } else {
+        loopGuard.consecutiveEmptyModelOutputs = 0;
+      }
+
       messages.push({
         role: "assistant",
         content: modelResponse.content,
@@ -270,8 +293,47 @@ export class AgentRuntimeService {
       });
 
       if (modelResponse.toolCalls.length === 0) {
+        if (modelResponse.content.trim().length === 0) {
+          if (
+            loopGuard.consecutiveEmptyModelOutputs >=
+            DEFAULT_MAX_CONSECUTIVE_EMPTY_MODEL_OUTPUTS
+          ) {
+            stopReason = "empty_model_output";
+            this.completePlanStep(options, modelPlanStep, "failed", {
+              summary: "Stopped after repeated empty model output",
+              metadata: {
+                loopStep: step,
+                consecutiveEmptyModelOutputs: loopGuard.consecutiveEmptyModelOutputs,
+              },
+            });
+            break;
+          }
+          messages.push({
+            role: "user",
+            content:
+              "The previous model response was empty. Continue with a concise final answer or request a tool if needed.",
+          });
+          continue;
+        }
         answer = modelResponse.content;
         stopReason = "final_answer";
+        break;
+      }
+
+      const guardStopReason = this.evaluateToolLoopGuard(
+        modelResponse.toolCalls,
+        loopGuard,
+        maxTotalToolCalls,
+      );
+      if (guardStopReason) {
+        stopReason = guardStopReason;
+        this.completePlanStep(options, modelPlanStep, "failed", {
+          summary: this.stopReasonMessage(stopReason),
+          metadata: {
+            loopStep: step,
+            totalToolCalls: loopGuard.totalToolCalls,
+          },
+        });
         break;
       }
 
@@ -582,7 +644,54 @@ export class AgentRuntimeService {
     if (stopReason === "model_error") {
       return "Agent stopped because the model request failed.";
     }
+    if (stopReason === "max_tool_calls") {
+      return "Agent stopped because the maximum number of tool calls was reached.";
+    }
+    if (stopReason === "empty_model_output") {
+      return "Agent stopped because the model returned empty output repeatedly.";
+    }
+    if (stopReason === "repeated_tool_call") {
+      return "Agent stopped because the same tool call repeated too many times.";
+    }
     return "Agent stopped because the maximum number of steps was reached.";
+  }
+
+  private evaluateToolLoopGuard(
+    toolCalls: ModelToolCall[],
+    guard: {
+      totalToolCalls: number;
+      consecutiveEmptyModelOutputs: number;
+      toolCallCounts: Map<string, number>;
+    },
+    maxTotalToolCalls: number,
+  ): AgentStopReason | undefined {
+    guard.totalToolCalls += toolCalls.length;
+    if (guard.totalToolCalls > maxTotalToolCalls) {
+      return "max_tool_calls";
+    }
+
+    for (const toolCall of toolCalls) {
+      const signature = this.toolCallSignature(toolCall);
+      const count = (guard.toolCallCounts.get(signature) ?? 0) + 1;
+      guard.toolCallCounts.set(signature, count);
+      if (count >= DEFAULT_MAX_REPEATED_TOOL_CALLS) {
+        return "repeated_tool_call";
+      }
+    }
+
+    return undefined;
+  }
+
+  private toolCallSignature(toolCall: ModelToolCall): string {
+    return `${toolCall.name}:${this.normalizeToolArguments(toolCall.arguments)}`;
+  }
+
+  private normalizeToolArguments(rawArguments: string): string {
+    try {
+      return JSON.stringify(JSON.parse(rawArguments));
+    } catch {
+      return rawArguments.trim();
+    }
   }
 
   private truncate(value: string, maxLength: number): string {
