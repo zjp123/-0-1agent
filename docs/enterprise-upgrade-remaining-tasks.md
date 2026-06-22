@@ -49,6 +49,7 @@
 - [x] Deployment Operations: readiness / migrations / environment profiles
 - [x] Security Hardening: audit pagination / break-glass / anomaly detection
 - [x] Dynamic MCP Management: DB 配置 / Web 管理 / runtime reload / command approval gate
+- [x] Remote MCP Transport: Streamable HTTP JSON-RPC POST / URL 配置 / 基础 auth
 
 ## 未完成
 
@@ -59,7 +60,8 @@
 - [x] Phase 17 - Web 生产运行手册
 - [ ] MCP tenant-scoped tool visibility / execution isolation
 - [ ] MCP env secretRef + Secrets/KMS 注入
-- [ ] MCP HTTP/SSE transport
+- [ ] MCP Streamable HTTP SSE response 兼容
+- [ ] MCP OAuth 2.1 remote authorization flow
 - [ ] 工具级 approval 恢复执行
 
 ## 当前状态

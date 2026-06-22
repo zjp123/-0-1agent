@@ -141,7 +141,7 @@ docker exec enterprise-agent-postgres psql -U agent -d agent_db -c "select count
 当前项目应有：
 
 ```text
-public_table_count = 30
+public_table_count >= 31
 ```
 
 查看完整表列表：

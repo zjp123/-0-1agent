@@ -106,6 +106,20 @@
       "when": 1782014400000,
       "tag": "0014_dynamic_mcp_servers",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1782184800000,
+      "tag": "0015_remote_mcp_transport",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1782186000000,
+      "tag": "0016_email_password_auth",
+      "breakpoints": true
     }
   ]
 }

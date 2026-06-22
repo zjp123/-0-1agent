@@ -21,7 +21,7 @@ export type RequestUser = {
   tenantId: string;
   roles: Role[];
   permissions: Permission[];
-  authType: "api_key" | "dev" | "jwt" | "service_token";
+  authType: "email_password" | "api_key" | "dev" | "jwt" | "service_token";
   tokenId?: string;
 };
 

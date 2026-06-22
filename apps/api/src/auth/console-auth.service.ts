@@ -1,10 +1,13 @@
 import {
+  BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { and, eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import crypto from "node:crypto";
 
 import { DRIZZLE_DB } from "../db/database.constants.js";
@@ -13,12 +16,14 @@ import { IdentityService } from "../db/identity.service.js";
 import {
   authRefreshTokens,
   authSessions,
+  tenants,
   users,
 } from "../db/schema.js";
 import { AuthRbacService } from "./auth-rbac.service.js";
 import { AuthService } from "./auth.service.js";
 import type { Permission, RequestUser, Role } from "./auth.types.js";
 import type { ConsoleLoginDto } from "./dto/console-login.dto.js";
+import type { ConsoleRegisterDto } from "./dto/console-register.dto.js";
 
 export type ConsoleAuthUser = {
   userId: string;
@@ -42,6 +47,10 @@ export type ConsoleAuthResponse = {
 export class ConsoleAuthService {
   private readonly accessTokenTtlSeconds = 15 * 60;
   private readonly refreshTokenTtlSeconds = 7 * 24 * 60 * 60;
+  private readonly passwordKeyLength = 64;
+  private readonly passwordScryptCost = 16_384;
+  private readonly passwordScryptBlockSize = 8;
+  private readonly passwordScryptParallelization = 1;
 
   constructor(
     @Inject(ConfigService)
@@ -56,12 +65,128 @@ export class ConsoleAuthService {
   ) {}
 
   async login(body: ConsoleLoginDto): Promise<ConsoleAuthResponse> {
-    const user =
-      body.credentialType === "service_token"
-        ? await this.authenticateServiceToken(body)
-        : this.authenticateApiKey(body);
+    const user = await this.authenticateConsoleUser(body);
 
     return this.issueSession(user, body.deviceLabel ?? "Web Console");
+  }
+
+  async register(body: ConsoleRegisterDto): Promise<ConsoleAuthResponse> {
+    const email = this.normalizeEmail(body.email);
+    const displayName =
+      this.normalizeOptionalName(body.displayName) ?? email.split("@")[0] ?? email;
+    const tenantName = this.workspaceExternalName(body.workspaceName, email);
+    const passwordHash = await this.hashPassword(body.password);
+    const roles: Role[] = ["admin"];
+
+    const existing = await this.findUserByEmail(email);
+    if (existing) {
+      throw new ConflictException("Email is already registered");
+    }
+
+    const created = await this.createRegisteredUser({
+      email,
+      displayName,
+      tenantName,
+      passwordHash,
+      roles,
+    });
+
+    return this.issueSession(
+      {
+        userId: created.userId,
+        tenantId: created.tenantId,
+        roles,
+        permissions: this.auth.permissionsForRoles(roles),
+        authType: "email_password",
+      },
+      body.deviceLabel ?? "Web Console",
+    );
+  }
+
+  private async authenticateConsoleUser(
+    body: ConsoleLoginDto,
+  ): Promise<ConsoleAuthUser> {
+    if (body.credentialType === "email_password") {
+      return this.authenticateEmailPassword(body);
+    }
+    if (body.credentialType === "service_token") {
+      return this.authenticateServiceToken(body);
+    }
+    return this.authenticateApiKey(body);
+  }
+
+  private async createRegisteredUser(input: {
+    email: string;
+    displayName: string;
+    tenantName: string;
+    passwordHash: string;
+    roles: Role[];
+  }): Promise<{ userId: string; tenantId: string }> {
+    try {
+      return await this.db.transaction(async (tx) => {
+        const [tenant] = await tx
+          .insert(tenants)
+          .values({ name: input.tenantName })
+          .returning({ id: tenants.id, name: tenants.name });
+        if (!tenant) {
+          throw new Error("Failed to create workspace");
+        }
+
+        const [user] = await tx
+          .insert(users)
+          .values({
+            tenantId: tenant.id,
+            externalId: input.email,
+            email: input.email,
+            passwordHash: input.passwordHash,
+            emailVerified: false,
+            defaultTenantId: tenant.id,
+            displayName: input.displayName,
+            roles: input.roles,
+          })
+          .returning({ id: users.id });
+        if (!user) {
+          throw new Error("Failed to create user");
+        }
+
+        return {
+          userId: input.email,
+          tenantId: tenant.name,
+        };
+      });
+    } catch (error) {
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictException("Email is already registered");
+      }
+      throw error;
+    }
+  }
+
+  private async authenticateEmailPassword(
+    body: ConsoleLoginDto,
+  ): Promise<ConsoleAuthUser> {
+    if (!body.email || !body.password) {
+      throw new BadRequestException("Email and password are required");
+    }
+
+    const row = await this.findUserByEmail(this.normalizeEmail(body.email));
+    if (!row?.passwordHash) {
+      throw new UnauthorizedException("Invalid email or password");
+    }
+    const passwordValid = await this.verifyPassword(body.password, row.passwordHash);
+    if (!passwordValid) {
+      throw new UnauthorizedException("Invalid email or password");
+    }
+
+    const tenantId = row.defaultTenantName ?? row.tenantName;
+    const roles = this.auth.normalizeRoles(row.roles, ["developer"]);
+    return {
+      userId: row.externalId,
+      tenantId,
+      roles,
+      permissions: this.auth.permissionsForRoles(roles),
+      authType: "email_password",
+    };
   }
 
   async refresh(refreshToken: string): Promise<ConsoleAuthResponse> {
@@ -145,7 +270,7 @@ export class ConsoleAuthService {
     body: ConsoleLoginDto,
   ): Promise<ConsoleAuthUser> {
     const persistent = await this.rbac.resolveServiceToken({
-      tokenHash: this.tokenHash(body.credential),
+      tokenHash: this.tokenHash(this.requiredCredential(body)),
       ...(body.tenantId ? { tenantId: body.tenantId } : {}),
     });
     if (persistent) {
@@ -165,7 +290,7 @@ export class ConsoleAuthService {
     }
 
     const configuredToken = this.config.get<string>("app.auth.serviceToken");
-    if (!configuredToken || !this.constantTimeEquals(configuredToken, body.credential)) {
+    if (!configuredToken || !this.constantTimeEquals(configuredToken, this.requiredCredential(body))) {
       throw new UnauthorizedException("Invalid service token");
     }
 
@@ -195,7 +320,7 @@ export class ConsoleAuthService {
 
   private authenticateApiKey(body: ConsoleLoginDto): ConsoleAuthUser {
     const configuredApiKey = this.config.get<string>("app.auth.apiKey");
-    if (!configuredApiKey || !this.constantTimeEquals(configuredApiKey, body.credential)) {
+    if (!configuredApiKey || !this.constantTimeEquals(configuredApiKey, this.requiredCredential(body))) {
       throw new UnauthorizedException("Invalid API key");
     }
 
@@ -336,11 +461,170 @@ export class ConsoleAuthService {
   ): RequestUser["authType"] | undefined {
     const authType = metadata["authType"];
     return authType === "api_key" ||
+      authType === "email_password" ||
       authType === "dev" ||
       authType === "jwt" ||
       authType === "service_token"
       ? authType
       : undefined;
+  }
+
+  private async findUserByEmail(email: string): Promise<
+    | {
+        externalId: string;
+        tenantName: string;
+        defaultTenantName?: string;
+        roles: string[];
+        passwordHash?: string;
+      }
+    | undefined
+  > {
+    const defaultTenants = alias(tenants, "default_tenants");
+    const [row] = await this.db
+      .select({
+        externalId: users.externalId,
+        tenantName: tenants.name,
+        defaultTenantName: defaultTenants.name,
+        roles: users.roles,
+        passwordHash: users.passwordHash,
+      })
+      .from(users)
+      .innerJoin(tenants, eq(users.tenantId, tenants.id))
+      .leftJoin(defaultTenants, eq(users.defaultTenantId, defaultTenants.id))
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (!row) {
+      return undefined;
+    }
+    const result: {
+      externalId: string;
+      tenantName: string;
+      defaultTenantName?: string;
+      roles: string[];
+      passwordHash?: string;
+    } = {
+      externalId: row.externalId,
+      tenantName: row.tenantName,
+      roles: row.roles,
+    };
+    if (row.defaultTenantName) {
+      result.defaultTenantName = row.defaultTenantName;
+    }
+    if (row.passwordHash) {
+      result.passwordHash = row.passwordHash;
+    }
+    return result;
+  }
+
+  private requiredCredential(body: ConsoleLoginDto): string {
+    if (!body.credential) {
+      throw new BadRequestException("Credential is required");
+    }
+    return body.credential;
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const maybeCause = "cause" in error ? error.cause : error;
+    return Boolean(
+      maybeCause &&
+        typeof maybeCause === "object" &&
+        "code" in maybeCause &&
+        maybeCause.code === "23505",
+    );
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  private normalizeOptionalName(value?: string): string | undefined {
+    const normalized = value?.trim();
+    return normalized ? normalized : undefined;
+  }
+
+  private workspaceExternalName(workspaceName: string | undefined, email: string): string {
+    const base =
+      this.normalizeOptionalName(workspaceName) ??
+      `${email.split("@")[0] ?? "user"} workspace`;
+    const slug = base
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "workspace";
+    return `${slug}-${crypto.randomBytes(3).toString("hex")}`;
+  }
+
+  private async hashPassword(password: string): Promise<string> {
+    const salt = crypto.randomBytes(16).toString("base64url");
+    const hash = await this.scrypt(password, salt);
+    return [
+      "scrypt",
+      this.passwordScryptCost,
+      this.passwordScryptBlockSize,
+      this.passwordScryptParallelization,
+      salt,
+      hash.toString("base64url"),
+    ].join("$");
+  }
+
+  private async verifyPassword(password: string, encodedHash: string): Promise<boolean> {
+    const [algorithm, cost, blockSize, parallelization, salt, expected] =
+      encodedHash.split("$");
+    if (
+      algorithm !== "scrypt" ||
+      !cost ||
+      !blockSize ||
+      !parallelization ||
+      !salt ||
+      !expected
+    ) {
+      return false;
+    }
+
+    const actual = await this.scrypt(password, salt, {
+      cost: Number(cost),
+      blockSize: Number(blockSize),
+      parallelization: Number(parallelization),
+    });
+    const expectedBuffer = Buffer.from(expected, "base64url");
+    return (
+      actual.length === expectedBuffer.length &&
+      crypto.timingSafeEqual(actual, expectedBuffer)
+    );
+  }
+
+  private scrypt(
+    password: string,
+    salt: string,
+    options: {
+      cost?: number;
+      blockSize?: number;
+      parallelization?: number;
+    } = {},
+  ): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      crypto.scrypt(
+        password,
+        salt,
+        this.passwordKeyLength,
+        {
+          N: options.cost ?? this.passwordScryptCost,
+          r: options.blockSize ?? this.passwordScryptBlockSize,
+          p: options.parallelization ?? this.passwordScryptParallelization,
+        },
+        (error, derivedKey) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve(derivedKey);
+        },
+      );
+    });
   }
 
   private signAccessToken(input: {

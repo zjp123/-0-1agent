@@ -16,10 +16,14 @@
   - `POST /api/tools/mcp/servers/reload`
 - MCP server 配置支持：
   - `name`
-  - `transport=stdio`
+  - `transport=stdio | streamable_http`
   - `command`
+  - `url`
   - `args`
   - `env`
+  - `headers`
+  - `authType`
+  - `authSecretRef`
   - `enabled`
   - `riskLevel`
   - `requiredPermissions`
@@ -35,6 +39,7 @@
   - `lastError`
 - 在 tenant-scoped Tool Registry 完成前，动态 MCP server `name` 需要全局唯一，避免工具命名冲突。
 - Web Tools 页面新增 MCP Servers 管理卡片。
+- Web Tools 页面支持 stdio / Streamable HTTP transport 切换。
 - MCP env 返回前统一掩码，避免明文展示。
 - MCP 配置变更写入 `auth_admin_audit_events`。
 
@@ -97,6 +102,16 @@ npm run dev:web
 
 3. 登录 Web Console。
 
+推荐使用具备 admin 权限的 service token 登录：
+
+```text
+Credential type: Service token
+Credential: local-admin-service-token
+Tenant: default
+```
+
+如果使用 API key 登录，默认只有 `developer` 权限，可以执行工具，但不能管理 MCP server，会缺少 `auth:manage`。
+
 4. 打开：
 
 ```text
@@ -107,12 +122,46 @@ http://localhost:3001/tools
 
 ```text
 Name: local_mcp
+Transport: stdio
 Command: node
-Args: tools/mcp/echo-server.mjs
+Args JSON: ["tools/mcp/echo-server.mjs"]
+Env JSON: {}
 Risk: medium
 ```
 
+动态 MCP 的相对路径会按项目仓库根目录解析，所以本地示例可以直接填写 `tools/mcp/echo-server.mjs`。
+
 6. 点击 Add 后，系统会 reload MCP servers。
+
+如果同名 server 已存在，Web 会把主按钮切换为 Update，更新原有配置并重新加载，而不是再次创建导致 409。
+
+如果需要添加另一个 MCP server，点击 New，表单会切换到一个新的默认名称，主按钮会回到 Add。
+
+### stdio 配置格式
+
+stdio MCP 与 Cursor / Claude Desktop 的配置模型一致：
+
+```json
+{
+  "command": "/Users/bjsttlp406/.nvm/versions/node/v22.21.1/bin/npx",
+  "args": ["-y", "brave-search-mcp"],
+  "env": {
+    "BRAVE_API_KEY": "your-key",
+    "npm_config_registry": "https://registry.npmmirror.com",
+    "PATH": "/Users/bjsttlp406/.nvm/versions/node/v22.21.1/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  }
+}
+```
+
+Web 表单对应关系：
+
+```text
+Command   -> command 字符串，支持 node、npx 或绝对路径 .../bin/npx
+Args JSON -> args 字符串数组，例如 ["-y", "chrome-devtools-mcp@latest", "--isolated"]
+Env JSON  -> env 字符串对象，例如 {"BRAVE_API_KEY":"..."}
+```
+
+编辑已有 server 时，如果 env 字段显示为 `********`，保存时会保留原 secret 值，不会把掩码写回数据库。
 
 7. 工具列表应出现：
 
@@ -135,13 +184,53 @@ local_mcp.word_count
 echo: hello from dynamic mcp
 ```
 
+## Streamable HTTP 测试流程
+
+启动本地 HTTP MCP mock server：
+
+```bash
+node tools/mcp/http-echo-server.mjs
+```
+
+打开 Web Tools 页面，点击 New，填写：
+
+```text
+Name: remote_echo
+Transport: streamable_http
+URL: http://127.0.0.1:8787/mcp
+Auth: none
+Risk: medium
+```
+
+由于 remote MCP 默认需要审批，保存后点击 Approve 或 Reload。工具列表应出现：
+
+```text
+remote_echo.echo
+```
+
+执行参数：
+
+```json
+{
+  "message": "hello remote mcp"
+}
+```
+
+应返回：
+
+```text
+remote echo: hello remote mcp
+```
+
 ## 当前边界
 
-- 目前只支持 MCP stdio transport。
+- 目前支持 MCP stdio 和 Streamable HTTP 的 JSON-RPC POST 最小闭环。
 - 当前 Tool Registry 仍是全局注册表，会加载所有租户 active server；已临时要求动态 MCP server 名称全局唯一，后续需要按请求租户过滤工具可见性。
 - `env` 已掩码展示，但尚未接入 Secret Store 引用或 KMS 加密字段。
 - command allowlist 目前是代码内置，后续应升级为策略配置或审批工作流。
 - 高风险 server 的 approve 目前是管理员动作，不是完整多人审批流。
+- Remote MCP 当前支持 `none`、`bearer`、`api_key` 三种基础鉴权，完整 OAuth 2.1 授权流程仍待实现。
+- Streamable HTTP 当前按 JSON-RPC POST 响应解析，SSE streaming response 兼容仍待增强。
 - 尚未实现工具级 approval 恢复执行。
 
 ## 下一步建议
@@ -150,4 +239,5 @@ echo: hello from dynamic mcp
 - Tool Registry 按 tenant 隔离 MCP 工具列表和执行权限。
 - command allowlist 改为数据库策略。
 - MCP tool 级别风险识别和 approval policy。
-- HTTP/SSE MCP transport。
+- Streamable HTTP SSE response 兼容。
+- OAuth 2.1 remote MCP 授权流。

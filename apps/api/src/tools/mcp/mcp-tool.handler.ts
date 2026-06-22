@@ -5,13 +5,21 @@ import type {
   ToolExecutionResult,
   ToolHandler,
 } from "../tool.types.js";
-import { McpStdioClient } from "./mcp-stdio.client.js";
+import type { McpCallToolResult } from "./mcp.types.js";
+
+export type McpToolClient = {
+  callTool(
+    name: string,
+    args: Record<string, unknown>,
+    timeoutMs: number,
+  ): Promise<McpCallToolResult>;
+};
 
 export class McpToolHandler implements ToolHandler {
   readonly definition: ToolDefinition;
 
   constructor(
-    private readonly client: McpStdioClient,
+    private readonly client: McpToolClient,
     private readonly mcpToolName: string,
     definition: ToolDefinition,
   ) {

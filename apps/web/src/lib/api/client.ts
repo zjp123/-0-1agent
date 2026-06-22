@@ -245,7 +245,7 @@ export type ConsoleAuthUser = {
   tenantId: string;
   roles: Role[];
   permissions: Permission[];
-  authType: "api_key" | "dev" | "jwt" | "service_token";
+  authType: "email_password" | "api_key" | "dev" | "jwt" | "service_token";
   tokenId?: string;
 };
 
@@ -259,10 +259,20 @@ export type ConsoleAuthResponse = {
 };
 
 export type ConsoleLoginInput = {
-  credentialType: "api_key" | "service_token";
-  credential: string;
+  credentialType: "email_password" | "api_key" | "service_token";
+  credential?: string;
+  email?: string;
+  password?: string;
   tenantId?: string;
   userId?: string;
+  deviceLabel?: string;
+};
+
+export type ConsoleRegisterInput = {
+  email: string;
+  password: string;
+  displayName?: string;
+  workspaceName?: string;
   deviceLabel?: string;
 };
 
@@ -293,7 +303,7 @@ export type AuthAuditEvent = {
   id: string;
   tenantId: string;
   actorUserId: string;
-  actorAuthType: "api_key" | "dev" | "jwt" | "service_token";
+  actorAuthType: "email_password" | "api_key" | "dev" | "jwt" | "service_token";
   actorTokenId?: string;
   action: string;
   targetType: string;
@@ -318,7 +328,7 @@ export type SecurityAnomalyEvent = {
   category: string;
   action: string;
   actorUserId?: string;
-  actorAuthType?: "api_key" | "dev" | "jwt" | "service_token";
+  actorAuthType?: "email_password" | "api_key" | "dev" | "jwt" | "service_token";
   targetType?: string;
   targetId?: string;
   message: string;
@@ -945,7 +955,7 @@ const roleSchema = z.enum([
   "service",
   "break_glass",
 ]);
-const authTypeSchema = z.enum(["api_key", "dev", "jwt", "service_token"]);
+const authTypeSchema = z.enum(["email_password", "api_key", "dev", "jwt", "service_token"]);
 
 const consoleAuthUserSchema: z.ZodType<ConsoleAuthUser> = z.object({
   userId: z.string(),
@@ -1629,10 +1639,14 @@ const mcpServerSchema = z.object({
   id: z.string(),
   tenantId: z.string(),
   name: z.string(),
-  transport: z.literal("stdio"),
+  transport: z.enum(["stdio", "streamable_http"]),
   command: z.string(),
+  url: z.string().optional(),
   args: z.array(z.string()),
   env: z.record(z.string(), z.string()),
+  headers: z.record(z.string(), z.string()),
+  authType: z.enum(["none", "bearer", "api_key"]),
+  authSecretRef: z.string().optional(),
   enabled: z.boolean(),
   status: z.enum(["pending_approval", "active", "disabled", "error"]),
   riskLevel: z.enum(["low", "medium", "high", "critical"]),
@@ -1652,6 +1666,23 @@ const mcpServerSchema = z.object({
 });
 
 export type McpServer = z.infer<typeof mcpServerSchema>;
+type McpServerMutationInput = {
+  name?: string;
+  transport?: McpServer["transport"];
+  command?: string;
+  url?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  headers?: Record<string, string>;
+  authType?: McpServer["authType"];
+  authSecretRef?: string;
+  enabled?: boolean;
+  riskLevel?: McpServer["riskLevel"];
+  requiredPermissions?: string[];
+  toolNamePrefix?: string;
+  timeoutMs?: number;
+  reason: string;
+};
 
 const toolRegistryStatusSchema = z.object({
   builtinTools: z.array(z.string()),
@@ -1691,27 +1722,21 @@ export async function listMcpServers(
 }
 
 export async function createMcpServer(
-  input: {
-    name: string;
-    command: string;
-    args: string[];
-    env?: Record<string, string>;
-    enabled: boolean;
-    riskLevel: McpServer["riskLevel"];
-    requiredPermissions: string[];
-    toolNamePrefix?: string;
-    timeoutMs?: number;
-    reason: string;
-  } & AuthCredentials,
+  input: McpServerMutationInput & { name: string } & AuthCredentials,
 ): Promise<McpServerMutationResponse> {
   const response = await fetch(`${apiBaseUrl}/tools/mcp/servers`, {
     method: "POST",
     headers: buildAuthHeaders(input, true),
     body: JSON.stringify({
       name: input.name,
+      transport: input.transport,
       command: input.command,
+      url: input.url,
       args: input.args,
       env: input.env ?? {},
+      headers: input.headers ?? {},
+      authType: input.authType,
+      authSecretRef: input.authSecretRef || undefined,
       enabled: input.enabled,
       riskLevel: input.riskLevel,
       requiredPermissions: input.requiredPermissions,
@@ -1728,17 +1753,26 @@ export async function createMcpServer(
 }
 
 export async function updateMcpServer(
-  input: {
-    serverId: string;
-    enabled?: boolean;
-    reason: string;
-  } & AuthCredentials,
+  input: McpServerMutationInput & { serverId: string } & AuthCredentials,
 ): Promise<McpServerMutationResponse> {
   const response = await fetch(`${apiBaseUrl}/tools/mcp/servers/${input.serverId}`, {
     method: "PATCH",
     headers: buildAuthHeaders(input, true),
     body: JSON.stringify({
+      name: input.name,
+      transport: input.transport,
+      command: input.command,
+      url: input.url,
+      args: input.args,
+      env: input.env,
+      headers: input.headers,
+      authType: input.authType,
+      authSecretRef: input.authSecretRef || undefined,
       enabled: input.enabled,
+      riskLevel: input.riskLevel,
+      requiredPermissions: input.requiredPermissions,
+      toolNamePrefix: input.toolNamePrefix || undefined,
+      timeoutMs: input.timeoutMs,
       reason: input.reason,
     }),
   });
@@ -1824,9 +1858,26 @@ export async function consoleLogin(input: ConsoleLoginInput): Promise<ConsoleAut
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       credentialType: input.credentialType,
-      credential: input.credential,
+      credential: input.credential || undefined,
+      email: input.email || undefined,
+      password: input.password || undefined,
       tenantId: input.tenantId || undefined,
       userId: input.userId || undefined,
+      deviceLabel: input.deviceLabel || undefined,
+    }),
+  });
+  return consoleAuthResponseSchema.parse(payload);
+}
+
+export async function consoleRegister(input: ConsoleRegisterInput): Promise<ConsoleAuthResponse> {
+  const payload = await fetchJson(`${apiBaseUrl}/auth/console/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      email: input.email,
+      password: input.password,
+      displayName: input.displayName || undefined,
+      workspaceName: input.workspaceName || undefined,
       deviceLabel: input.deviceLabel || undefined,
     }),
   });

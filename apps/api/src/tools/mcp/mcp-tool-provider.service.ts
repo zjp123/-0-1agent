@@ -7,13 +7,21 @@ import type {
   ToolRiskLevel,
 } from "../tool.types.js";
 import { McpServerManagementService } from "./mcp-server-management.service.js";
+import { McpHttpClient } from "./mcp-http.client.js";
 import { McpStdioClient } from "./mcp-stdio.client.js";
-import { McpToolHandler } from "./mcp-tool.handler.js";
+import { McpToolHandler, type McpToolClient } from "./mcp-tool.handler.js";
 import {
   normalizeMcpToolName,
   toToolInputSchema,
   type McpServerConfig,
+  type McpToolDefinition,
 } from "./mcp.types.js";
+
+type ManagedMcpClient = McpToolClient & {
+  connect(): Promise<void>;
+  listTools(timeoutMs?: number): Promise<McpToolDefinition[]>;
+  close(): void;
+};
 
 export type McpToolProviderStatus = {
   enabled: boolean;
@@ -29,7 +37,7 @@ export type McpToolProviderStatus = {
 @Injectable()
 export class McpToolProviderService implements OnApplicationShutdown {
   private readonly logger = new Logger(McpToolProviderService.name);
-  private readonly clients: McpStdioClient[] = [];
+  private readonly clients: ManagedMcpClient[] = [];
   private status: McpToolProviderStatus = { enabled: false, servers: [] };
 
   constructor(
@@ -71,16 +79,7 @@ export class McpToolProviderService implements OnApplicationShutdown {
 
       const statusEntry = this.status.servers.find((item) => item.name === server.name);
       try {
-        const client = new McpStdioClient(
-          server,
-          this.config.get<number>("app.tools.mcpConnectTimeoutMs", 10_000),
-        );
-        client.on("stderr", (message) => {
-          this.logger.debug(`MCP ${server.name} stderr: ${String(message).trim()}`);
-        });
-        client.on("protocolError", (message) => {
-          this.logger.warn(String(message));
-        });
+        const client = this.createClient(server);
         await client.connect();
         this.clients.push(client);
 
@@ -134,6 +133,22 @@ export class McpToolProviderService implements OnApplicationShutdown {
       client.close();
     }
     this.clients.length = 0;
+  }
+
+  private createClient(server: McpServerConfig): ManagedMcpClient {
+    const timeoutMs = this.config.get<number>("app.tools.mcpConnectTimeoutMs", 10_000);
+    if (server.transport === "streamable_http") {
+      return new McpHttpClient(server, timeoutMs);
+    }
+
+    const client = new McpStdioClient(server, timeoutMs);
+    client.on("stderr", (message) => {
+      this.logger.debug(`MCP ${server.name} stderr: ${String(message).trim()}`);
+    });
+    client.on("protocolError", (message) => {
+      this.logger.warn(String(message));
+    });
+    return client;
   }
 
   private toToolDefinition(

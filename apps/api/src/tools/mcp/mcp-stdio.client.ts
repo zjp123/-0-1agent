@@ -26,6 +26,7 @@ export class McpStdioClient extends EventEmitter {
   private process: ChildProcessWithoutNullStreams | undefined;
   private readline: Interface | undefined;
   private nextId = 1;
+  private stderrPreview = "";
   private readonly pending = new Map<
     string | number,
     {
@@ -50,13 +51,25 @@ export class McpStdioClient extends EventEmitter {
     const child = spawn(this.config.command, this.config.args, {
       stdio: ["pipe", "pipe", "pipe"],
       env: this.buildProcessEnv(),
+      ...(this.config.cwd ? { cwd: this.config.cwd } : {}),
     });
     this.process = child;
     this.readline = createInterface({ input: child.stdout });
     this.readline.on("line", (line) => this.handleLine(line));
-    child.stderr.on("data", (chunk) => this.emit("stderr", String(chunk)));
+    child.stderr.on("data", (chunk) => {
+      const message = String(chunk);
+      this.stderrPreview = `${this.stderrPreview}${message}`.slice(-2_000);
+      this.emit("stderr", message);
+    });
     child.on("exit", (code, signal) => {
-      this.rejectAll(new Error(`MCP server ${this.config.name} exited: ${code ?? signal ?? "unknown"}`));
+      this.rejectAll(
+        new Error(
+          [
+            `MCP server ${this.config.name} exited: ${code ?? signal ?? "unknown"}`,
+            this.stderrPreview.trim() ? this.stderrPreview.trim() : undefined,
+          ].filter(Boolean).join(" - "),
+        ),
+      );
       this.process = undefined;
       this.readline?.close();
       this.readline = undefined;

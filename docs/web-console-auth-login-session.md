@@ -12,6 +12,7 @@
 
 ```text
 POST /api/auth/console/login
+POST /api/auth/console/register
 POST /api/auth/console/refresh
 POST /api/auth/console/logout
 GET  /api/auth/console/me
@@ -28,8 +29,16 @@ apps/api/src/auth/dto/console-refresh.dto.ts
 
 登录模式：
 
+- `email_password`: 使用邮箱密码登录普通 Web Console 用户。
 - `service_token`: 使用现有 service token 换取 Web Console session。
 - `api_key`: 使用现有 API key 换取 Web Console session。
+
+注册模式：
+
+- `email` 全局唯一。
+- `password` 使用 `scrypt` 哈希后保存。
+- 注册时自动创建个人 workspace/tenant。
+- 注册用户自动获得该 workspace 的 `admin` 权限。
 
 签发结果：
 
@@ -86,9 +95,11 @@ apps/web/src/features/auth/login-form.tsx
 
 能力：
 
+- 支持邮箱密码登录。
+- 支持邮箱密码注册并自动创建 workspace。
 - 支持 service token 登录。
 - 支持 API key 登录。
-- 支持 tenant / user / device label。
+- 支持集成凭证场景下的 tenant / user / device label。
 - 登录成功后跳转 Dashboard。
 
 ### 权限视图裁剪
@@ -162,6 +173,8 @@ SERVICE_TOKEN_TENANT_ID=default
 已完成：
 
 - Web 登录页。
+- 邮箱密码注册和登录。
+- 注册时自动创建个人 workspace / tenant。
 - Access Token / Refresh Token 会话续期。
 - 退出登录。
 - 前端 session provider。
@@ -173,7 +186,8 @@ SERVICE_TOKEN_TENANT_ID=default
 
 后续增强：
 
-- 正式用户名密码或企业 IdP / SSO。
+- 邮箱验证、忘记密码、团队 workspace 成员管理。
+- 企业 IdP / SSO。
 - HttpOnly cookie session。
 - CSRF 策略。
 - session 设备列表和主动撤销 UI。

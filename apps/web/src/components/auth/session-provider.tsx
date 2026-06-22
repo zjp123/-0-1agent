@@ -13,11 +13,13 @@ import { notify } from "@/components/notifications/toast-provider";
 import {
   consoleLogin,
   consoleLogout,
+  consoleRegister,
   consoleRefresh,
   type AuthCredentials,
   type ConsoleAuthResponse,
   type ConsoleAuthUser,
   type ConsoleLoginInput,
+  type ConsoleRegisterInput,
 } from "@/lib/api/client";
 
 type StoredSession = {
@@ -38,6 +40,7 @@ type SessionContextValue = {
   credentials: AuthCredentials;
   hasPermission: (permission: string) => boolean;
   login: (input: ConsoleLoginInput) => Promise<void>;
+  register: (input: ConsoleRegisterInput) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -119,6 +122,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         notify({
           title: "Signed in",
           message: `${response.user.userId} authenticated for tenant ${response.user.tenantId}.`,
+          tone: "success",
+        });
+      },
+      register: async (input) => {
+        const response = await consoleRegister(input);
+        applySession(response);
+        notify({
+          title: "Workspace created",
+          message: `${response.user.userId} is ready in ${response.user.tenantId}.`,
           tone: "success",
         });
       },

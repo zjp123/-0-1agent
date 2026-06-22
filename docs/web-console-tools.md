@@ -24,6 +24,7 @@ http://localhost:3001/tools
 - 支持 `calculator` 默认测试参数。
 - 支持 `current_time` 默认测试参数。
 - 支持展示 MCP 外部工具来源，MCP 工具通过同一个 `/api/tools` 列表进入页面。
+- 支持 MCP Servers 管理入口；只有具备 `auth:manage` 的登录态或手动 service token 才会启用管理操作。
 - 展示工具执行结果。
 - 展示完整 response/audit JSON。
 
@@ -46,6 +47,18 @@ POST /api/tools/execute
 ```text
 tools:execute
 ```
+
+MCP server 管理接口需要：
+
+```text
+auth:manage
+```
+
+本地常见区别：
+
+- API key 登录默认是 `developer`，可以执行工具，但不能管理 MCP server。
+- Service token 使用 `SERVICE_TOKEN_ROLES=admin` 时具备 `auth:manage`，可以管理 MCP server。
+- Web 页面会在没有 `auth:manage` 时禁用 MCP 管理按钮，避免自动请求 `/api/tools/mcp/servers/*` 产生 403。
 
 ## 关键文件
 

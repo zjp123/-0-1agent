@@ -17,11 +17,16 @@ export class CreateMcpServerDto extends AuthAdminReasonDto {
   name!: string;
 
   @IsOptional()
-  @IsIn(["stdio"])
-  transport?: "stdio";
+  @IsIn(["stdio", "streamable_http"])
+  transport?: "stdio" | "streamable_http";
 
+  @IsOptional()
   @IsString()
-  command!: string;
+  command?: string;
+
+  @IsOptional()
+  @IsString()
+  url?: string;
 
   @IsOptional()
   @IsArray()
@@ -30,6 +35,18 @@ export class CreateMcpServerDto extends AuthAdminReasonDto {
   @IsOptional()
   @IsObject()
   env?: Record<string, string>;
+
+  @IsOptional()
+  @IsObject()
+  headers?: Record<string, string>;
+
+  @IsOptional()
+  @IsIn(["none", "bearer", "api_key"])
+  authType?: "none" | "bearer" | "api_key";
+
+  @IsOptional()
+  @IsString()
+  authSecretRef?: string;
 
   @IsOptional()
   @IsBoolean()

@@ -5,7 +5,7 @@ import type { Permission, Role } from "./auth.types.js";
 
 export type AuthStatus = {
   enabled: boolean;
-  modes: Array<"api_key" | "dev" | "jwt" | "service_token">;
+  modes: Array<"email_password" | "api_key" | "dev" | "jwt" | "service_token">;
   controls: string[];
   roles: Record<Role, Permission[]>;
 };
@@ -21,6 +21,7 @@ export class AuthService {
       this.config.get<string>("app.auth.serviceToken"),
     );
     const modes: AuthStatus["modes"] = [];
+    modes.push("email_password");
     if (hasJwtSecret) {
       modes.push("jwt");
     }

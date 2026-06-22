@@ -1,9 +1,9 @@
 "use client";
 
-import { CheckCircle2, PauseCircle, Play, RefreshCcw, Server, ShieldCheck } from "lucide-react";
+import { CheckCircle2, PauseCircle, Play, Plus, RefreshCcw, Server, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
-import { useEffectiveCredentials } from "@/components/auth/session-provider";
+import { useEffectiveCredentials, useSession } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   approveMcpServer,
@@ -13,6 +13,7 @@ import {
   listTools,
   listMcpServers,
   reloadMcpServers,
+  updateMcpServer,
   type McpServer,
   type ToolCallResponse,
   type ToolDefinition,
@@ -28,6 +29,26 @@ function defaultArguments(toolName: string): string {
   return JSON.stringify({}, null, 2);
 }
 
+function parseStringArrayJson(value: string, label: string): string[] {
+  const parsed = JSON.parse(value) as unknown;
+  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
+    throw new Error(`${label} must be a JSON string array.`);
+  }
+  return parsed;
+}
+
+function parseStringRecordJson(value: string, label: string): Record<string, string> {
+  const parsed = JSON.parse(value) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`${label} must be a JSON object.`);
+  }
+  const entries = Object.entries(parsed);
+  if (entries.some(([, item]) => typeof item !== "string")) {
+    throw new Error(`${label} values must be strings.`);
+  }
+  return Object.fromEntries(entries) as Record<string, string>;
+}
+
 export function ToolsWorkbench() {
   const [tools, setTools] = useState<ToolDefinition[]>([]);
   const [selectedName, setSelectedName] = useState<string>("");
@@ -37,17 +58,39 @@ export function ToolsWorkbench() {
   const [result, setResult] = useState<ToolCallResponse | undefined>();
   const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
   const [mcpName, setMcpName] = useState("local_mcp");
+  const [mcpTransport, setMcpTransport] = useState<McpServer["transport"]>("stdio");
   const [mcpCommand, setMcpCommand] = useState("node");
-  const [mcpArgs, setMcpArgs] = useState("tools/mcp/echo-server.mjs");
+  const [mcpUrl, setMcpUrl] = useState("https://mcp.example.com/mcp");
+  const [mcpArgs, setMcpArgs] = useState(JSON.stringify(["tools/mcp/echo-server.mjs"], null, 2));
+  const [mcpEnv, setMcpEnv] = useState("{}");
+  const [mcpHeaders, setMcpHeaders] = useState("{}");
+  const [mcpAuthType, setMcpAuthType] = useState<McpServer["authType"]>("none");
+  const [mcpAuthSecretRef, setMcpAuthSecretRef] = useState("");
   const [mcpRiskLevel, setMcpRiskLevel] = useState<McpServer["riskLevel"]>("medium");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
+  const { hasPermission } = useSession();
+  const canManageMcp = hasCredentials && (!usingSession || hasPermission("auth:manage"));
 
   const selectedTool = useMemo(
     () => tools.find((tool) => tool.name === selectedName),
     [selectedName, tools],
   );
+  const matchingMcpServer = useMemo(
+    () => mcpServers.find((server) => server.name === mcpName.trim()),
+    [mcpName, mcpServers],
+  );
+  const nextMcpName = useMemo(() => {
+    const usedNames = new Set(mcpServers.map((server) => server.name));
+    let index = mcpServers.length + 1;
+    let candidate = `local_mcp_${index}`;
+    while (usedNames.has(candidate)) {
+      index += 1;
+      candidate = `local_mcp_${index}`;
+    }
+    return candidate;
+  }, [mcpServers]);
 
   async function refresh(): Promise<void> {
     setLoading(true);
@@ -55,9 +98,11 @@ export function ToolsWorkbench() {
     try {
       const nextTools = await listTools();
       setTools(nextTools);
-      if (hasCredentials) {
+      if (canManageMcp) {
         const nextServers = await listMcpServers(credentials);
         setMcpServers(nextServers);
+      } else {
+        setMcpServers([]);
       }
       if (!selectedName && nextTools[0]) {
         setSelectedName(nextTools[0].name);
@@ -72,22 +117,49 @@ export function ToolsWorkbench() {
 
   useEffect(() => {
     void refresh();
-  }, [hasCredentials]);
+  }, [canManageMcp]);
 
   async function createServer(): Promise<void> {
     setLoading(true);
     setErrorMessage(undefined);
     try {
-      await createMcpServer({
-        name: mcpName,
-        command: mcpCommand,
-        args: mcpArgs.split(/\s+/).map((item) => item.trim()).filter(Boolean),
+      if (!canManageMcp) {
+        throw new Error("MCP server management requires auth:manage permission.");
+      }
+      const args = parseStringArrayJson(mcpArgs, "Args JSON");
+      const env = parseStringRecordJson(mcpEnv, "Env JSON");
+      const headers = JSON.parse(mcpHeaders) as Record<string, string>;
+      const shouldPreserveMaskedEnv =
+        Boolean(matchingMcpServer) &&
+        Object.values(env).some((value) => value === "********");
+      const payload = {
+        transport: mcpTransport,
+        command: mcpTransport === "stdio" ? mcpCommand : undefined,
+        url: mcpTransport === "streamable_http" ? mcpUrl : undefined,
+        args: mcpTransport === "stdio" ? args : [],
+        env: shouldPreserveMaskedEnv ? undefined : env,
+        headers,
+        authType: mcpAuthType,
+        authSecretRef: mcpAuthSecretRef.trim() || undefined,
         enabled: true,
         riskLevel: mcpRiskLevel,
         requiredPermissions: ["tools:execute"],
-        reason: "Configure MCP server from Web Console",
-        ...credentials,
-      });
+      };
+      if (matchingMcpServer) {
+        await updateMcpServer({
+          serverId: matchingMcpServer.id,
+          ...payload,
+          reason: "Update MCP server from Web Console",
+          ...credentials,
+        });
+      } else {
+        await createMcpServer({
+          name: mcpName,
+          ...payload,
+          reason: "Configure MCP server from Web Console",
+          ...credentials,
+        });
+      }
       await refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to create MCP server.");
@@ -100,6 +172,9 @@ export function ToolsWorkbench() {
     setLoading(true);
     setErrorMessage(undefined);
     try {
+      if (!canManageMcp) {
+        throw new Error("MCP server management requires auth:manage permission.");
+      }
       await approveMcpServer({
         serverId,
         reason: "Approve MCP server from Web Console",
@@ -117,6 +192,9 @@ export function ToolsWorkbench() {
     setLoading(true);
     setErrorMessage(undefined);
     try {
+      if (!canManageMcp) {
+        throw new Error("MCP server management requires auth:manage permission.");
+      }
       await disableMcpServer({
         serverId,
         reason: "Disable MCP server from Web Console",
@@ -134,6 +212,9 @@ export function ToolsWorkbench() {
     setLoading(true);
     setErrorMessage(undefined);
     try {
+      if (!canManageMcp) {
+        throw new Error("MCP server management requires auth:manage permission.");
+      }
       await reloadMcpServers(credentials);
       await refresh();
     } catch (error) {
@@ -174,6 +255,34 @@ export function ToolsWorkbench() {
     setErrorMessage(undefined);
   }
 
+  function prepareNewMcpServer(): void {
+    setMcpName(nextMcpName);
+    setMcpTransport("stdio");
+    setMcpCommand("node");
+    setMcpUrl("https://mcp.example.com/mcp");
+    setMcpArgs(JSON.stringify(["tools/mcp/echo-server.mjs"], null, 2));
+    setMcpEnv("{}");
+    setMcpHeaders("{}");
+    setMcpAuthType("none");
+    setMcpAuthSecretRef("");
+    setMcpRiskLevel("medium");
+    setErrorMessage(undefined);
+  }
+
+  function editMcpServer(server: McpServer): void {
+    setMcpName(server.name);
+    setMcpTransport(server.transport);
+    setMcpCommand(server.command || "node");
+    setMcpUrl(server.url ?? "https://mcp.example.com/mcp");
+    setMcpArgs(JSON.stringify(server.args, null, 2));
+    setMcpEnv(JSON.stringify(server.env, null, 2));
+    setMcpHeaders(JSON.stringify(server.headers, null, 2));
+    setMcpAuthType(server.authType);
+    setMcpAuthSecretRef(server.authSecretRef ?? "");
+    setMcpRiskLevel(server.riskLevel);
+    setErrorMessage(undefined);
+  }
+
   return (
     <div className="tools-page">
       <div className="dashboard-header">
@@ -195,38 +304,78 @@ export function ToolsWorkbench() {
             <h2 className="section-card-title">MCP Servers</h2>
             <p className="section-card-description">Manage runtime MCP tool servers with masked env values and guarded enablement.</p>
           </div>
-          <button type="button" className="refresh-button" onClick={() => void reloadServers()} disabled={loading || !hasCredentials}>
-            <RefreshCcw className={`icon-sm ${loading ? "spin" : ""}`} aria-hidden="true" />
-            Reload
-          </button>
+          <div className="mcp-header-actions">
+            <button type="button" className="refresh-button" onClick={prepareNewMcpServer} disabled={loading || !canManageMcp}>
+              <Plus className="icon-sm" aria-hidden="true" />
+              New
+            </button>
+            <button type="button" className="refresh-button" onClick={() => void reloadServers()} disabled={loading || !canManageMcp}>
+              <RefreshCcw className={`icon-sm ${loading ? "spin" : ""}`} aria-hidden="true" />
+              Reload
+            </button>
+          </div>
         </div>
         <div className="section-card-body mcp-manager-body">
           {!hasCredentials ? <div className="alert alert-neutral">Sign in or enter local credentials to manage MCP servers.</div> : null}
+          {hasCredentials && usingSession && !canManageMcp ? (
+            <div className="alert alert-warning">Your current session can run tools but cannot manage MCP servers. Sign in with an admin/service token session for MCP configuration.</div>
+          ) : null}
           <div className="mcp-create-grid">
             <label>
               <span className="label">Name</span>
-              <input value={mcpName} onChange={(event) => setMcpName(event.target.value)} className="text-input" />
+              <input value={mcpName} onChange={(event) => setMcpName(event.target.value)} className="text-input" disabled={!canManageMcp} />
+            </label>
+            <label>
+              <span className="label">Transport</span>
+              <select value={mcpTransport} onChange={(event) => setMcpTransport(event.target.value as McpServer["transport"])} className="text-input" disabled={!canManageMcp}>
+                <option value="stdio">stdio</option>
+                <option value="streamable_http">streamable_http</option>
+              </select>
             </label>
             <label>
               <span className="label">Command</span>
-              <input value={mcpCommand} onChange={(event) => setMcpCommand(event.target.value)} className="text-input" />
+              <input value={mcpCommand} onChange={(event) => setMcpCommand(event.target.value)} className="text-input" disabled={!canManageMcp || mcpTransport !== "stdio"} />
             </label>
             <label>
               <span className="label">Args</span>
-              <input value={mcpArgs} onChange={(event) => setMcpArgs(event.target.value)} className="text-input" />
+              <textarea value={mcpArgs} onChange={(event) => setMcpArgs(event.target.value)} className="text-input mcp-json-input" disabled={!canManageMcp || mcpTransport !== "stdio"} rows={4} />
+            </label>
+            <label>
+              <span className="label">Env JSON</span>
+              <textarea value={mcpEnv} onChange={(event) => setMcpEnv(event.target.value)} className="text-input mcp-json-input" disabled={!canManageMcp || mcpTransport !== "stdio"} rows={4} />
+            </label>
+            <label>
+              <span className="label">URL</span>
+              <input value={mcpUrl} onChange={(event) => setMcpUrl(event.target.value)} className="text-input" disabled={!canManageMcp || mcpTransport !== "streamable_http"} />
+            </label>
+            <label>
+              <span className="label">Auth</span>
+              <select value={mcpAuthType} onChange={(event) => setMcpAuthType(event.target.value as McpServer["authType"])} className="text-input" disabled={!canManageMcp}>
+                <option value="none">none</option>
+                <option value="bearer">bearer</option>
+                <option value="api_key">api_key</option>
+              </select>
+            </label>
+            <label>
+              <span className="label">Secret ref</span>
+              <input value={mcpAuthSecretRef} onChange={(event) => setMcpAuthSecretRef(event.target.value)} className="text-input" disabled={!canManageMcp || mcpAuthType === "none"} placeholder="env:MCP_TOKEN" />
+            </label>
+            <label>
+              <span className="label">Headers JSON</span>
+              <textarea value={mcpHeaders} onChange={(event) => setMcpHeaders(event.target.value)} className="text-input mcp-json-input" disabled={!canManageMcp || mcpTransport !== "streamable_http"} rows={4} />
             </label>
             <label>
               <span className="label">Risk</span>
-              <select value={mcpRiskLevel} onChange={(event) => setMcpRiskLevel(event.target.value as McpServer["riskLevel"])} className="text-input">
+              <select value={mcpRiskLevel} onChange={(event) => setMcpRiskLevel(event.target.value as McpServer["riskLevel"])} className="text-input" disabled={!canManageMcp}>
                 <option value="low">low</option>
                 <option value="medium">medium</option>
                 <option value="high">high</option>
                 <option value="critical">critical</option>
               </select>
             </label>
-            <button type="button" className="refresh-button" onClick={() => void createServer()} disabled={loading || !hasCredentials}>
+            <button type="button" className="refresh-button" onClick={() => void createServer()} disabled={loading || !canManageMcp}>
               <Server className="icon-sm" aria-hidden="true" />
-              Add
+              {matchingMcpServer ? "Update" : "Add"}
             </button>
           </div>
 
@@ -239,17 +388,24 @@ export function ToolsWorkbench() {
                     <StatusBadge tone={server.status === "active" ? "success" : server.status === "error" ? "danger" : "warning"}>{server.status}</StatusBadge>
                     <StatusBadge tone={server.riskLevel === "high" || server.riskLevel === "critical" ? "warning" : "neutral"}>{server.riskLevel}</StatusBadge>
                   </div>
-                  <p className="mcp-command-line">{server.command} {server.args.join(" ")}</p>
+                  <p className="mcp-command-line">
+                    {server.transport === "streamable_http"
+                      ? `${server.transport} ${server.url ?? ""}`
+                      : `${server.command} ${server.args.join(" ")}`}
+                  </p>
                   {server.lastError ? <p className="mcp-error-line">{server.lastError}</p> : null}
                 </div>
                 <div className="mcp-server-actions">
+                  <button type="button" className="icon-action-button" onClick={() => editMcpServer(server)} disabled={loading || !canManageMcp}>
+                    Edit
+                  </button>
                   {server.status !== "active" ? (
-                    <button type="button" className="icon-action-button" onClick={() => void approveServer(server.id)} disabled={loading}>
+                    <button type="button" className="icon-action-button" onClick={() => void approveServer(server.id)} disabled={loading || !canManageMcp}>
                       <ShieldCheck className="icon-sm" aria-hidden="true" />
                       Approve
                     </button>
                   ) : (
-                    <button type="button" className="icon-action-button" onClick={() => void disableServer(server.id)} disabled={loading}>
+                    <button type="button" className="icon-action-button" onClick={() => void disableServer(server.id)} disabled={loading || !canManageMcp}>
                       <PauseCircle className="icon-sm" aria-hidden="true" />
                       Disable
                     </button>

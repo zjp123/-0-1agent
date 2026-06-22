@@ -8,10 +8,16 @@ import type {
 export type McpServerConfig = {
   id?: string;
   name: string;
+  transport: "stdio" | "streamable_http";
   command: string;
+  url?: string;
   args: string[];
   env: Record<string, string>;
+  headers?: Record<string, string>;
+  authType?: "none" | "bearer" | "api_key";
+  authSecretRef?: string;
   disabled: boolean;
+  cwd?: string;
   toolNamePrefix?: string;
   timeoutMs?: number;
   riskLevel?: ToolRiskLevel;
