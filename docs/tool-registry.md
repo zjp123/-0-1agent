@@ -27,6 +27,11 @@ apps/api/src/tools/
   builtin/
     current-time.tool.ts
     calculator.tool.ts
+  mcp/
+    mcp-stdio.client.ts
+    mcp-tool-provider.service.ts
+    mcp-server-management.service.ts
+    mcp-server-management.controller.ts
 ```
 
 ## 核心类型
@@ -149,6 +154,17 @@ POST /api/tools/execute
 
 执行工具。
 
+```http
+GET /api/tools/mcp/servers
+POST /api/tools/mcp/servers
+PATCH /api/tools/mcp/servers/:serverId
+POST /api/tools/mcp/servers/:serverId/approve
+POST /api/tools/mcp/servers/:serverId/disable
+POST /api/tools/mcp/servers/reload
+```
+
+管理动态 MCP server 配置，并触发 Tool Registry 运行时 reload。
+
 示例请求：
 
 ```json
@@ -224,16 +240,20 @@ Web Agent Chat 的 Run Details 会展示 `Tool Outputs` 卡片：
 - MCP 工具发现：`initialize`、`tools/list`
 - MCP 工具执行：`tools/call`
 - MCP 工具统一接入现有权限、schema、timeout、result truncation、audit response
+- MCP DB 动态配置、审批、启停和 reload
+- MCP server env 响应掩码
+- MCP command allowlist 和高风险 server approval gate
 - 工具列表 API
 - 工具执行 API
 
 未完成：
 
-- 高风险工具 approval-required 中断态
+- 工具级 approval-required 中断态恢复执行
 - 审计持久化
 - 工具结果脱敏策略
 - 工具并行执行编排
 - 更完整的工具调用指标
+- MCP 按 tenant 隔离工具可见性
 
 ## 下一步
 
@@ -247,10 +267,16 @@ Web Agent Chat 的 Run Details 会展示 `Tool Outputs` 卡片：
 
 ## MCP 外部工具接入
 
-MCP 默认关闭，避免未授权外部进程进入生产运行时。启用方式：
+MCP 按配置自动启用：
+
+- `MCP_SERVERS` 为空：不启动任何 MCP server。
+- `MCP_SERVERS` 有配置：自动启用 MCP。
+- `MCP_ENABLED=false`：强制关闭配置好的 MCP server。
+- `MCP_ENABLED=true`：显式开启。
+
+本地示例：
 
 ```env
-MCP_ENABLED=true
 MCP_CONNECT_TIMEOUT_MS=10000
 MCP_TOOL_TIMEOUT_MS=15000
 MCP_SERVERS=[{"name":"local_mcp","command":"node","args":["tools/mcp/echo-server.mjs"],"toolNamePrefix":"local_mcp","riskLevel":"low","requiredPermissions":["tools:execute"]}]

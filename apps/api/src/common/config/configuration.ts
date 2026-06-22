@@ -27,6 +27,13 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
+function parseOptionalBoolean(value: string | undefined): boolean | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
 function parseMcpServers(value: string | undefined): Array<{
   name: string;
   command: string;
@@ -81,7 +88,11 @@ function parseStringRecord(value: unknown): Record<string, string> {
   );
 }
 
-export const configuration = registerAs("app", () => ({
+export function buildAppConfiguration() {
+  const mcpServers = parseMcpServers(process.env.MCP_SERVERS);
+  const explicitMcpEnabled = parseOptionalBoolean(process.env.MCP_ENABLED);
+
+  return {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number.parseInt(process.env.PORT ?? "3000", 10),
   allowedOrigins: parseCsv(process.env.ALLOWED_ORIGINS),
@@ -194,8 +205,9 @@ export const configuration = registerAs("app", () => ({
       process.env.RATE_LIMIT_KEY_PREFIX ?? "enterprise-agent:rate-limit",
   },
   tools: {
-    mcpEnabled: parseBoolean(process.env.MCP_ENABLED, false),
-    mcpServers: parseMcpServers(process.env.MCP_SERVERS),
+    mcpEnabled: explicitMcpEnabled ?? mcpServers.length > 0,
+    mcpForceDisabled: explicitMcpEnabled === false,
+    mcpServers,
     mcpConnectTimeoutMs: parsePositiveInt(process.env.MCP_CONNECT_TIMEOUT_MS, 10_000),
     mcpToolTimeoutMs: parsePositiveInt(process.env.MCP_TOOL_TIMEOUT_MS, 15_000),
   },
@@ -241,4 +253,7 @@ export const configuration = registerAs("app", () => ({
     timeoutMs: parsePositiveInt(process.env.LLM_TIMEOUT_MS, 30_000),
     maxRetries: parsePositiveInt(process.env.LLM_MAX_RETRIES, 2),
   },
-}));
+  };
+}
+
+export const configuration = registerAs("app", buildAppConfiguration);

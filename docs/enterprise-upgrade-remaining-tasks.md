@@ -48,6 +48,7 @@
 - [x] CI/CD / Docker Production Build
 - [x] Deployment Operations: readiness / migrations / environment profiles
 - [x] Security Hardening: audit pagination / break-glass / anomaly detection
+- [x] Dynamic MCP Management: DB 配置 / Web 管理 / runtime reload / command approval gate
 
 ## 未完成
 
@@ -56,11 +57,16 @@
 - [x] Phase 15 - Web E2E 自动化测试
 - [x] Phase 16 - Web 配置与密钥治理
 - [x] Phase 17 - Web 生产运行手册
+- [ ] MCP tenant-scoped tool visibility / execution isolation
+- [ ] MCP env secretRef + Secrets/KMS 注入
+- [ ] MCP HTTP/SSE transport
+- [ ] 工具级 approval 恢复执行
 
 ## 当前状态
 
 - 企业级 API / Agent 核心升级路线已完成。
 - Web Console Phase 1-17 已完成。
+- MCP 已从静态 env 配置升级为可动态配置、审批、启停和 reload。
 
 ## 下一步说明
 

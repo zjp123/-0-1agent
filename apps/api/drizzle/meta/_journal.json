@@ -99,6 +99,13 @@
       "when": 1781504430973,
       "tag": "0013_unknown_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782014400000,
+      "tag": "0014_dynamic_mcp_servers",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import type {
 } from "../tool.types.js";
 
 export type McpServerConfig = {
+  id?: string;
   name: string;
   command: string;
   args: string[];

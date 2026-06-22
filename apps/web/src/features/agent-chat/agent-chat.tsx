@@ -25,6 +25,7 @@ type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
+  state?: "streaming" | "completed" | "cancelled" | "error";
 };
 
 type RunSnapshot = {
@@ -58,6 +59,7 @@ export function AgentChat() {
   const [metadata, setMetadata] = useState<RunMetadata | undefined>();
   const [lastRun, setLastRun] = useState<RunSnapshot | undefined>();
   const abortRef = useRef<AbortController | undefined>(undefined);
+  const activeAssistantMessageIdRef = useRef<string | undefined>(undefined);
 
   const canSubmit = status !== "streaming" && message.trim().length > 0;
   const canRetry = status !== "streaming" && Boolean(lastRun);
@@ -104,6 +106,7 @@ export function AgentChat() {
       id: `${requestId}-assistant`,
       role: "assistant",
       content: "",
+      state: "streaming",
     };
 
     setMessages((current) => {
@@ -125,6 +128,7 @@ export function AgentChat() {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    activeAssistantMessageIdRef.current = assistantMessage.id;
 
     try {
       await runAgentStream({
@@ -137,14 +141,19 @@ export function AgentChat() {
         idleTimeoutMs: 45_000,
         onEvent: (event) => handleStreamEvent(event, assistantMessage.id),
       });
-      setStatus((current) => (current === "cancelled" ? current : "done"));
+      if (controller.signal.aborted) {
+        applyCancelledState(assistantMessage.id);
+        return;
+      }
+      markAssistantMessage(assistantMessage.id, "completed");
+      setStatus("done");
     } catch (error) {
       if (controller.signal.aborted) {
-        setStatus("cancelled");
-        setEvents((current) => [...current, "cancelled"]);
+        applyCancelledState(assistantMessage.id);
         return;
       }
       setStatus("error");
+      markAssistantMessage(assistantMessage.id, "error");
       const messageText = normalizeStreamError(error);
       setErrorMessage(messageText);
       notify({
@@ -154,10 +163,17 @@ export function AgentChat() {
       });
     } finally {
       abortRef.current = undefined;
+      if (activeAssistantMessageIdRef.current === assistantMessage.id) {
+        activeAssistantMessageIdRef.current = undefined;
+      }
     }
   }
 
   function handleStreamEvent(event: AgentStreamEvent, assistantMessageId: string): void {
+    if (activeAssistantMessageIdRef.current !== assistantMessageId || status === "cancelled") {
+      return;
+    }
+
     setEvents((current) => [...current, event.event]);
 
     if (event.event === "delta") {
@@ -192,8 +208,15 @@ export function AgentChat() {
   }
 
   function cancel(): void {
+    const assistantMessageId = activeAssistantMessageIdRef.current;
+    activeAssistantMessageIdRef.current = undefined;
     abortRef.current?.abort();
-    setStatus("cancelled");
+    if (assistantMessageId) {
+      applyCancelledState(assistantMessageId);
+    } else {
+      setStatus("cancelled");
+      setEvents((current) => current.includes("cancelled") ? current : [...current, "cancelled"]);
+    }
   }
 
   function clearConversation(): void {
@@ -203,6 +226,37 @@ export function AgentChat() {
     setErrorMessage(undefined);
     setStatus("idle");
     setLastRun(undefined);
+  }
+
+  function markAssistantMessage(
+    assistantMessageId: string,
+    state: NonNullable<ChatMessage["state"]>,
+    fallbackContent?: string,
+  ): void {
+    setMessages((current) =>
+      current.map((item) => {
+        if (item.id !== assistantMessageId) {
+          return item;
+        }
+
+        return {
+          ...item,
+          state,
+          content: item.content.trim().length > 0 ? item.content : fallbackContent ?? item.content,
+        };
+      }),
+    );
+  }
+
+  function applyCancelledState(assistantMessageId: string): void {
+    setStatus("cancelled");
+    setErrorMessage(undefined);
+    setEvents((current) => current.includes("cancelled") ? current : [...current, "cancelled"]);
+    markAssistantMessage(
+      assistantMessageId,
+      "cancelled",
+      "已停止生成。本次请求已由用户手动停止，没有完整回答。",
+    );
   }
 
   return (
@@ -226,7 +280,13 @@ export function AgentChat() {
             {messages.map((item) => (
               <article key={item.id} className={`message message-${item.role}`}>
                 <div className="message-role">{item.role}</div>
-                <MarkdownRenderer content={item.content || (item.role === "assistant" ? "..." : "")} />
+                {item.role === "assistant" && item.state === "cancelled" ? (
+                  <div className="message-state-row">
+                    <StatusBadge tone="warning">stopped</StatusBadge>
+                    <span>用户已停止本次生成</span>
+                  </div>
+                ) : null}
+                <MarkdownRenderer content={messageContent(item)} />
               </article>
             ))}
           </div>
@@ -316,6 +376,22 @@ function normalizeStreamError(error: unknown): string {
   return error.message;
 }
 
+function messageContent(message: ChatMessage): string {
+  if (message.content.trim().length > 0) {
+    return message.content;
+  }
+  if (message.role === "assistant" && message.state === "cancelled") {
+    return "已停止生成。本次请求已由用户手动停止，没有完整回答。";
+  }
+  if (message.role === "assistant" && message.state === "error") {
+    return "生成失败。请查看右侧 Run Details。";
+  }
+  if (message.role === "assistant") {
+    return "正在生成...";
+  }
+  return "";
+}
+
 function riskTone(riskLevel: string) {
   if (riskLevel === "critical" || riskLevel === "high") {
     return "danger" as const;
@@ -349,6 +425,9 @@ function RunMetadataPanel({
         <p className="section-card-description">SSE lifecycle, context, usage, and tool/model timeline.</p>
       </div>
       <div className="section-card-body">
+        {events.includes("cancelled") ? (
+          <div className="alert alert-neutral">This run was stopped by the user before completion.</div>
+        ) : null}
         {errorMessage ? <div className="alert alert-danger">{errorMessage}</div> : null}
         <dl className="details-grid single">
           <div>

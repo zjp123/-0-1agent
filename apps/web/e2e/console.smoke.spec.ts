@@ -43,6 +43,29 @@ test("agent chat consumes a streaming response", async ({ page }) => {
   await expect(page.getByText("model step 1: mock-model")).toBeVisible();
 });
 
+test("agent chat shows a clear stopped state after stop", async ({ page }) => {
+  await seedSession(page);
+  await page.route("**/api/agent/run/stream", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    await route.fulfill({
+      headers: { "content-type": "text/event-stream" },
+      body: "event: started\ndata: {\"requestId\":\"slow-request\"}\n\n",
+    });
+  });
+  await page.goto("/agent-chat");
+
+  await Promise.all([
+    page.waitForRequest("**/api/agent/run/stream"),
+    page.getByRole("button", { name: "Send" }).click(),
+  ]);
+  await page.getByRole("button", { name: "Stop" }).click();
+
+  await expect(page.getByText("用户已停止本次生成")).toBeVisible();
+  await expect(page.getByText("已停止生成。本次请求已由用户手动停止，没有完整回答。")).toBeVisible();
+  await expect(page.locator(".message-assistant").last()).not.toContainText("...");
+  await expect(page.locator(".badge", { hasText: /^cancelled$/ })).toBeVisible();
+});
+
 test("tools page loads tools and executes calculator", async ({ page }) => {
   await seedSession(page);
   await page.goto("/tools");

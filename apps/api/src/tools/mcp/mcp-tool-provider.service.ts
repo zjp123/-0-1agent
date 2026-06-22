@@ -6,6 +6,7 @@ import type {
   ToolHandler,
   ToolRiskLevel,
 } from "../tool.types.js";
+import { McpServerManagementService } from "./mcp-server-management.service.js";
 import { McpStdioClient } from "./mcp-stdio.client.js";
 import { McpToolHandler } from "./mcp-tool.handler.js";
 import {
@@ -21,6 +22,7 @@ export type McpToolProviderStatus = {
     disabled: boolean;
     toolCount: number;
     error?: string;
+    source: "env" | "db";
   }>;
 };
 
@@ -33,26 +35,36 @@ export class McpToolProviderService implements OnApplicationShutdown {
   constructor(
     @Inject(ConfigService)
     private readonly config: ConfigService,
+    @Inject(McpServerManagementService)
+    private readonly serverManagement: McpServerManagementService,
   ) {}
 
   async loadHandlers(): Promise<ToolHandler[]> {
-    const enabled = this.config.get<boolean>("app.tools.mcpEnabled", false);
-    const servers = this.config.get<McpServerConfig[]>("app.tools.mcpServers", []);
+    this.closeClients();
+    const forceDisabled = this.config.get<boolean>("app.tools.mcpForceDisabled", false);
+    const envServers = this.config.get<McpServerConfig[]>("app.tools.mcpServers", []);
+    const dbServers = forceDisabled ? [] : await this.serverManagement.listEnabledConfigs();
+    const enabled = !forceDisabled && (envServers.length > 0 || dbServers.length > 0);
+    const serverEntries = [
+      ...envServers.map((server) => ({ server, source: "env" as const })),
+      ...dbServers.map((server) => ({ server, source: "db" as const })),
+    ];
     this.status = {
       enabled,
-      servers: servers.map((server) => ({
+      servers: serverEntries.map(({ server, source }) => ({
         name: server.name,
         disabled: server.disabled,
         toolCount: 0,
+        source,
       })),
     };
 
-    if (!enabled || servers.length === 0) {
+    if (!enabled || serverEntries.length === 0) {
       return [];
     }
 
     const handlers: ToolHandler[] = [];
-    for (const server of servers) {
+    for (const { server, source } of serverEntries) {
       if (server.disabled) {
         continue;
       }
@@ -85,10 +97,22 @@ export class McpToolProviderService implements OnApplicationShutdown {
         if (statusEntry) {
           statusEntry.toolCount = tools.length;
         }
+        if (source === "db") {
+          await this.serverManagement.markLoadResult(server, {
+            ok: true,
+            loadedAt: new Date(),
+          });
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load MCP server";
         if (statusEntry) {
           statusEntry.error = message;
+        }
+        if (source === "db") {
+          await this.serverManagement.markLoadResult(server, {
+            ok: false,
+            error: message,
+          });
         }
         this.logger.warn(`Failed to load MCP server ${server.name}: ${message}`);
       }
@@ -102,6 +126,10 @@ export class McpToolProviderService implements OnApplicationShutdown {
   }
 
   onApplicationShutdown(): void {
+    this.closeClients();
+  }
+
+  private closeClients(): void {
     for (const client of this.clients) {
       client.close();
     }

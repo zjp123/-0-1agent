@@ -51,6 +51,13 @@ export const indexingJobStatusEnum = pgEnum("indexing_job_status", [
   "cancelled",
 ]);
 
+export const mcpServerStatusEnum = pgEnum("mcp_server_status", [
+  "pending_approval",
+  "active",
+  "disabled",
+  "error",
+]);
+
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 160 }).notNull(),
@@ -645,6 +652,49 @@ export const workflows = pgTable(
   },
   (table) => ({
     tenantIdx: index("workflows_tenant_idx").on(table.tenantId),
+  }),
+);
+
+export const mcpServers = pgTable(
+  "mcp_servers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    name: varchar("name", { length: 160 }).notNull(),
+    transport: varchar("transport", { length: 40 }).notNull().default("stdio"),
+    command: varchar("command", { length: 240 }).notNull(),
+    args: jsonb("args").$type<string[]>().notNull().default([]),
+    env: jsonb("env").$type<Record<string, string>>().notNull().default({}),
+    enabled: boolean("enabled").notNull().default(false),
+    status: mcpServerStatusEnum("status").notNull().default("pending_approval"),
+    riskLevel: varchar("risk_level", { length: 40 }).notNull().default("medium"),
+    requiredPermissions: jsonb("required_permissions").$type<string[]>().notNull().default(["tools:execute"]),
+    toolNamePrefix: varchar("tool_name_prefix", { length: 120 }),
+    timeoutMs: integer("timeout_ms"),
+    commandPolicy: varchar("command_policy", { length: 80 }).notNull().default("allowlist"),
+    approvalRequired: boolean("approval_required").notNull().default(false),
+    lastLoadedAt: timestamp("last_loaded_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdBy: varchar("created_by", { length: 160 }).notNull(),
+    approvedBy: varchar("approved_by", { length: 160 }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    tenantNameIdx: uniqueIndex("mcp_servers_tenant_name_idx").on(
+      table.tenantId,
+      table.name,
+    ),
+    tenantStatusIdx: index("mcp_servers_tenant_status_idx").on(
+      table.tenantId,
+      table.status,
+    ),
+    tenantEnabledIdx: index("mcp_servers_tenant_enabled_idx").on(
+      table.tenantId,
+      table.enabled,
+    ),
   }),
 );
 

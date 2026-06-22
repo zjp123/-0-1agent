@@ -1625,6 +1625,175 @@ export async function listTools(): Promise<ToolDefinition[]> {
   return z.array(toolDefinitionSchema).parse(payload);
 }
 
+const mcpServerSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  name: z.string(),
+  transport: z.literal("stdio"),
+  command: z.string(),
+  args: z.array(z.string()),
+  env: z.record(z.string(), z.string()),
+  enabled: z.boolean(),
+  status: z.enum(["pending_approval", "active", "disabled", "error"]),
+  riskLevel: z.enum(["low", "medium", "high", "critical"]),
+  requiredPermissions: z.array(z.string()),
+  toolNamePrefix: z.string().optional(),
+  timeoutMs: z.number().optional(),
+  commandPolicy: z.string(),
+  approvalRequired: z.boolean(),
+  lastLoadedAt: z.string().optional(),
+  lastError: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()),
+  createdBy: z.string(),
+  approvedBy: z.string().optional(),
+  approvedAt: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type McpServer = z.infer<typeof mcpServerSchema>;
+
+const toolRegistryStatusSchema = z.object({
+  builtinTools: z.array(z.string()),
+  mcpEnabled: z.boolean(),
+  mcpTools: z.array(z.string()),
+  mcpServers: z.array(z.object({
+    name: z.string(),
+    disabled: z.boolean(),
+    toolCount: z.number(),
+    error: z.string().optional(),
+    source: z.enum(["env", "db"]),
+  })),
+  controls: z.array(z.string()),
+});
+
+export type ToolRegistryStatus = z.infer<typeof toolRegistryStatusSchema>;
+
+const mcpServerMutationResponseSchema = z.object({
+  server: mcpServerSchema,
+  registry: toolRegistryStatusSchema,
+});
+
+export type McpServerMutationResponse = z.infer<typeof mcpServerMutationResponseSchema>;
+
+export async function listMcpServers(
+  credentials: AuthCredentials,
+): Promise<McpServer[]> {
+  const response = await fetch(`${apiBaseUrl}/tools/mcp/servers`, {
+    cache: "no-store",
+    headers: buildAuthHeaders(credentials),
+  });
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(JSON.stringify(payload));
+  }
+  return z.array(mcpServerSchema).parse(payload);
+}
+
+export async function createMcpServer(
+  input: {
+    name: string;
+    command: string;
+    args: string[];
+    env?: Record<string, string>;
+    enabled: boolean;
+    riskLevel: McpServer["riskLevel"];
+    requiredPermissions: string[];
+    toolNamePrefix?: string;
+    timeoutMs?: number;
+    reason: string;
+  } & AuthCredentials,
+): Promise<McpServerMutationResponse> {
+  const response = await fetch(`${apiBaseUrl}/tools/mcp/servers`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      name: input.name,
+      command: input.command,
+      args: input.args,
+      env: input.env ?? {},
+      enabled: input.enabled,
+      riskLevel: input.riskLevel,
+      requiredPermissions: input.requiredPermissions,
+      toolNamePrefix: input.toolNamePrefix || undefined,
+      timeoutMs: input.timeoutMs,
+      reason: input.reason,
+    }),
+  });
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(JSON.stringify(payload));
+  }
+  return mcpServerMutationResponseSchema.parse(payload);
+}
+
+export async function updateMcpServer(
+  input: {
+    serverId: string;
+    enabled?: boolean;
+    reason: string;
+  } & AuthCredentials,
+): Promise<McpServerMutationResponse> {
+  const response = await fetch(`${apiBaseUrl}/tools/mcp/servers/${input.serverId}`, {
+    method: "PATCH",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      enabled: input.enabled,
+      reason: input.reason,
+    }),
+  });
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(JSON.stringify(payload));
+  }
+  return mcpServerMutationResponseSchema.parse(payload);
+}
+
+export async function approveMcpServer(
+  input: { serverId: string; reason: string } & AuthCredentials,
+): Promise<McpServerMutationResponse> {
+  return mcpServerAction(input.serverId, "approve", input.reason, input);
+}
+
+export async function disableMcpServer(
+  input: { serverId: string; reason: string } & AuthCredentials,
+): Promise<McpServerMutationResponse> {
+  return mcpServerAction(input.serverId, "disable", input.reason, input);
+}
+
+export async function reloadMcpServers(
+  credentials: AuthCredentials,
+): Promise<ToolRegistryStatus> {
+  const response = await fetch(`${apiBaseUrl}/tools/mcp/servers/reload`, {
+    method: "POST",
+    headers: buildAuthHeaders(credentials, true),
+    body: JSON.stringify({}),
+  });
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(JSON.stringify(payload));
+  }
+  return toolRegistryStatusSchema.parse(payload);
+}
+
+async function mcpServerAction(
+  serverId: string,
+  action: "approve" | "disable",
+  reason: string,
+  credentials: AuthCredentials,
+): Promise<McpServerMutationResponse> {
+  const response = await fetch(`${apiBaseUrl}/tools/mcp/servers/${serverId}/${action}`, {
+    method: "POST",
+    headers: buildAuthHeaders(credentials, true),
+    body: JSON.stringify({ reason }),
+  });
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(JSON.stringify(payload));
+  }
+  return mcpServerMutationResponseSchema.parse(payload);
+}
+
 export async function executeTool(input: {
   name: string;
   arguments: Record<string, unknown>;

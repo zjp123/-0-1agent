@@ -41,6 +41,11 @@ export class ToolRegistryService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
+    await this.reloadMcpHandlers();
+  }
+
+  async reloadMcpHandlers(): Promise<ToolRegistryStatus> {
+    this.unregisterBySource("mcp");
     const handlers = await this.mcpTools.loadHandlers();
     for (const handler of handlers) {
       try {
@@ -53,6 +58,7 @@ export class ToolRegistryService implements OnModuleInit {
         );
       }
     }
+    return this.getStatus();
   }
 
   register(handler: ToolHandler): void {
@@ -63,6 +69,14 @@ export class ToolRegistryService implements OnModuleInit {
       );
     }
     this.handlers.set(handler.definition.name, handler);
+  }
+
+  private unregisterBySource(source: ToolDefinition["source"]): void {
+    for (const [name, handler] of this.handlers.entries()) {
+      if (handler.definition.source === source) {
+        this.handlers.delete(name);
+      }
+    }
   }
 
   listDefinitions(): ToolDefinition[] {

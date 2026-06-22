@@ -205,17 +205,65 @@
 
 安全约束：
 
-- MCP 默认关闭。
+- 未配置 `MCP_SERVERS` 时不启动 MCP；配置 `MCP_SERVERS` 后自动启用 MCP。
+- `MCP_ENABLED=false` 可强制关闭已经配置的 MCP servers。
 - MCP 子进程不继承 API 完整环境变量，只传递 `PATH`、`HOME`、`NODE_ENV` 和显式配置的 server `env`。
 - MCP 工具默认需要 `tools:execute`。
 
 复测：
 
-- 临时启动 `PORT=3002 MCP_ENABLED=true` API。
+- 临时启动 `PORT=3002` 并配置 `MCP_SERVERS` 的 API。
 - `GET /api/tools` 返回 `local_mcp.echo`、`local_mcp.word_count`。
 - `POST /api/tools/execute` 执行 `local_mcp.echo` 成功，返回 `source=mcp` 和结构化 `data.message`。
 - `GET /api/agent/capabilities` 返回 `mcpEnabled=true`、`mcpTools=["local_mcp.echo","local_mcp.word_count"]`。
 - 临时 3002 API 和 MCP server 已停止。
+
+### 7. Agent Chat Stop 后仍显示思考态
+
+现象：
+
+- 在 `http://localhost:3001/agent-chat` 点击 `Send` 后再点击 `Stop`。
+- assistant 消息仍显示 `...`，视觉上像仍在思考，无法明确判断已经停止。
+
+修复：
+
+- Agent Chat 消息增加 `state`：`streaming`、`completed`、`cancelled`、`error`。
+- Stop 时立即 abort 当前 stream，并把 active assistant 消息切换到 `cancelled`。
+- cancelled assistant 卡片显示 `stopped` badge 和中文提示：`用户已停止本次生成`。
+- 空 assistant 内容不再统一 fallback 为 `...`，而是按状态显示 `正在生成...`、停止提示或错误提示。
+- Run Details 中增加 cancelled 提示。
+- abort 后清空 active stream id，忽略晚到 SSE event，避免停止后被 `done/result` 改回完成态。
+
+复测：
+
+- 新增 Web E2E：`agent chat shows a clear stopped state after stop`。
+- `npm run test:e2e:web`：10 passed。
+- `npm run build:web`：通过。
+
+### 8. MCP 配置后仍需手动开启的问题
+
+现象：
+
+- 用户配置了 `MCP_SERVERS` 后，如果忘记额外设置 `MCP_ENABLED=true`，MCP 工具仍不可用。
+- 这会造成“双开关”体验，容易误判为 MCP 配置不生效。
+
+修复：
+
+- MCP 启用策略改为配置驱动：
+  - `MCP_SERVERS` 为空：不启动任何 MCP server。
+  - `MCP_SERVERS` 有配置：自动启用 MCP。
+  - `MCP_ENABLED=false`：强制关闭已配置 MCP servers。
+  - `MCP_ENABLED=true`：显式开启。
+- 导出 `buildAppConfiguration()` 并增加单元测试覆盖三种状态。
+- 更新 `.env.example`、`docs/mcp-external-tools.md`、`docs/tool-registry.md`。
+
+复测：
+
+- 只设置 `MCP_SERVERS`、不设置 `MCP_ENABLED`：`mcpEnabled=true`。
+- 设置 `MCP_ENABLED=false` 且配置 `MCP_SERVERS`：`mcpEnabled=false`。
+- `npm run check -w @enterprise-agent/api`：通过。
+- `npm run test:unit`：15 passed。
+- `npm run build -w @enterprise-agent/api`：通过。
 
 ## 最终结论
 

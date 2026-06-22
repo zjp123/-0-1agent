@@ -1,13 +1,19 @@
 "use client";
 
-import { Play, RefreshCcw } from "lucide-react";
+import { CheckCircle2, PauseCircle, Play, RefreshCcw, Server, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
+  approveMcpServer,
+  createMcpServer,
+  disableMcpServer,
   executeTool,
   listTools,
+  listMcpServers,
+  reloadMcpServers,
+  type McpServer,
   type ToolCallResponse,
   type ToolDefinition,
 } from "@/lib/api/client";
@@ -29,6 +35,11 @@ export function ToolsWorkbench() {
   const [apiKey, setApiKey] = useState("");
   const [serviceToken, setServiceToken] = useState("");
   const [result, setResult] = useState<ToolCallResponse | undefined>();
+  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+  const [mcpName, setMcpName] = useState("local_mcp");
+  const [mcpCommand, setMcpCommand] = useState("node");
+  const [mcpArgs, setMcpArgs] = useState("tools/mcp/echo-server.mjs");
+  const [mcpRiskLevel, setMcpRiskLevel] = useState<McpServer["riskLevel"]>("medium");
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
@@ -44,6 +55,10 @@ export function ToolsWorkbench() {
     try {
       const nextTools = await listTools();
       setTools(nextTools);
+      if (hasCredentials) {
+        const nextServers = await listMcpServers(credentials);
+        setMcpServers(nextServers);
+      }
       if (!selectedName && nextTools[0]) {
         setSelectedName(nextTools[0].name);
         setArgumentsText(defaultArguments(nextTools[0].name));
@@ -57,7 +72,76 @@ export function ToolsWorkbench() {
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [hasCredentials]);
+
+  async function createServer(): Promise<void> {
+    setLoading(true);
+    setErrorMessage(undefined);
+    try {
+      await createMcpServer({
+        name: mcpName,
+        command: mcpCommand,
+        args: mcpArgs.split(/\s+/).map((item) => item.trim()).filter(Boolean),
+        enabled: true,
+        riskLevel: mcpRiskLevel,
+        requiredPermissions: ["tools:execute"],
+        reason: "Configure MCP server from Web Console",
+        ...credentials,
+      });
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create MCP server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function approveServer(serverId: string): Promise<void> {
+    setLoading(true);
+    setErrorMessage(undefined);
+    try {
+      await approveMcpServer({
+        serverId,
+        reason: "Approve MCP server from Web Console",
+        ...credentials,
+      });
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to approve MCP server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function disableServer(serverId: string): Promise<void> {
+    setLoading(true);
+    setErrorMessage(undefined);
+    try {
+      await disableMcpServer({
+        serverId,
+        reason: "Disable MCP server from Web Console",
+        ...credentials,
+      });
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to disable MCP server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function reloadServers(): Promise<void> {
+    setLoading(true);
+    setErrorMessage(undefined);
+    try {
+      await reloadMcpServers(credentials);
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to reload MCP servers.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function runSelectedTool(): Promise<void> {
     if (!selectedTool) {
@@ -104,6 +188,81 @@ export function ToolsWorkbench() {
       </div>
 
       {errorMessage ? <div className="alert alert-danger">{errorMessage}</div> : null}
+
+      <section className="section-card mcp-manager-card">
+        <div className="section-card-header">
+          <div>
+            <h2 className="section-card-title">MCP Servers</h2>
+            <p className="section-card-description">Manage runtime MCP tool servers with masked env values and guarded enablement.</p>
+          </div>
+          <button type="button" className="refresh-button" onClick={() => void reloadServers()} disabled={loading || !hasCredentials}>
+            <RefreshCcw className={`icon-sm ${loading ? "spin" : ""}`} aria-hidden="true" />
+            Reload
+          </button>
+        </div>
+        <div className="section-card-body mcp-manager-body">
+          {!hasCredentials ? <div className="alert alert-neutral">Sign in or enter local credentials to manage MCP servers.</div> : null}
+          <div className="mcp-create-grid">
+            <label>
+              <span className="label">Name</span>
+              <input value={mcpName} onChange={(event) => setMcpName(event.target.value)} className="text-input" />
+            </label>
+            <label>
+              <span className="label">Command</span>
+              <input value={mcpCommand} onChange={(event) => setMcpCommand(event.target.value)} className="text-input" />
+            </label>
+            <label>
+              <span className="label">Args</span>
+              <input value={mcpArgs} onChange={(event) => setMcpArgs(event.target.value)} className="text-input" />
+            </label>
+            <label>
+              <span className="label">Risk</span>
+              <select value={mcpRiskLevel} onChange={(event) => setMcpRiskLevel(event.target.value as McpServer["riskLevel"])} className="text-input">
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="critical">critical</option>
+              </select>
+            </label>
+            <button type="button" className="refresh-button" onClick={() => void createServer()} disabled={loading || !hasCredentials}>
+              <Server className="icon-sm" aria-hidden="true" />
+              Add
+            </button>
+          </div>
+
+          <div className="mcp-server-list">
+            {mcpServers.length > 0 ? mcpServers.map((server) => (
+              <article key={server.id} className="mcp-server-row">
+                <div className="mcp-server-main">
+                  <div className="mcp-server-title">
+                    <strong>{server.name}</strong>
+                    <StatusBadge tone={server.status === "active" ? "success" : server.status === "error" ? "danger" : "warning"}>{server.status}</StatusBadge>
+                    <StatusBadge tone={server.riskLevel === "high" || server.riskLevel === "critical" ? "warning" : "neutral"}>{server.riskLevel}</StatusBadge>
+                  </div>
+                  <p className="mcp-command-line">{server.command} {server.args.join(" ")}</p>
+                  {server.lastError ? <p className="mcp-error-line">{server.lastError}</p> : null}
+                </div>
+                <div className="mcp-server-actions">
+                  {server.status !== "active" ? (
+                    <button type="button" className="icon-action-button" onClick={() => void approveServer(server.id)} disabled={loading}>
+                      <ShieldCheck className="icon-sm" aria-hidden="true" />
+                      Approve
+                    </button>
+                  ) : (
+                    <button type="button" className="icon-action-button" onClick={() => void disableServer(server.id)} disabled={loading}>
+                      <PauseCircle className="icon-sm" aria-hidden="true" />
+                      Disable
+                    </button>
+                  )}
+                  {server.enabled ? <CheckCircle2 className="icon-sm mcp-enabled-icon" aria-label="enabled" /> : null}
+                </div>
+              </article>
+            )) : (
+              <div className="empty-state">No dynamic MCP servers configured.</div>
+            )}
+          </div>
+        </div>
+      </section>
 
       <section className="tools-layout">
         <aside className="tool-list">
