@@ -8,6 +8,7 @@ import { AuthSessionService } from "./auth-session.service.js";
 import { AuthService } from "./auth.service.js";
 import { ConsoleAuthController } from "./console-auth.controller.js";
 import { ConsoleAuthService } from "./console-auth.service.js";
+import { ConsoleCookieService } from "./console-cookie.service.js";
 import { PermissionsGuard } from "./permissions.guard.js";
 
 @Module({
@@ -18,6 +19,7 @@ import { PermissionsGuard } from "./permissions.guard.js";
     AuthRbacService,
     AuthSessionService,
     ConsoleAuthService,
+    ConsoleCookieService,
     ApiKeyGuard,
     PermissionsGuard,
   ],
@@ -27,6 +29,7 @@ import { PermissionsGuard } from "./permissions.guard.js";
     AuthRbacService,
     AuthSessionService,
     ConsoleAuthService,
+    ConsoleCookieService,
     ApiKeyGuard,
     PermissionsGuard,
   ],

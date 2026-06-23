@@ -955,6 +955,45 @@ pre {
   background: #f8fafc;
 }
 
+.table-row-active {
+  background: #ecfdf5;
+}
+
+.audit-query-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.audit-filter-grid {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.pagination-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pagination-label {
+  color: #475569;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.audit-detail-card {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  padding: 1rem;
+}
+
 .evaluation-layout {
   display: grid;
   gap: 1rem;
@@ -1022,6 +1061,63 @@ pre {
   display: grid;
   align-content: start;
   gap: 1rem;
+}
+
+.knowledge-filter-grid {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.file-upload-control {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.file-upload-control input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-upload-control:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.file-upload-control:has(input:disabled) input {
+  cursor: not-allowed;
+}
+
+.knowledge-preview {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.knowledge-preview-content {
+  max-height: 22rem;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  padding: 0.875rem;
+  white-space: pre-wrap;
 }
 
 .retrieval-item {
@@ -1244,6 +1340,75 @@ pre {
   gap: 0.5rem;
 }
 
+.tool-group {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: #ffffff;
+}
+
+.tool-group-active {
+  border-color: #99f6e4;
+}
+
+.tool-group-header {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tool-group-header:hover {
+  background: #f8fafc;
+}
+
+.tool-group-header > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.tool-group-chevron {
+  transform: rotate(-90deg);
+  transition: transform 160ms ease;
+}
+
+.tool-group-chevron-open {
+  transform: rotate(0deg);
+  transition: transform 160ms ease;
+}
+
+.tool-group-count {
+  display: inline-flex;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.tool-group-items {
+  display: grid;
+  gap: 0.375rem;
+  border-top: 1px solid var(--line);
+  background: #f8fafc;
+  padding: 0.5rem;
+}
+
 .tool-list-item {
   display: flex;
   align-items: center;
@@ -1253,9 +1418,14 @@ pre {
   border-radius: 0.5rem;
   background: #ffffff;
   color: #334155;
-  padding: 0.75rem;
+  padding: 0.625rem 0.75rem;
   text-align: left;
   cursor: pointer;
+}
+
+.tool-list-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tool-list-item:hover {
@@ -1289,6 +1459,12 @@ pre {
   display: grid;
   min-width: 0;
   gap: 0.75rem;
+  scroll-margin-top: 5rem;
+}
+
+.mcp-form-status {
+  display: flex;
+  min-width: 0;
 }
 
 .mcp-header-actions {
@@ -1319,6 +1495,11 @@ pre {
   border-radius: 0.5rem;
   background: #ffffff;
   padding: 0.875rem;
+}
+
+.mcp-server-row-editing {
+  border-color: #5eead4;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.14);
 }
 
 .mcp-server-main {

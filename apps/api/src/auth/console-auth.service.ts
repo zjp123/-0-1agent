@@ -37,6 +37,7 @@ export type ConsoleAuthUser = {
 export type ConsoleAuthResponse = {
   accessToken: string;
   refreshToken: string;
+  csrfToken?: string;
   expiresAt: string;
   refreshTokenExpiresAt: string;
   sessionId: string;

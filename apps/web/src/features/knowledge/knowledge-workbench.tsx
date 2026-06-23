@@ -50,6 +50,11 @@ function parseTags(value: string): string[] | undefined {
   return tags.length > 0 ? tags : undefined;
 }
 
+function mergeTags(...tagGroups: Array<string[] | undefined>): string[] | undefined {
+  const tags = Array.from(new Set(tagGroups.flatMap((group) => group ?? []).map((tag) => tag.trim()).filter(Boolean)));
+  return tags.length > 0 ? tags : undefined;
+}
+
 function formatDate(value?: string): string {
   if (!value) {
     return "none";
@@ -90,10 +95,12 @@ export function KnowledgeWorkbench() {
   const [results, setResults] = useState<KnowledgeSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [retrieving, setRetrieving] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [successMessage, setSuccessMessage] = useState<string | undefined>();
+  const [uploadSummary, setUploadSummary] = useState<Array<{ name: string; status: "success" | "failed"; message: string }>>([]);
   const [title, setTitle] = useState("Enterprise Agent Runbook");
   const [content, setContent] = useState(
     "This document describes how operators test the enterprise agent knowledge base locally.",
@@ -101,6 +108,9 @@ export function KnowledgeWorkbench() {
   const [sourceType, setSourceType] = useState<KnowledgeSourceType>("manual");
   const [sourceUri, setSourceUri] = useState("local://runbook");
   const [tagsText, setTagsText] = useState("runbook,local");
+  const [documentSearch, setDocumentSearch] = useState("");
+  const [documentTagFilter, setDocumentTagFilter] = useState("");
+  const [selectedDocumentId, setSelectedDocumentId] = useState("");
   const [query, setQuery] = useState("enterprise agent knowledge base");
   const [queryTagsText, setQueryTagsText] = useState("");
   const [limit, setLimit] = useState(5);
@@ -108,6 +118,23 @@ export function KnowledgeWorkbench() {
   const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
   const totalChunks = data.jobs.reduce((total, job) => total + job.totalChunks, 0);
   const processedChunks = data.jobs.reduce((total, job) => total + job.processedChunks, 0);
+  const filteredDocuments = useMemo(() => {
+    const normalizedSearch = documentSearch.trim().toLowerCase();
+    const normalizedTag = documentTagFilter.trim().toLowerCase();
+    return data.documents.filter((document) => {
+      const haystack = [document.title, document.sourceType, document.sourceUri ?? "", document.content, document.id]
+        .join(" ")
+        .toLowerCase();
+      const matchesSearch = !normalizedSearch || haystack.includes(normalizedSearch);
+      const matchesTag =
+        !normalizedTag || document.tags.some((tag) => tag.toLowerCase().includes(normalizedTag));
+      return matchesSearch && matchesTag;
+    });
+  }, [data.documents, documentSearch, documentTagFilter]);
+  const selectedDocument = useMemo(
+    () => data.documents.find((document) => document.id === selectedDocumentId),
+    [data.documents, selectedDocumentId],
+  );
 
   async function refresh(): Promise<void> {
     if (!hasCredentials) {
@@ -128,6 +155,9 @@ export function KnowledgeWorkbench() {
         getIndexingWorkerAlerts(credentials),
       ]);
       setData({ documents, jobs, workerStatus, workerAlerts });
+      setSelectedDocumentId((current) =>
+        documents.some((document) => document.id === current) ? current : documents[0]?.id ?? "",
+      );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load knowledge data.");
     } finally {
@@ -163,6 +193,64 @@ export function KnowledgeWorkbench() {
       setErrorMessage(error instanceof Error ? error.message : "Knowledge ingestion failed.");
     } finally {
       setIngesting(false);
+    }
+  }
+
+  async function submitFileUpload(fileList: FileList | null, input: HTMLInputElement): Promise<void> {
+    if (!hasCredentials) {
+      setErrorMessage("Enter an API key or service token before uploading knowledge files.");
+      input.value = "";
+      return;
+    }
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) {
+      return;
+    }
+
+    setUploadingFiles(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    setUploadSummary([]);
+    const summaries: Array<{ name: string; status: "success" | "failed"; message: string }> = [];
+    const baseTags = parseTags(tagsText);
+
+    try {
+      for (const file of files) {
+        try {
+          const fileContent = await file.text();
+          if (!fileContent.trim()) {
+            summaries.push({ name: file.name, status: "failed", message: "File is empty." });
+            continue;
+          }
+          const response = await ingestKnowledge({
+            ...credentials,
+            title: file.name.replace(/\.[^/.]+$/, "") || file.name,
+            content: fileContent,
+            sourceType: "upload",
+            sourceUri: file.name,
+            tags: mergeTags(baseTags, ["upload"]),
+          });
+          summaries.push({
+            name: file.name,
+            status: "success",
+            message: `${response.chunks.length} chunk(s) indexed.`,
+          });
+        } catch (error) {
+          summaries.push({
+            name: file.name,
+            status: "failed",
+            message: error instanceof Error ? error.message : "Upload ingestion failed.",
+          });
+        }
+      }
+      setUploadSummary(summaries);
+      const successCount = summaries.filter((summary) => summary.status === "success").length;
+      const failureCount = summaries.length - successCount;
+      setSuccessMessage(`Uploaded ${successCount}/${summaries.length} file(s). ${failureCount} failed.`);
+      await refresh();
+    } finally {
+      input.value = "";
+      setUploadingFiles(false);
     }
   }
 
@@ -213,6 +301,25 @@ export function KnowledgeWorkbench() {
     } finally {
       setReindexing(false);
     }
+  }
+
+  function useSelectedDocumentAsQuery(): void {
+    if (!selectedDocument) {
+      return;
+    }
+    setQuery(`${selectedDocument.title}\n\n${selectedDocument.content.slice(0, 800)}`.trim());
+    setQueryTagsText(selectedDocument.tags.join(", "));
+  }
+
+  function copySelectedDocumentToForm(): void {
+    if (!selectedDocument) {
+      return;
+    }
+    setTitle(selectedDocument.title);
+    setContent(selectedDocument.content);
+    setSourceType(selectedDocument.sourceType);
+    setSourceUri(selectedDocument.sourceUri ?? "");
+    setTagsText(selectedDocument.tags.join(", "));
   }
 
   return (
@@ -357,6 +464,37 @@ export function KnowledgeWorkbench() {
 
           <section className="section-card">
             <div className="section-card-header">
+              <h2 className="section-card-title">Upload Files</h2>
+              <p className="section-card-description">Batch ingest local text, markdown, JSON, and CSV files.</p>
+            </div>
+            <div className="section-card-body auth-form">
+              <label className="file-upload-control">
+                <UploadCloud className="icon-sm" aria-hidden="true" />
+                <span>{uploadingFiles ? "Uploading..." : "Choose Files"}</span>
+                <input
+                  type="file"
+                  multiple
+                  accept=".txt,.md,.markdown,.json,.csv,.log,text/plain,text/markdown,application/json,text/csv"
+                  disabled={uploadingFiles || !hasCredentials}
+                  onChange={(event) => void submitFileUpload(event.currentTarget.files, event.currentTarget)}
+                />
+              </label>
+              {uploadSummary.length > 0 ? (
+                <ul className="compact-list">
+                  {uploadSummary.map((summary) => (
+                    <li key={`${summary.name}-${summary.status}`}>
+                      <span>{summary.name}</span>
+                      <StatusBadge tone={summary.status === "success" ? "success" : "danger"}>{summary.status}</StatusBadge>
+                      <span>{summary.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
               <h2 className="section-card-title">Retrieve Test</h2>
               <p className="section-card-description">Run a query against keyword/vector hybrid retrieval.</p>
             </div>
@@ -420,6 +558,26 @@ export function KnowledgeWorkbench() {
               </button>
             </div>
             <div className="section-card-body">
+              <div className="knowledge-filter-grid">
+                <label>
+                  <span className="label">Search</span>
+                  <input
+                    value={documentSearch}
+                    onChange={(event) => setDocumentSearch(event.target.value)}
+                    className="text-input"
+                    placeholder="Title, source, content, or id"
+                  />
+                </label>
+                <label>
+                  <span className="label">Tag</span>
+                  <input
+                    value={documentTagFilter}
+                    onChange={(event) => setDocumentTagFilter(event.target.value)}
+                    className="text-input"
+                    placeholder="runbook"
+                  />
+                </label>
+              </div>
               <div className="dependency-table-wrap">
                 <table className="dependency-table">
                   <thead>
@@ -431,8 +589,12 @@ export function KnowledgeWorkbench() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.documents.map((document) => (
-                      <tr key={document.id}>
+                    {filteredDocuments.map((document) => (
+                      <tr
+                        key={document.id}
+                        className={document.id === selectedDocumentId ? "clickable-row table-row-active" : "clickable-row"}
+                        onClick={() => setSelectedDocumentId(document.id)}
+                      >
                         <td>
                           <div className="dependency-name">{document.title}</div>
                           <div className="dependency-detail">{document.id}</div>
@@ -445,16 +607,79 @@ export function KnowledgeWorkbench() {
                         <td>{formatDate(document.createdAt)}</td>
                       </tr>
                     ))}
-                    {data.documents.length === 0 ? (
+                    {filteredDocuments.length === 0 ? (
                       <tr>
                         <td colSpan={4}>
-                          <div className="table-empty">No documents loaded.</div>
+                          <div className="table-empty">No documents matched.</div>
                         </td>
                       </tr>
                     ) : null}
                   </tbody>
                 </table>
               </div>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header table-card-header">
+              <div>
+                <h2 className="section-card-title">Document Preview</h2>
+                <p className="section-card-description">Inspect the selected document before retrieval testing.</p>
+              </div>
+              <div className="mcp-server-actions">
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={useSelectedDocumentAsQuery}
+                  disabled={!selectedDocument}
+                >
+                  <Search className="icon-sm" aria-hidden="true" />
+                  Use as Query
+                </button>
+                <button
+                  type="button"
+                  className="refresh-button secondary-button"
+                  onClick={copySelectedDocumentToForm}
+                  disabled={!selectedDocument}
+                >
+                  <FileText className="icon-sm" aria-hidden="true" />
+                  Edit Draft
+                </button>
+              </div>
+            </div>
+            <div className="section-card-body">
+              {selectedDocument ? (
+                <div className="knowledge-preview">
+                  <dl className="details-grid">
+                    <div>
+                      <dt className="label">Title</dt>
+                      <dd className="detail-value">{selectedDocument.title}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Source</dt>
+                      <dd className="detail-value">{selectedDocument.sourceType}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Source URI</dt>
+                      <dd className="detail-value">{selectedDocument.sourceUri ?? "none"}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Updated</dt>
+                      <dd className="detail-value">{formatDate(selectedDocument.updatedAt)}</dd>
+                    </div>
+                  </dl>
+                  <div className="badge-row">
+                    {selectedDocument.tags.length > 0 ? (
+                      selectedDocument.tags.map((tag) => <StatusBadge key={tag}>{tag}</StatusBadge>)
+                    ) : (
+                      <StatusBadge>no tags</StatusBadge>
+                    )}
+                  </div>
+                  <p className="retrieval-content knowledge-preview-content">{selectedDocument.content}</p>
+                </div>
+              ) : (
+                <div className="empty-state">Select a document to preview it.</div>
+              )}
             </div>
           </section>
 

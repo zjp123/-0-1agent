@@ -252,6 +252,7 @@ export type ConsoleAuthUser = {
 export type ConsoleAuthResponse = {
   accessToken: string;
   refreshToken: string;
+  csrfToken?: string;
   expiresAt: string;
   refreshTokenExpiresAt: string;
   sessionId: string;
@@ -319,6 +320,17 @@ export type AuthAuditEventList = {
   limit: number;
   offset: number;
   nextOffset?: number;
+};
+
+export type AuthAuditEventQuery = {
+  limit?: number;
+  offset?: number;
+  action?: string;
+  targetType?: string;
+  targetId?: string;
+  actorUserId?: string;
+  from?: string;
+  to?: string;
 };
 
 export type SecurityAnomalyEvent = {
@@ -969,6 +981,7 @@ const consoleAuthUserSchema: z.ZodType<ConsoleAuthUser> = z.object({
 const consoleAuthResponseSchema: z.ZodType<ConsoleAuthResponse> = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
+  csrfToken: z.string().optional(),
   expiresAt: z.string(),
   refreshTokenExpiresAt: z.string(),
   sessionId: z.string(),
@@ -1855,6 +1868,7 @@ export async function executeTool(input: {
 export async function consoleLogin(input: ConsoleLoginInput): Promise<ConsoleAuthResponse> {
   const payload = await fetchJson(`${apiBaseUrl}/auth/console/login`, {
     method: "POST",
+    credentials: "include",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       credentialType: input.credentialType,
@@ -1872,6 +1886,7 @@ export async function consoleLogin(input: ConsoleLoginInput): Promise<ConsoleAut
 export async function consoleRegister(input: ConsoleRegisterInput): Promise<ConsoleAuthResponse> {
   const payload = await fetchJson(`${apiBaseUrl}/auth/console/register`, {
     method: "POST",
+    credentials: "include",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       email: input.email,
@@ -1884,20 +1899,34 @@ export async function consoleRegister(input: ConsoleRegisterInput): Promise<Cons
   return consoleAuthResponseSchema.parse(payload);
 }
 
-export async function consoleRefresh(refreshToken: string): Promise<ConsoleAuthResponse> {
+export async function consoleRefresh(
+  refreshToken: string | undefined,
+  csrfToken: string | undefined,
+): Promise<ConsoleAuthResponse> {
   const payload = await fetchJson(`${apiBaseUrl}/auth/console/refresh`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+    },
+    body: JSON.stringify({ refreshToken: refreshToken || undefined }),
   });
   return consoleAuthResponseSchema.parse(payload);
 }
 
-export async function consoleLogout(refreshToken: string): Promise<void> {
+export async function consoleLogout(
+  refreshToken: string | undefined,
+  csrfToken: string | undefined,
+): Promise<void> {
   await fetchJson(`${apiBaseUrl}/auth/console/logout`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
+    },
+    body: JSON.stringify({ refreshToken: refreshToken || undefined }),
   });
 }
 
@@ -1943,7 +1972,7 @@ export async function listServiceTokens(
 
 export async function listAuthAuditEvents(
   credentials: AuthCredentials,
-  query: { limit?: number; offset?: number } = {},
+  query: AuthAuditEventQuery = {},
 ): Promise<AuthAuditEventList> {
   const params = new URLSearchParams();
   if (query.limit !== undefined) {
@@ -1951,6 +1980,24 @@ export async function listAuthAuditEvents(
   }
   if (query.offset !== undefined) {
     params.set("offset", String(query.offset));
+  }
+  if (query.action) {
+    params.set("action", query.action);
+  }
+  if (query.targetType) {
+    params.set("targetType", query.targetType);
+  }
+  if (query.targetId) {
+    params.set("targetId", query.targetId);
+  }
+  if (query.actorUserId) {
+    params.set("actorUserId", query.actorUserId);
+  }
+  if (query.from) {
+    params.set("from", query.from);
+  }
+  if (query.to) {
+    params.set("to", query.to);
   }
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
   const payload = await fetchJson(`${apiBaseUrl}/auth/audit-events${suffix}`, {
@@ -2407,6 +2454,7 @@ async function fetchJson(url: string, init: FetchJsonInit): Promise<unknown> {
     try {
       const response = await fetch(url, {
         cache: "no-store",
+        credentials: "same-origin",
         ...init,
         signal: controller.signal,
         headers: {

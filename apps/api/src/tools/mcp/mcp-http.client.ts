@@ -21,6 +21,7 @@ type JsonRpcResponse = {
 
 export class McpHttpClient {
   private nextId = 1;
+  private sessionId: string | undefined;
 
   constructor(
     private readonly config: McpServerConfig,
@@ -36,6 +37,7 @@ export class McpHttpClient {
         version: "0.1.0",
       },
     });
+    await this.notify("notifications/initialized", {});
   }
 
   async listTools(timeoutMs = this.connectTimeoutMs): Promise<McpToolDefinition[]> {
@@ -110,24 +112,21 @@ export class McpHttpClient {
       });
 
       const text = await response.text();
+      this.captureSessionId(response);
       if (!response.ok) {
         throw new ToolRegistryError(
-          `MCP HTTP ${response.status}: ${text.slice(0, 500)}`,
+          `MCP HTTP ${response.status}: ${this.previewResponse(text)}`,
           "TOOL_EXECUTION_FAILED",
           { serverName: this.config.name, method },
         );
       }
 
-      let payload: unknown;
-      try {
-        payload = JSON.parse(text) as unknown;
-      } catch {
-        throw new ToolRegistryError(
-          `Invalid JSON from MCP server ${this.config.name}`,
-          "TOOL_EXECUTION_FAILED",
-          { serverName: this.config.name, method },
-        );
-      }
+      const payload = this.parseResponsePayload(
+        text,
+        response.headers.get("content-type") ?? "",
+        id,
+        method,
+      );
 
       if (!isJsonRpcResponse(payload)) {
         throw new ToolRegistryError(
@@ -164,6 +163,54 @@ export class McpHttpClient {
     }
   }
 
+  private async notify(
+    method: string,
+    params: Record<string, unknown>,
+    timeoutMs = this.connectTimeoutMs,
+  ): Promise<void> {
+    if (!this.config.url) {
+      throw new ToolRegistryError(
+        `MCP server ${this.config.name} is missing url`,
+        "TOOL_EXECUTION_FAILED",
+      );
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(this.config.url, {
+        method: "POST",
+        headers: this.buildHeaders(),
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method,
+          params,
+        }),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      this.captureSessionId(response);
+      if (!response.ok) {
+        throw new ToolRegistryError(
+          `MCP HTTP ${response.status}: ${this.previewResponse(text)}`,
+          "TOOL_EXECUTION_FAILED",
+          { serverName: this.config.name, method },
+        );
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new ToolRegistryError(
+          `MCP request timed out: ${method}`,
+          "TOOL_TIMEOUT",
+          { serverName: this.config.name, method },
+        );
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private buildHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       accept: "application/json, text/event-stream",
@@ -177,7 +224,91 @@ export class McpHttpClient {
     if (this.config.authType === "api_key" && authSecret) {
       headers["x-api-key"] = authSecret;
     }
+    if (this.sessionId) {
+      headers["mcp-session-id"] = this.sessionId;
+    }
     return headers;
+  }
+
+  private captureSessionId(response: Response): void {
+    const sessionId = response.headers.get("mcp-session-id");
+    if (sessionId) {
+      this.sessionId = sessionId;
+    }
+  }
+
+  private parseResponsePayload(
+    text: string,
+    contentType: string,
+    expectedId: string | number,
+    method: string,
+  ): unknown {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      throw new ToolRegistryError(
+        `Empty response from MCP server ${this.config.name}`,
+        "TOOL_EXECUTION_FAILED",
+        { serverName: this.config.name, method },
+      );
+    }
+
+    if (contentType.toLowerCase().includes("text/event-stream")) {
+      const payload = this.parseEventStreamPayload(trimmed, expectedId);
+      if (payload) {
+        return payload;
+      }
+      throw new ToolRegistryError(
+        `Invalid SSE JSON-RPC response from MCP server ${this.config.name}: ${this.previewResponse(trimmed)}`,
+        "TOOL_EXECUTION_FAILED",
+        { serverName: this.config.name, method },
+      );
+    }
+
+    try {
+      return JSON.parse(trimmed) as unknown;
+    } catch {
+      throw new ToolRegistryError(
+        `Invalid JSON from MCP server ${this.config.name}: ${this.previewResponse(trimmed)}`,
+        "TOOL_EXECUTION_FAILED",
+        { serverName: this.config.name, method },
+      );
+    }
+  }
+
+  private parseEventStreamPayload(
+    text: string,
+    expectedId: string | number,
+  ): unknown | undefined {
+    const events = text.split(/\r?\n\r?\n/);
+    for (const event of events) {
+      const data = event
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice("data:".length).trimStart())
+        .join("\n")
+        .trim();
+      if (!data || data === "[DONE]") {
+        continue;
+      }
+
+      let payload: unknown;
+      try {
+        payload = JSON.parse(data) as unknown;
+      } catch {
+        continue;
+      }
+      if (
+        isJsonRpcResponse(payload) &&
+        String(payload.id) === String(expectedId)
+      ) {
+        return payload;
+      }
+    }
+    return undefined;
+  }
+
+  private previewResponse(text: string): string {
+    return text.replace(/\s+/g, " ").trim().slice(0, 500) || "<empty>";
   }
 
   private resolveAuthSecret(): string | undefined {

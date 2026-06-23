@@ -55,6 +55,8 @@ JWT_AUDIENCE=enterprise-agent-web
 SERVICE_TOKEN=local-admin-service-token
 SERVICE_TOKEN_ROLES=admin
 SERVICE_TOKEN_TENANT_ID=default
+AUTH_COOKIE_SECURE=false
+AUTH_COOKIE_SAMESITE=lax
 
 DATABASE_URL=postgresql://agent:agent_password@localhost:15432/agent_db
 POSTGRES_DB=agent_db

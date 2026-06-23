@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   KeyRound,
+  Search,
   Plus,
   RefreshCcw,
   ShieldCheck,
@@ -25,6 +26,8 @@ import {
   listSecurityAnomalies,
   listServiceTokens,
   type AuthAuditEvent,
+  type AuthAuditEventList,
+  type AuthAuditEventQuery,
   type AuthCredentials,
   type AuthRole,
   type AgentRunHistoryItem,
@@ -37,7 +40,6 @@ import {
 type SecurityData = {
   roles: AuthRole[];
   serviceTokens: ServiceToken[];
-  auditEvents: AuthAuditEvent[];
   anomalies: SecurityAnomalyEvent[];
   approvalRequests: ApprovalRequest[];
   agentRuns: AgentRunHistoryItem[];
@@ -46,11 +48,23 @@ type SecurityData = {
 const emptyData: SecurityData = {
   roles: [],
   serviceTokens: [],
-  auditEvents: [],
   anomalies: [],
   approvalRequests: [],
   agentRuns: [],
 };
+
+const defaultAuditQuery = {
+  limit: 25,
+  offset: 0,
+  action: "",
+  targetType: "",
+  targetId: "",
+  actorUserId: "",
+  from: "",
+  to: "",
+};
+
+type AuditFilterState = typeof defaultAuditQuery;
 
 function formatDate(value?: string): string {
   if (!value) {
@@ -60,6 +74,27 @@ function formatDate(value?: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function dateTimeLocalToIso(value: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function toAuditQuery(filters: AuditFilterState): AuthAuditEventQuery {
+  return {
+    limit: filters.limit,
+    offset: filters.offset,
+    action: filters.action.trim() || undefined,
+    targetType: filters.targetType.trim() || undefined,
+    targetId: filters.targetId.trim() || undefined,
+    actorUserId: filters.actorUserId.trim() || undefined,
+    from: dateTimeLocalToIso(filters.from),
+    to: dateTimeLocalToIso(filters.to),
+  };
 }
 
 function severityTone(severity: SecurityAnomalyEvent["severity"]) {
@@ -96,7 +131,15 @@ export function SecurityGovernance() {
   const [apiKey, setApiKey] = useState("");
   const [serviceToken, setServiceToken] = useState("");
   const [data, setData] = useState<SecurityData>(emptyData);
+  const [auditEvents, setAuditEvents] = useState<AuthAuditEventList>({
+    items: [],
+    limit: defaultAuditQuery.limit,
+    offset: defaultAuditQuery.offset,
+  });
+  const [auditFilters, setAuditFilters] = useState<AuditFilterState>(defaultAuditQuery);
+  const [selectedAuditEventId, setSelectedAuditEventId] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [acknowledgingId, setAcknowledgingId] = useState<string | undefined>();
   const [decidingApprovalId, setDecidingApprovalId] = useState<string | undefined>();
@@ -122,10 +165,17 @@ export function SecurityGovernance() {
   );
   const pendingApprovals = data.approvalRequests.filter((request) => request.status === "pending");
   const approvalRequiredRuns = data.agentRuns.filter((run) => run.status === "approval_required");
+  const selectedAuditEvent = auditEvents.items.find((event) => event.id === selectedAuditEventId);
 
   async function refresh(): Promise<void> {
     if (!hasCredentials) {
       setData(emptyData);
+      setAuditEvents({
+        items: [],
+        limit: auditFilters.limit,
+        offset: auditFilters.offset,
+      });
+      setSelectedAuditEventId(undefined);
       setErrorMessage(undefined);
       setSuccessMessage(undefined);
       return;
@@ -135,10 +185,10 @@ export function SecurityGovernance() {
     setErrorMessage(undefined);
     setSuccessMessage(undefined);
     try {
-      const [roles, serviceTokens, auditEvents, anomalies, approvalRequests, agentRuns] = await Promise.all([
+      const [roles, serviceTokens, nextAuditEvents, anomalies, approvalRequests, agentRuns] = await Promise.all([
         listAuthRoles(credentials),
         listServiceTokens(credentials),
-        listAuthAuditEvents(credentials, { limit: 25 }),
+        listAuthAuditEvents(credentials, toAuditQuery(auditFilters)),
         listSecurityAnomalies(credentials, { limit: 25 }),
         listApprovalRequests(credentials),
         listAgentRunHistory(credentials),
@@ -146,16 +196,78 @@ export function SecurityGovernance() {
       setData({
         roles,
         serviceTokens,
-        auditEvents: auditEvents.items,
         anomalies: anomalies.items,
         approvalRequests,
         agentRuns,
       });
+      setAuditEvents(nextAuditEvents);
+      setSelectedAuditEventId((current) =>
+        current && nextAuditEvents.items.some((event) => event.id === current)
+          ? current
+          : nextAuditEvents.items[0]?.id,
+      );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load security governance data.");
     } finally {
       setLoading(false);
     }
+  }
+
+  async function refreshAuditEvents(nextFilters = auditFilters): Promise<void> {
+    if (!hasCredentials) {
+      setAuditEvents({
+        items: [],
+        limit: nextFilters.limit,
+        offset: nextFilters.offset,
+      });
+      setSelectedAuditEventId(undefined);
+      return;
+    }
+
+    setAuditLoading(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const result = await listAuthAuditEvents(credentials, toAuditQuery(nextFilters));
+      setAuditEvents(result);
+      setSelectedAuditEventId((current) =>
+        current && result.items.some((event) => event.id === current)
+          ? current
+          : result.items[0]?.id,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to query audit events.");
+    } finally {
+      setAuditLoading(false);
+    }
+  }
+
+  function updateAuditFilter<K extends keyof AuditFilterState>(
+    key: K,
+    value: AuditFilterState[K],
+  ): void {
+    setAuditFilters((current) => ({
+      ...current,
+      [key]: value,
+      offset: key === "offset" ? value as number : 0,
+    }));
+  }
+
+  async function submitAuditSearch(): Promise<void> {
+    const nextFilters = { ...auditFilters, offset: 0 };
+    setAuditFilters(nextFilters);
+    await refreshAuditEvents(nextFilters);
+  }
+
+  async function clearAuditSearch(): Promise<void> {
+    setAuditFilters(defaultAuditQuery);
+    await refreshAuditEvents(defaultAuditQuery);
+  }
+
+  async function moveAuditPage(offset: number): Promise<void> {
+    const nextFilters = { ...auditFilters, offset };
+    setAuditFilters(nextFilters);
+    await refreshAuditEvents(nextFilters);
   }
 
   function togglePermission(permission: Permission): void {
@@ -308,7 +420,7 @@ export function SecurityGovernance() {
             <CheckCircle2 className="icon-sm" aria-hidden="true" />
           </div>
           <div className="metric-body">
-            <div className="metric-value">{data.auditEvents.length}</div>
+            <div className="metric-value">{auditEvents.items.length}</div>
           </div>
         </div>
         <div className="metric-tile">
@@ -591,9 +703,85 @@ export function SecurityGovernance() {
           <section className="section-card">
             <div className="section-card-header">
               <h2 className="section-card-title">Audit Events</h2>
-              <p className="section-card-description">Recent auth governance decisions with reason/comment metadata.</p>
+              <p className="section-card-description">Query who changed what, when, and why across auth and MCP governance.</p>
             </div>
-            <div className="section-card-body">
+            <div className="section-card-body audit-query-panel">
+              <div className="audit-filter-grid">
+                <label>
+                  <span className="label">Action</span>
+                  <input
+                    value={auditFilters.action}
+                    onChange={(event) => updateAuditFilter("action", event.target.value)}
+                    className="text-input"
+                    placeholder="tools.mcp.update"
+                  />
+                </label>
+                <label>
+                  <span className="label">Actor</span>
+                  <input
+                    value={auditFilters.actorUserId}
+                    onChange={(event) => updateAuditFilter("actorUserId", event.target.value)}
+                    className="text-input"
+                    placeholder="user@example.com"
+                  />
+                </label>
+                <label>
+                  <span className="label">Target type</span>
+                  <input
+                    value={auditFilters.targetType}
+                    onChange={(event) => updateAuditFilter("targetType", event.target.value)}
+                    className="text-input"
+                    placeholder="mcp_server"
+                  />
+                </label>
+                <label>
+                  <span className="label">Target ID</span>
+                  <input
+                    value={auditFilters.targetId}
+                    onChange={(event) => updateAuditFilter("targetId", event.target.value)}
+                    className="text-input"
+                    placeholder="github"
+                  />
+                </label>
+                <label>
+                  <span className="label">From</span>
+                  <input
+                    value={auditFilters.from}
+                    onChange={(event) => updateAuditFilter("from", event.target.value)}
+                    className="text-input"
+                    type="datetime-local"
+                  />
+                </label>
+                <label>
+                  <span className="label">To</span>
+                  <input
+                    value={auditFilters.to}
+                    onChange={(event) => updateAuditFilter("to", event.target.value)}
+                    className="text-input"
+                    type="datetime-local"
+                  />
+                </label>
+              </div>
+              <div className="button-row">
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => void submitAuditSearch()}
+                  disabled={auditLoading || !hasCredentials}
+                >
+                  <Search className="icon-sm" aria-hidden="true" />
+                  Search
+                </button>
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => void clearAuditSearch()}
+                  disabled={auditLoading || !hasCredentials}
+                >
+                  Clear
+                </button>
+              </div>
+
               <div className="dependency-table-wrap">
                 <table className="dependency-table">
                   <thead>
@@ -605,8 +793,12 @@ export function SecurityGovernance() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.auditEvents.map((event) => (
-                      <tr key={event.id}>
+                    {auditEvents.items.map((event) => (
+                      <tr
+                        key={event.id}
+                        className={event.id === selectedAuditEventId ? "clickable-row table-row-active" : "clickable-row"}
+                        onClick={() => setSelectedAuditEventId(event.id)}
+                      >
                         <td>
                           <div className="dependency-name">{event.action}</div>
                           <div className="dependency-detail">{event.actorUserId}</div>
@@ -622,7 +814,7 @@ export function SecurityGovernance() {
                         <td>{formatDate(event.createdAt)}</td>
                       </tr>
                     ))}
-                    {data.auditEvents.length === 0 ? (
+                    {auditEvents.items.length === 0 ? (
                       <tr>
                         <td colSpan={4}>
                           <div className="table-empty">No audit events loaded.</div>
@@ -632,6 +824,56 @@ export function SecurityGovernance() {
                   </tbody>
                 </table>
               </div>
+              <div className="pagination-row">
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => void moveAuditPage(Math.max(0, auditEvents.offset - auditEvents.limit))}
+                  disabled={auditLoading || auditEvents.offset === 0}
+                >
+                  Previous
+                </button>
+                <span className="pagination-label">
+                  {auditEvents.items.length === 0
+                    ? "0 results"
+                    : `${auditEvents.offset + 1}-${auditEvents.offset + auditEvents.items.length}`}
+                </span>
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => void moveAuditPage(auditEvents.nextOffset ?? auditEvents.offset)}
+                  disabled={auditLoading || auditEvents.nextOffset === undefined}
+                >
+                  Next
+                </button>
+              </div>
+              {selectedAuditEvent ? (
+                <div className="audit-detail-card">
+                  <div>
+                    <div className="dependency-name">{selectedAuditEvent.action}</div>
+                    <div className="dependency-detail">
+                      {selectedAuditEvent.actorUserId} / {selectedAuditEvent.actorAuthType} / {formatDate(selectedAuditEvent.createdAt)}
+                    </div>
+                  </div>
+                  <dl className="details-grid single">
+                    <div>
+                      <dt className="label">Target</dt>
+                      <dd className="detail-value">{selectedAuditEvent.targetType} / {selectedAuditEvent.targetId}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Reason</dt>
+                      <dd className="detail-value">{selectedAuditEvent.reason}</dd>
+                    </div>
+                    {selectedAuditEvent.comment ? (
+                      <div>
+                        <dt className="label">Comment</dt>
+                        <dd className="detail-value">{selectedAuditEvent.comment}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <pre className="code-block compact-code">{JSON.stringify(selectedAuditEvent.metadata, null, 2)}</pre>
+                </div>
+              ) : null}
             </div>
           </section>
         </div>

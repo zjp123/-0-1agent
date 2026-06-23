@@ -161,6 +161,8 @@ Args JSON -> args 字符串数组，例如 ["-y", "chrome-devtools-mcp@latest", 
 Env JSON  -> env 字符串对象，例如 {"BRAVE_API_KEY":"..."}
 ```
 
+`Command / Args / Env JSON` 只属于 `stdio` transport，并且在 Web 表单中都可以编辑。`streamable_http` transport 不使用本地 command，Web 表单只展示 `URL / Headers JSON / Auth`。
+
 编辑已有 server 时，如果 env 字段显示为 `********`，保存时会保留原 secret 值，不会把掩码写回数据库。
 
 7. 工具列表应出现：
@@ -217,6 +219,25 @@ remote_echo.echo
 ```
 
 应返回：
+
+## Streamable HTTP 兼容说明
+
+Streamable HTTP MCP server 可能返回两种响应格式：
+
+- `application/json`: 普通 JSON-RPC response。
+- `text/event-stream`: SSE 包裹的 JSON-RPC response。
+
+API 端 `McpHttpClient` 已支持解析这两种格式，并会保存远端返回的 `Mcp-Session-Id`，后续请求自动带上 `Mcp-Session-Id` header。
+
+如果接入 GitHub Copilot MCP 这类远端服务：
+
+```text
+URL: https://api.githubcopilot.com/mcp/
+Auth: bearer
+Secret ref: env:GITHUB_COPILOT_TOKEN
+```
+
+需要确保 API 进程环境变量里有对应 token。否则远端通常会返回未授权、重定向或非 JSON/SSE 内容，页面会显示 HTTP 状态或响应预览。
 
 ```text
 remote echo: hello remote mcp

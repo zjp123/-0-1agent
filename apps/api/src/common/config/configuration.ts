@@ -101,6 +101,15 @@ export function buildAppConfiguration() {
     jwtSecret: process.env.JWT_SECRET,
     jwtIssuer: process.env.JWT_ISSUER,
     jwtAudience: process.env.JWT_AUDIENCE,
+    cookieSecure: parseBoolean(
+      process.env.AUTH_COOKIE_SECURE,
+      (process.env.NODE_ENV ?? "development") === "production",
+    ),
+    cookieSameSite:
+      process.env.AUTH_COOKIE_SAMESITE === "none" ||
+      process.env.AUTH_COOKIE_SAMESITE === "strict"
+        ? process.env.AUTH_COOKIE_SAMESITE
+        : "lax",
     serviceToken: process.env.SERVICE_TOKEN,
     serviceTokenUserId:
       process.env.SERVICE_TOKEN_USER_ID ?? "service-token-user",

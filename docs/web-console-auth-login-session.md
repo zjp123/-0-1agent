@@ -44,6 +44,7 @@ apps/api/src/auth/dto/console-refresh.dto.ts
 
 - `accessToken`: 15 分钟短期 JWT。
 - `refreshToken`: 7 天 refresh token，数据库只保存 hash。
+- `csrfToken`: 用于 cookie refresh/logout 的 CSRF header。
 - `sessionId`: 记录到 `auth_sessions`。
 - `user`: 当前用户、tenant、roles、permissions、authType。
 
@@ -60,8 +61,11 @@ auth_refresh_tokens
 
 - 登录时创建 `auth_sessions`。
 - 登录时创建 hash-only `auth_refresh_tokens`。
+- 登录、注册、refresh 时写入 HttpOnly refresh cookie。
+- 登录、注册、refresh 时写入非 HttpOnly CSRF cookie，并在响应体返回 `csrfToken`。
 - refresh 时轮换 refresh token。
 - logout 时撤销当前 refresh token。
+- refresh/logout 要求 `X-CSRF-Token` 与 CSRF cookie 一致。
 - refresh 后保留登录时的 roles / permissions 快照，避免权限语义漂移。
 
 ### Web Session Provider
@@ -76,6 +80,8 @@ apps/web/src/components/auth/local-credential-fields.tsx
 能力：
 
 - 保存 Web Console session 到 `localStorage`。
+- 保存 `csrfToken`，refresh/logout 请求自动携带 `X-CSRF-Token`。
+- auth 请求使用 `credentials: include`，支持跨端口 localhost cookie。
 - 页面刷新后恢复 session。
 - access token 快过期时自动 refresh。
 - 提供 `useSession()`。
@@ -155,6 +161,8 @@ JWT_AUDIENCE=enterprise-agent-web
 SERVICE_TOKEN=local-admin-service-token
 SERVICE_TOKEN_ROLES=admin
 SERVICE_TOKEN_TENANT_ID=default
+AUTH_COOKIE_SECURE=false
+AUTH_COOKIE_SAMESITE=lax
 ```
 
 `API_KEY` 用于登录页选择 `API key` 时的 credential，也用于 curl 调用受保护 API 时的 `x-api-key`。本地可用 `openssl rand -hex 32` 生成后写入根目录 `.env`，修改后需要重启 API 服务。
@@ -175,6 +183,8 @@ SERVICE_TOKEN_TENANT_ID=default
 - Web 登录页。
 - 邮箱密码注册和登录。
 - 注册时自动创建个人 workspace / tenant。
+- HttpOnly refresh cookie。
+- CSRF 双提交校验。
 - Access Token / Refresh Token 会话续期。
 - 退出登录。
 - 前端 session provider。
@@ -188,8 +198,7 @@ SERVICE_TOKEN_TENANT_ID=default
 
 - 邮箱验证、忘记密码、团队 workspace 成员管理。
 - 企业 IdP / SSO。
-- HttpOnly cookie session。
-- CSRF 策略。
+- 将 access token 从 localStorage 迁移到内存或后端 BFF。
 - session 设备列表和主动撤销 UI。
 - refresh token 重放检测。
 - 更细粒度页面级强制跳转。

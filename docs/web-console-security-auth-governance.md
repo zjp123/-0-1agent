@@ -10,6 +10,7 @@
 - 支持创建 role，并强制填写 reason/comment 留痕字段。
 - 展示 service tokens 列表。
 - 展示 auth audit events。
+- 支持 audit events 查询、筛选、分页和详情查看。
 - 展示 security anomaly events。
 - 支持 acknowledge anomaly。
 - 对 break-glass role/token 显示强提醒。
@@ -66,6 +67,9 @@
 - Approval request 决策支持 comment，approve/reject 后刷新治理视图。
 - Agent run governance 表展示 requestId、preflight、usage、stopReason、token usage。
 - Agent run requestId 可跳转到 `/observability?requestId=...` 查看完整 trace timeline。
+- Audit Events 模块支持按 `action`、`actorUserId`、`targetType`、`targetId`、`from`、`to` 查询，并支持上一页/下一页翻页。
+- 点击审计事件行可查看 target、reason、comment 和 metadata JSON，便于排查 MCP 配置、权限变更和安全确认动作。
+- Web Console refresh/logout 已接入 HttpOnly refresh cookie 和 CSRF 双提交校验，降低 refresh token 被脚本读取和跨站请求滥用风险。
 
 ## Agent 治理联动
 
@@ -94,7 +98,6 @@ curl --max-time 10 -fsS http://localhost:3001/security
 
 - 增加 role 编辑、删除和权限差异预览。
 - 增加 service token 创建、禁用、轮换的二次确认流程。
-- 增加 audit event 筛选条件。
 - 增加 anomaly severity/category 筛选。
 - 增加前端权限视图控制，只向具备 `auth:manage` 的用户展示治理操作。
 - 增加审批通过后的 Agent run 恢复执行。

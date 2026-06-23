@@ -25,6 +25,7 @@ import {
 type StoredSession = {
   accessToken: string;
   refreshToken: string;
+  csrfToken?: string;
   expiresAt: string;
   refreshTokenExpiresAt: string;
   sessionId: string;
@@ -56,6 +57,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const nextSession: StoredSession = {
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
+      csrfToken: response.csrfToken,
       expiresAt: response.expiresAt,
       refreshTokenExpiresAt: response.refreshTokenExpiresAt,
       sessionId: response.sessionId,
@@ -78,7 +80,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       clearSession();
       return;
     }
-    const response = await consoleRefresh(current.refreshToken);
+    const response = await consoleRefresh(current.refreshToken, current.csrfToken);
     applySession(response);
   }, [applySession, clearSession, session]);
 
@@ -97,7 +99,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setStatus("authenticated");
       if (new Date(stored.expiresAt).getTime() <= Date.now() + 60_000) {
         try {
-          const response = await consoleRefresh(stored.refreshToken);
+          const response = await consoleRefresh(stored.refreshToken, stored.csrfToken);
           applySession(response);
         } catch {
           clearSession();
@@ -136,9 +138,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       },
       logout: async () => {
         const token = session?.refreshToken;
+        const csrfToken = session?.csrfToken;
         clearSession();
         if (token) {
-          await consoleLogout(token);
+          await consoleLogout(token, csrfToken);
         }
         notify({ title: "Signed out", tone: "neutral" });
       },

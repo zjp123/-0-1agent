@@ -25,6 +25,9 @@ http://localhost:3001/tools
 - 支持 `current_time` 默认测试参数。
 - 支持展示 MCP 外部工具来源，MCP 工具通过同一个 `/api/tools` 列表进入页面。
 - 支持 MCP Servers 管理入口；只有具备 `auth:manage` 的登录态或手动 service token 才会启用管理操作。
+- 支持 stdio MCP 的 `command / args / env` 可编辑配置，例如 `npx` 和 Cursor 风格 args JSON。
+- 支持 Streamable HTTP MCP 的 `url / headers / auth` 配置，HTTP transport 不展示本地 command 字段。
+- 工具列表按来源折叠分组：`Built-in`、每个 MCP server 单独一组，并显示组内工具数量，避免 GitHub 等大型 MCP server 拉长页面。
 - 展示工具执行结果。
 - 展示完整 response/audit JSON。
 
