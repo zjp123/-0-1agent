@@ -195,7 +195,7 @@ export class AgentRuntimeService {
 
     const messages = [...context.messages];
     const toolDefinitions = this.tools
-      .listDefinitions()
+      .listDefinitions(this.toolRegistryContext(options))
       .map((definition) => this.toModelToolDefinition(definition));
     const planningPlanStep = this.startPlanStep(options, plan, "planning");
     this.completePlanStep(options, planningPlanStep, "completed", {
@@ -370,7 +370,7 @@ export class AgentRuntimeService {
             toolCall.name,
           );
           const definition = this.tools
-            .listDefinitions()
+            .listDefinitions(this.toolRegistryContext(options))
             .find((candidate) => candidate.name === toolCall.name);
           if (definition && this.requiresApproval(definition.riskLevel)) {
             const approvalRequest = await this.createToolApprovalRequest(
@@ -572,7 +572,7 @@ export class AgentRuntimeService {
       high: 0,
       critical: 0,
     };
-    for (const definition of this.tools.listDefinitions()) {
+    for (const definition of this.tools.listDefinitions(this.toolRegistryContext(options))) {
       toolRisk[definition.riskLevel] += 1;
     }
     const checks: AgentRunPreflight["checks"] = [
@@ -798,6 +798,10 @@ export class AgentRuntimeService {
         parameters: definition.inputSchema,
       },
     };
+  }
+
+  private toolRegistryContext(options: AgentRunOptions): { tenantId?: string } | undefined {
+    return options.tenantId ? { tenantId: options.tenantId } : undefined;
   }
 
   private parseToolArguments(rawArguments: string): Record<string, unknown> {

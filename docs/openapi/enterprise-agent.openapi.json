@@ -390,6 +390,15 @@
         ],
         "summary": "List registered tools",
         "operationId": "listTools",
+        "description": "Requires permission: tools:execute",
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [],
         "responses": {
           "200": {

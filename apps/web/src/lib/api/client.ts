@@ -164,6 +164,9 @@ export type ToolDefinition = {
   description: string;
   source: "builtin" | "mcp";
   riskLevel: "low" | "medium" | "high" | "critical";
+  tenantId?: string;
+  serverId?: string;
+  serverName?: string;
   inputSchema: {
     type: "object";
     properties: Record<string, unknown>;
@@ -201,6 +204,9 @@ export type ToolCallResponse = {
     inputPreview: string;
     resultPreview?: string;
     error?: string;
+    toolTenantId?: string;
+    serverId?: string;
+    serverName?: string;
     requiredPermissions: string[];
   };
 };
@@ -916,6 +922,9 @@ const toolDefinitionSchema: z.ZodType<ToolDefinition> = z.object({
   description: z.string(),
   source: z.enum(["builtin", "mcp"]),
   riskLevel: z.enum(["low", "medium", "high", "critical"]),
+  tenantId: z.string().optional(),
+  serverId: z.string().optional(),
+  serverName: z.string().optional(),
   inputSchema: z.object({
     type: z.literal("object"),
     properties: z.record(z.string(), z.unknown()),
@@ -954,6 +963,9 @@ const toolCallResponseSchema: z.ZodType<ToolCallResponse> = z.object({
     inputPreview: z.string(),
     resultPreview: z.string().optional(),
     error: z.string().optional(),
+    toolTenantId: z.string().optional(),
+    serverId: z.string().optional(),
+    serverName: z.string().optional(),
     requiredPermissions: z.array(z.string()),
   }),
 });
@@ -1632,12 +1644,10 @@ function normalizeHttpErrorMessage(
   }
 }
 
-export async function listTools(): Promise<ToolDefinition[]> {
+export async function listTools(credentials: AuthCredentials): Promise<ToolDefinition[]> {
   const response = await fetch(`${apiBaseUrl}/tools`, {
     cache: "no-store",
-    headers: {
-      accept: "application/json",
-    },
+    headers: buildAuthHeaders(credentials),
   });
 
   const payload: unknown = await response.json();
@@ -1703,6 +1713,7 @@ const toolRegistryStatusSchema = z.object({
   mcpTools: z.array(z.string()),
   mcpServers: z.array(z.object({
     name: z.string(),
+    tenantId: z.string().optional(),
     disabled: z.boolean(),
     toolCount: z.number(),
     error: z.string().optional(),

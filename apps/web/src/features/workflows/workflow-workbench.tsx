@@ -7,6 +7,7 @@ import {
   Play,
   Plus,
   RefreshCcw,
+  RotateCcw,
   Workflow as WorkflowIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -53,6 +54,45 @@ const workflowStepStatuses: WorkflowStepStatus[] = [
   "failed",
   "skipped",
   "waiting_for_approval",
+];
+
+type WorkflowTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  title: string;
+  goal: string;
+  steps: string;
+};
+
+const workflowTemplates: WorkflowTemplate[] = [
+  {
+    id: "production-readiness",
+    name: "Production Readiness",
+    description: "上线前检查基础设施、核心链路和审批记录。",
+    title: "Production Readiness Review",
+    goal: "Validate the enterprise agent before production deployment.",
+    steps:
+      "Check infrastructure - Confirm database, Redis, vector store, API, and Web readiness.\nRun smoke tests - Execute auth, agent streaming, tools, RAG, workflow, and observability checks.\nReview security gates - Verify RBAC, audit events, rate limits, and approval policies.\nApprove rollout - Record operator approval and next action before deployment.",
+  },
+  {
+    id: "incident-triage",
+    name: "Incident Triage",
+    description: "生产故障排查，先定级，再定位，再恢复。",
+    title: "Incident Triage Workflow",
+    goal: "Triage a production incident and produce a safe recovery plan.",
+    steps:
+      "Classify incident - Identify severity, affected tenants, and customer impact.\nCollect signals - Inspect traces, logs, health checks, queue depth, and recent deploys.\nIsolate root cause - Compare symptoms with recent changes and dependency status.\nExecute mitigation - Apply the lowest-risk recovery action and record evidence.\nWrite follow-up - Summarize cause, mitigation, owner, and prevention tasks.",
+  },
+  {
+    id: "rag-quality-review",
+    name: "RAG Quality Review",
+    description: "检查知识库导入、检索质量和引用结果。",
+    title: "RAG Quality Review",
+    goal: "Evaluate whether the knowledge base returns useful, traceable retrieval results.",
+    steps:
+      "Review source coverage - Confirm target documents are ingested and tagged.\nRun retrieval probes - Test representative queries and inspect matched chunks.\nCheck answer grounding - Verify agent responses cite relevant retrieved sources.\nRecord gaps - List missing documents, bad chunks, and query failures.",
+  },
 ];
 
 function formatDate(value?: string): string {
@@ -104,6 +144,7 @@ export function WorkflowWorkbench() {
   const [data, setData] = useState<WorkflowData>(emptyData);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
   const [selectedScheduleId, setSelectedScheduleId] = useState("");
+  const [selectedRunId, setSelectedRunId] = useState("");
   const [selectedStepId, setSelectedStepId] = useState("");
   const [stepStatus, setStepStatus] = useState<WorkflowStepStatus>("running");
   const [stepOutput, setStepOutput] = useState("");
@@ -132,7 +173,10 @@ export function WorkflowWorkbench() {
   const selectedWorkflow = data.workflows.find((workflow) => workflow.id === selectedWorkflowId);
   const selectedStep = selectedWorkflow?.steps.find((step) => step.id === selectedStepId);
   const selectedSchedule = data.schedules.find((schedule) => schedule.id === selectedScheduleId);
+  const selectedRun = data.runs.find((run) => run.id === selectedRunId);
   const activeRuns = data.runs.filter((run) => run.status === "pending" || run.status === "running");
+  const selectedWorkflowRuns = data.runs.filter((run) => run.workflowId === selectedWorkflowId);
+  const failedSteps = selectedWorkflow?.steps.filter((step) => step.status === "failed") ?? [];
 
   async function refresh(): Promise<void> {
     if (!hasCredentials) {
@@ -158,6 +202,9 @@ export function WorkflowWorkbench() {
       const workflow = workflows.find((item) => item.id === workflowId) ?? workflows[0];
       setSelectedStepId((current) => current || workflow?.steps[0]?.id || "");
       setSelectedScheduleId((current) => current || schedules[0]?.id || "");
+      setSelectedRunId((current) =>
+        runs.some((run) => run.id === current) ? current : runs[0]?.id ?? "",
+      );
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to load workflows.");
     } finally {
@@ -231,37 +278,7 @@ export function WorkflowWorkbench() {
       setErrorMessage("Select a workflow step before executing it.");
       return;
     }
-
-    setExecutingStep(true);
-    setErrorMessage(undefined);
-    setSuccessMessage(undefined);
-    try {
-      const result = await executeWorkflowStep({
-        ...credentials,
-        workflowId: selectedWorkflow.id,
-        stepId: selectedStep.id,
-        instruction: stepOutput.trim() || undefined,
-        maxSteps: 4,
-      });
-      setData((current) => ({
-        ...current,
-        workflows: current.workflows.map((workflow) =>
-          workflow.id === result.workflow.id ? result.workflow : workflow,
-        ),
-      }));
-      setSelectedWorkflowId(result.workflow.id);
-      setSelectedStepId(result.step.id);
-      setStepStatus(result.step.status);
-      setStepOutput(result.step.output ?? "");
-      setStepError(result.step.error ?? "");
-      setSuccessMessage(
-        `Executed step ${result.step.title}. Agent stop reason: ${result.agentRun.stopReason}.`,
-      );
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to execute workflow step.");
-    } finally {
-      setExecutingStep(false);
-    }
+    await executeWorkflowStepById(selectedStep.id, stepOutput);
   }
 
   async function executePendingSteps(): Promise<void> {
@@ -355,6 +372,7 @@ export function WorkflowWorkbench() {
         ...credentials,
         scheduleId: selectedSchedule.id,
       });
+      setSelectedRunId(run.id);
       setSuccessMessage(`Triggered workflow run ${run.id}.`);
       await refresh();
     } catch (error) {
@@ -377,6 +395,58 @@ export function WorkflowWorkbench() {
     setStepStatus(step.status);
     setStepOutput(step.output ?? "");
     setStepError(step.error ?? "");
+  }
+
+  function applyTemplate(template: WorkflowTemplate): void {
+    setWorkflowTitle(template.title);
+    setWorkflowGoal(template.goal);
+    setStepsText(template.steps);
+    setSuccessMessage(`Loaded template: ${template.name}.`);
+    setErrorMessage(undefined);
+  }
+
+  async function retryStep(step: WorkflowStep): Promise<void> {
+    selectStep(step);
+    setStepOutput(step.output ?? "Retry this failed workflow step and explain what changed.");
+    await executeWorkflowStepById(step.id, step.output ?? "Retry this failed workflow step and explain what changed.");
+  }
+
+  async function executeWorkflowStepById(stepId: string, instruction?: string): Promise<void> {
+    if (!hasCredentials || !selectedWorkflow) {
+      setErrorMessage("Select a workflow step before executing it.");
+      return;
+    }
+
+    setExecutingStep(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const result = await executeWorkflowStep({
+        ...credentials,
+        workflowId: selectedWorkflow.id,
+        stepId,
+        instruction: instruction?.trim() || undefined,
+        maxSteps: 4,
+      });
+      setData((current) => ({
+        ...current,
+        workflows: current.workflows.map((workflow) =>
+          workflow.id === result.workflow.id ? result.workflow : workflow,
+        ),
+      }));
+      setSelectedWorkflowId(result.workflow.id);
+      setSelectedStepId(result.step.id);
+      setStepStatus(result.step.status);
+      setStepOutput(result.step.output ?? "");
+      setStepError(result.step.error ?? "");
+      setSuccessMessage(
+        `Executed step ${result.step.title}. Agent stop reason: ${result.agentRun.stopReason}.`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to execute workflow step.");
+    } finally {
+      setExecutingStep(false);
+    }
   }
 
   return (
@@ -423,11 +493,12 @@ export function WorkflowWorkbench() {
         </div>
         <div className="metric-tile">
           <div className="metric-head">
-            <span className="label">Active Runs</span>
+            <span className="label">Selected Runs</span>
             <Play className="icon-sm" aria-hidden="true" />
           </div>
           <div className="metric-body">
-            <div className="metric-value">{activeRuns.length}</div>
+            <div className="metric-value">{selectedWorkflowRuns.length}</div>
+            <div className="dependency-detail">{activeRuns.length} active globally</div>
           </div>
         </div>
         <div className="metric-tile">
@@ -457,6 +528,26 @@ export function WorkflowWorkbench() {
                 onApiKeyChange={setApiKey}
                 onServiceTokenChange={setServiceToken}
               />
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Workflow Templates</h2>
+              <p className="section-card-description">Load an enterprise workflow template into the draft form.</p>
+            </div>
+            <div className="section-card-body workflow-template-list">
+              {workflowTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  className="workflow-template-card"
+                  onClick={() => applyTemplate(template)}
+                >
+                  <strong>{template.name}</strong>
+                  <span>{template.description}</span>
+                </button>
+              ))}
             </div>
           </section>
 
@@ -589,6 +680,57 @@ export function WorkflowWorkbench() {
           </section>
 
           <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Failed Step Retry</h2>
+              <p className="section-card-description">Retry failed steps with the same workflow context.</p>
+            </div>
+            <div className="section-card-body workflow-list">
+              {failedSteps.map((step) => (
+                <button
+                  key={step.id}
+                  type="button"
+                  className="tool-list-item"
+                  onClick={() => void retryStep(step)}
+                  disabled={executingStep || !hasCredentials}
+                >
+                  <span>
+                    <strong>{step.title}</strong>
+                    <span className="dependency-detail">{step.error ?? "failed without error detail"}</span>
+                  </span>
+                  <RotateCcw className="icon-sm" aria-hidden="true" />
+                </button>
+              ))}
+              {failedSteps.length === 0 ? <div className="empty-state">No failed steps for the selected workflow.</div> : null}
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Workflow Events</h2>
+              <p className="section-card-description">Selected workflow timeline for audit and replay context.</p>
+            </div>
+            <div className="section-card-body timeline-list">
+              {selectedWorkflow?.events.map((event) => (
+                <article key={event.id} className="timeline-item">
+                  <div className="timeline-marker">
+                    <GitBranch className="icon-sm" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <div className="dependency-name">{event.type}</div>
+                    <div className="dependency-detail">{event.message}</div>
+                    <div className="dependency-detail">
+                      {formatDate(event.timestamp)} / {event.actorUserId}
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {!selectedWorkflow || selectedWorkflow.events.length === 0 ? (
+                <div className="empty-state">No workflow events loaded.</div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="section-card">
             <div className="section-card-header table-card-header">
               <div>
                 <h2 className="section-card-title">Steps</h2>
@@ -634,7 +776,11 @@ export function WorkflowWorkbench() {
                   </thead>
                   <tbody>
                     {selectedWorkflow?.steps.map((step) => (
-                      <tr key={step.id} onClick={() => selectStep(step)} className="clickable-row">
+                      <tr
+                        key={step.id}
+                        onClick={() => selectStep(step)}
+                        className={step.id === selectedStepId ? "clickable-row table-row-active" : "clickable-row"}
+                      >
                         <td>
                           <div className="dependency-name">{step.order}. {step.title}</div>
                           <div className="dependency-detail">{step.description ?? step.id}</div>
@@ -727,7 +873,7 @@ export function WorkflowWorkbench() {
                       <tr
                         key={schedule.id}
                         onClick={() => setSelectedScheduleId(schedule.id)}
-                        className="clickable-row"
+                        className={schedule.id === selectedScheduleId ? "clickable-row table-row-active" : "clickable-row"}
                       >
                         <td>
                           <div className="dependency-name">{schedule.name}</div>
@@ -773,7 +919,11 @@ export function WorkflowWorkbench() {
                   </thead>
                   <tbody>
                     {data.runs.map((run) => (
-                      <tr key={run.id}>
+                      <tr
+                        key={run.id}
+                        onClick={() => setSelectedRunId(run.id)}
+                        className={run.id === selectedRunId ? "clickable-row table-row-active" : "clickable-row"}
+                      >
                         <td>
                           <StatusBadge tone={statusTone(run.status)}>{run.status}</StatusBadge>
                           <div className="dependency-detail">{run.id}</div>
@@ -793,6 +943,52 @@ export function WorkflowWorkbench() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </section>
+
+          <section className="section-card">
+            <div className="section-card-header">
+              <h2 className="section-card-title">Run Details</h2>
+              <p className="section-card-description">Inspect selected schedule run output, error, and metadata.</p>
+            </div>
+            <div className="section-card-body">
+              {selectedRun ? (
+                <div className="knowledge-preview">
+                  <dl className="details-grid">
+                    <div>
+                      <dt className="label">Run ID</dt>
+                      <dd className="detail-value">{selectedRun.id}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Status</dt>
+                      <dd className="detail-value">{selectedRun.status}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Triggered By</dt>
+                      <dd className="detail-value">{selectedRun.triggeredBy}</dd>
+                    </div>
+                    <div>
+                      <dt className="label">Completed</dt>
+                      <dd className="detail-value">{formatDate(selectedRun.completedAt)}</dd>
+                    </div>
+                  </dl>
+                  {selectedRun.output ? (
+                    <>
+                      <div className="subsection-title">Output</div>
+                      <p className="retrieval-content knowledge-preview-content">{selectedRun.output}</p>
+                    </>
+                  ) : null}
+                  {selectedRun.error ? (
+                    <>
+                      <div className="subsection-title">Error</div>
+                      <p className="retrieval-content knowledge-preview-content">{selectedRun.error}</p>
+                    </>
+                  ) : null}
+                  <pre className="code-block compact-code">{JSON.stringify(selectedRun.metadata, null, 2)}</pre>
+                </div>
+              ) : (
+                <div className="empty-state">Select a schedule run to inspect details.</div>
+              )}
             </div>
           </section>
 

@@ -7,6 +7,7 @@ import type {
 
 export type McpServerConfig = {
   id?: string;
+  tenantId?: string;
   name: string;
   transport: "stdio" | "streamable_http";
   command: string;

@@ -35,6 +35,9 @@ export type ToolDefinition = {
   description: string;
   source: ToolSource;
   riskLevel: ToolRiskLevel;
+  tenantId?: string;
+  serverId?: string;
+  serverName?: string;
   inputSchema: ToolInputSchema;
   outputSchema?: ToolInputSchema;
   timeoutMs: number;
@@ -77,6 +80,9 @@ export type ToolAuditEvent = {
   error?: string;
   userId?: string;
   tenantId?: string;
+  toolTenantId?: string;
+  serverId?: string;
+  serverName?: string;
   requiredPermissions: string[];
 };
 

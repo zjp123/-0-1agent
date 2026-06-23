@@ -24,8 +24,10 @@ export class ToolsController {
   ) {}
 
   @Get()
-  listTools(): ToolDefinition[] {
-    return this.registry.listDefinitions();
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("tools:execute")
+  listTools(@CurrentUser() user: RequestUser): ToolDefinition[] {
+    return this.registry.listDefinitions({ tenantId: user.tenantId });
   }
 
   @Post("execute")

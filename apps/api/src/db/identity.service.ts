@@ -49,6 +49,16 @@ export class IdentityService {
     return created.id;
   }
 
+  async externalTenantId(tenantId: string): Promise<string> {
+    const [tenant] = await this.db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+
+    return tenant?.name ?? tenantId;
+  }
+
   async ensureUser(input: {
     tenantId: string;
     externalId: string;

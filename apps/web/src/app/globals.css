@@ -947,6 +947,40 @@ pre {
   gap: 1rem;
 }
 
+.workflow-template-list {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+}
+
+.workflow-template-card {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #334155;
+  padding: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workflow-template-card:hover {
+  background: #f8fafc;
+}
+
+.workflow-template-card strong {
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.workflow-template-card span {
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
 .clickable-row {
   cursor: pointer;
 }

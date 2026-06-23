@@ -37,7 +37,8 @@
   - `status`
   - `lastLoadedAt`
   - `lastError`
-- 在 tenant-scoped Tool Registry 完成前，动态 MCP server `name` 需要全局唯一，避免工具命名冲突。
+- 动态 MCP server `name` 只需要在当前 tenant/workspace 内唯一。
+- Tool Registry 会按请求 tenant 过滤 MCP 工具，避免跨 tenant 可见或执行。
 - Web Tools 页面新增 MCP Servers 管理卡片。
 - Web Tools 页面支持 stdio / Streamable HTTP transport 切换。
 - MCP env 返回前统一掩码，避免明文展示。
@@ -82,6 +83,45 @@ server 创建或更新后默认进入 `pending_approval`。管理员需要调用
 `MCP_ENABLED=false` 是生产事故开关。
 
 即使数据库里存在 `active + enabled` 的 MCP server，只要设置了 `MCP_ENABLED=false`，API 进程也不会加载任何 MCP server。
+
+### Tenant 隔离
+
+MCP server 管理、工具可见性和工具执行都按 tenant/workspace 隔离：
+
+- `mcp_servers` 表使用 `tenant_id + name` 唯一索引，同一个 tenant 内不能重名。
+- 不同 tenant 可以使用相同 server name，例如都叫 `github`。
+- `GET /api/tools` 需要认证，并只返回：
+  - built-in tools
+  - 当前用户 tenant 下的 MCP tools
+- Agent Runtime 构建 ReAct tool definitions 时也会按 `options.tenantId` 过滤 MCP tools。
+- `POST /api/tools/execute` 执行 MCP tool 前会校验 tool definition 的 tenant 和请求用户 tenant 是否一致。
+- 跨 tenant 执行会返回 `denied`，不会调用外部 MCP server。
+- Tool audit 会记录 `tenantId`、`toolTenantId`、`serverId`、`serverName`，方便排查工具来源。
+
+### 运行时命名隔离
+
+运行时仍使用 MCP server 的展示名生成工具名，例如：
+
+```text
+github.search_repositories
+```
+
+由于 registry 在执行前会校验 tenant，同名 server 在不同 tenant 下不会互相可见，也不会互相执行。
+
+如果同一 tenant 内需要接入多个同类 MCP server，可以通过 `toolNamePrefix` 显式区分工具名。
+
+## 本次升级记录
+
+2026-06-23 完成 MCP tenant-scoped tool visibility / execution isolation：
+
+- 移除动态 MCP server name 的全局唯一限制。
+- MCP runtime config 增加 `tenantId`。
+- MCP tool definition 增加 `tenantId`、`serverId`、`serverName`。
+- `GET /api/tools` 改为受保护接口，并按当前用户 tenant 过滤 MCP tools。
+- Agent Runtime 的工具列表、approval 判断和 preflight 风险统计都按 tenant 过滤。
+- Tool Registry 执行 MCP tool 前增加 tenant ownership 校验。
+- Tool audit 增加 MCP server 归属字段。
+- Web Tools 页面调用 `GET /api/tools` 时携带当前登录凭证。
 
 ## 本地测试流程
 

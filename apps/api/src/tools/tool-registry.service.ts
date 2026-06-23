@@ -79,8 +79,10 @@ export class ToolRegistryService implements OnModuleInit {
     }
   }
 
-  listDefinitions(): ToolDefinition[] {
-    return [...this.handlers.values()].map((handler) => handler.definition);
+  listDefinitions(context?: { tenantId?: string }): ToolDefinition[] {
+    return [...this.handlers.values()]
+      .map((handler) => handler.definition)
+      .filter((definition) => this.canAccessDefinition(definition, context?.tenantId));
   }
 
   async execute(request: ToolCallRequest): Promise<ToolCallResponse> {
@@ -96,6 +98,18 @@ export class ToolRegistryService implements OnModuleInit {
         riskLevel: "low",
         content: `Tool not found: ${request.name}`,
         requiredPermissions: [],
+      });
+    }
+
+    if (!this.canAccessDefinition(handler.definition, request.context.tenantId)) {
+      return this.buildResponse({
+        request,
+        status: "denied",
+        startedAt,
+        source: handler.definition.source,
+        riskLevel: handler.definition.riskLevel,
+        content: "Tool is not available for this tenant.",
+        requiredPermissions: handler.definition.requiredPermissions,
       });
     }
 
@@ -181,6 +195,19 @@ export class ToolRegistryService implements OnModuleInit {
     };
   }
 
+  private canAccessDefinition(
+    definition: ToolDefinition,
+    tenantId: string | undefined,
+  ): boolean {
+    if (definition.source !== "mcp") {
+      return true;
+    }
+    if (!definition.tenantId) {
+      return true;
+    }
+    return Boolean(tenantId) && definition.tenantId === tenantId;
+  }
+
   private async withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
     let timeout: NodeJS.Timeout | undefined;
     try {
@@ -235,6 +262,18 @@ export class ToolRegistryService implements OnModuleInit {
     }
     if (input.request.context.tenantId) {
       audit.tenantId = input.request.context.tenantId;
+    }
+    if (input.source === "mcp") {
+      const definition = this.handlers.get(input.request.name)?.definition;
+      if (definition?.tenantId) {
+        audit.toolTenantId = definition.tenantId;
+      }
+      if (definition?.serverId) {
+        audit.serverId = definition.serverId;
+      }
+      if (definition?.serverName) {
+        audit.serverName = definition.serverName;
+      }
     }
 
     const response: ToolCallResponse = {

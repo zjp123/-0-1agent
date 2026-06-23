@@ -89,7 +89,6 @@ export class McpServerManagementService {
     const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
     const normalized = this.normalizeInput(body);
     await this.assertNameAvailable(tenantUuid, normalized.name);
-    await this.assertRuntimeNameAvailable(normalized.name);
     const policy = this.evaluatePolicy(normalized);
     const enabled = (body.enabled ?? true) && !policy.approvalRequired;
     const now = new Date();
@@ -155,7 +154,6 @@ export class McpServerManagementService {
     const existing = await this.getTenantServer(tenantUuid, serverId);
     if (body.name !== undefined) {
       await this.assertNameAvailable(tenantUuid, body.name.trim(), serverId);
-      await this.assertRuntimeNameAvailable(body.name.trim(), serverId);
     }
 
     const riskLevel = this.normalizeRiskLevel(body.riskLevel ?? existing.riskLevel);
@@ -356,7 +354,7 @@ export class McpServerManagementService {
       throw error;
     }
 
-    return rows.map((row) => this.toRuntimeConfig(row));
+    return Promise.all(rows.map((row) => this.toRuntimeConfig(row)));
   }
 
   async markLoadResult(
@@ -554,23 +552,6 @@ export class McpServerManagementService {
     }
   }
 
-  private async assertRuntimeNameAvailable(
-    name: string,
-    ignoredId?: string,
-  ): Promise<void> {
-    const [existing] = await this.db
-      .select({ id: mcpServers.id })
-      .from(mcpServers)
-      .where(eq(mcpServers.name, name))
-      .limit(1);
-
-    if (existing && existing.id !== ignoredId) {
-      throw new ConflictException(
-        "MCP server name must be globally unique until tenant-scoped tool registry is enabled",
-      );
-    }
-  }
-
   private async getTenantServer(
     tenantUuid: string,
     serverId: string,
@@ -615,9 +596,10 @@ export class McpServerManagementService {
     await this.db.insert(authAdminAuditEvents).values(values);
   }
 
-  private toRuntimeConfig(row: typeof mcpServers.$inferSelect): McpServerConfig {
+  private async toRuntimeConfig(row: typeof mcpServers.$inferSelect): Promise<McpServerConfig> {
     return {
       id: row.id,
+      tenantId: await this.identity.externalTenantId(row.tenantId),
       name: row.name,
       transport: this.normalizeTransport(row.transport),
       command: row.command,

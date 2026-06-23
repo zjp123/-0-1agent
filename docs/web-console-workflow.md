@@ -8,9 +8,13 @@
 
 - 展示 workflow 列表。
 - 支持创建 workflow 草稿。
+- 支持 workflow 模板一键填充草稿。
 - 支持查看 workflow steps。
 - 支持运行 workflow。
+- 支持失败 step 重试。
+- 支持查看 workflow event timeline。
 - 展示 schedule 相关状态。
+- 支持查看 schedule run 详情。
 - 新增 Workflow 页面留痕文档。
 
 首版将“运行 workflow”拆成两类能力：
@@ -65,21 +69,38 @@
 ## 工作台能力
 
 - 手动刷新 workflow/schedule 状态，避免无凭据时自动触发 401。
+- 内置企业常见 workflow templates：
+  - Production Readiness
+  - Incident Triage
+  - RAG Quality Review
 - 创建 workflow 草稿，支持多 step 输入。
 - 查看 workflow list、goal、status。
 - 查看 selected workflow steps。
 - 更新 step status、output、error。
 - 执行选中 step：将 step 转换为 Agent task，调用 Agent Runtime，按结果自动写回 `completed` / `failed`、`output` 和 `error`。
 - 执行 pending steps：按 step order 顺序执行所有 pending steps，默认遇到失败停止。
+- 失败 step 会进入 Failed Step Retry 面板，可直接复用单步执行接口重试。
+- 查看 selected workflow events，包括 created、step_updated、status_updated 等事件。
 - 创建 interval/cron schedule。
 - 手动 trigger schedule，生成 schedule run。
-- 查看 schedule list、runs 和 scheduler capabilities。
+- 查看 schedule list、runs、run details 和 scheduler capabilities。
+
+## 本次升级记录
+
+2026-06-23 完成 Workflow 工作台可用性增强：
+
+- 增加 Workflow Templates 面板，支持一键填充上线检查、故障排查、RAG 质量评审模板。
+- 增加 Failed Step Retry 面板，失败步骤可直接重试。
+- 增加 Workflow Events 时间线，展示当前 workflow 的关键状态事件。
+- Schedule、Step、Schedule Run 表格增加选中高亮。
+- 增加 Run Details 面板，展示选中 schedule run 的 status、trigger、output、error 和 metadata。
+- 顶部指标增加 selected workflow runs 统计，并保留全局 active runs 数量。
 
 ## 验证方式
 
 ```bash
 PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run check:web
-PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run check -w @enterprise-agent/api
+PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run build:web
 curl --max-time 10 -fsS http://127.0.0.1:3000/api/workflows -H 'x-service-token: local-admin-service-token'
 curl --max-time 10 -fsS http://127.0.0.1:3000/api/workflows/scheduler/status -H 'x-service-token: local-admin-service-token'
 curl --max-time 10 -fsS http://localhost:3001/workflows
@@ -89,7 +110,7 @@ curl --max-time 10 -fsS http://localhost:3001/workflows
 
 - 增加执行全部时的进度流式展示。
 - 增加 schedule run complete/failed/cancel 操作。
-- 增加 workflow 详情页和事件时间线。
+- 增加独立 workflow 详情页和更完整的执行日志视图。
 - 增加 step 拖拽排序和依赖关系配置。
 - 增加审批节点、人机协同和执行日志视图。
 

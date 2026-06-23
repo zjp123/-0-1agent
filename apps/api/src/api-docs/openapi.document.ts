@@ -21,7 +21,7 @@ const routes: ApiRoute[] = [
   { method: "get", path: "/agent/capabilities", tag: "Agent Runtime", summary: "Get agent capability snapshot", operationId: "getAgentCapabilities" },
   { method: "post", path: "/agent/run", tag: "Agent Runtime", summary: "Run an agent task", operationId: "runAgent", permission: "agent:run", requestSchema: "RunAgentRequest" },
   { method: "post", path: "/agent/run/stream", tag: "Agent Runtime", summary: "Run an agent task with Server-Sent Events", operationId: "streamAgentRun", permission: "agent:run", requestSchema: "RunAgentRequest", responseSchema: "ServerSentEventsResponse" },
-  { method: "get", path: "/tools", tag: "Tools", summary: "List registered tools", operationId: "listTools" },
+  { method: "get", path: "/tools", tag: "Tools", summary: "List registered tools", operationId: "listTools", permission: "tools:execute" },
   { method: "post", path: "/tools/execute", tag: "Tools", summary: "Execute a registered tool", operationId: "executeTool", permission: "tools:execute", requestSchema: "ExecuteToolRequest" },
   { method: "post", path: "/knowledge/ingest", tag: "Knowledge", summary: "Ingest a knowledge document", operationId: "ingestKnowledge", permission: "knowledge:write", requestSchema: "IngestKnowledgeRequest" },
   { method: "post", path: "/knowledge/retrieve", tag: "Knowledge", summary: "Retrieve knowledge chunks", operationId: "retrieveKnowledge", permission: "knowledge:read", requestSchema: "RetrieveKnowledgeRequest" },

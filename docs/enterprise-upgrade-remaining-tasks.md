@@ -58,7 +58,7 @@
 - [x] Phase 15 - Web E2E 自动化测试
 - [x] Phase 16 - Web 配置与密钥治理
 - [x] Phase 17 - Web 生产运行手册
-- [ ] MCP tenant-scoped tool visibility / execution isolation
+- [x] MCP tenant-scoped tool visibility / execution isolation
 - [ ] MCP env secretRef + Secrets/KMS 注入
 - [ ] MCP Streamable HTTP SSE response 兼容
 - [ ] MCP OAuth 2.1 remote authorization flow

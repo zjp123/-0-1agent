@@ -60,7 +60,7 @@ function toolGroupId(tool: ToolDefinition): string {
   if (tool.source === "builtin") {
     return "builtin";
   }
-  return tool.name.split(".")[0] || "mcp";
+  return tool.serverName || tool.name.split(".")[0] || "mcp";
 }
 
 function groupTools(tools: ToolDefinition[]): ToolGroup[] {
@@ -139,10 +139,18 @@ export function ToolsWorkbench() {
   }, [mcpServers]);
 
   async function refresh(): Promise<void> {
+    if (!hasCredentials) {
+      setTools([]);
+      setMcpServers([]);
+      setSelectedName("");
+      setResult(undefined);
+      setErrorMessage(undefined);
+      return;
+    }
     setLoading(true);
     setErrorMessage(undefined);
     try {
-      const nextTools = await listTools();
+      const nextTools = await listTools(credentials);
       setTools(nextTools);
       if (canManageMcp) {
         const nextServers = await listMcpServers(credentials);

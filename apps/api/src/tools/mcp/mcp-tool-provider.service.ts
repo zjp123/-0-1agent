@@ -27,6 +27,7 @@ export type McpToolProviderStatus = {
   enabled: boolean;
   servers: Array<{
     name: string;
+    tenantId?: string;
     disabled: boolean;
     toolCount: number;
     error?: string;
@@ -61,6 +62,7 @@ export class McpToolProviderService implements OnApplicationShutdown {
       enabled,
       servers: serverEntries.map(({ server, source }) => ({
         name: server.name,
+        ...(server.tenantId ? { tenantId: server.tenantId } : {}),
         disabled: server.disabled,
         toolCount: 0,
         source,
@@ -77,7 +79,9 @@ export class McpToolProviderService implements OnApplicationShutdown {
         continue;
       }
 
-      const statusEntry = this.status.servers.find((item) => item.name === server.name);
+      const statusEntry = this.status.servers.find(
+        (item) => item.name === server.name && item.tenantId === server.tenantId,
+      );
       try {
         const client = this.createClient(server);
         await client.connect();
@@ -169,6 +173,9 @@ export class McpToolProviderService implements OnApplicationShutdown {
         `MCP tool ${toolName} from server ${server.name}.`,
       source: "mcp",
       riskLevel,
+      ...(server.tenantId ? { tenantId: server.tenantId } : {}),
+      ...(server.id ? { serverId: server.id } : {}),
+      serverName: server.name,
       inputSchema: toToolInputSchema(inputSchema),
       timeoutMs,
       maxResultLength: 8_000,
