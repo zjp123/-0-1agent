@@ -153,6 +153,7 @@ export function AgentChat() {
       sessionId: activeSessionId,
     };
     setLastRun(nextRun);
+    setMessage("");
     await startRun(nextRun, { appendUserMessage: true });
   }
 

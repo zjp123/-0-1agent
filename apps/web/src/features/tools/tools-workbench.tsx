@@ -461,106 +461,127 @@ export function ToolsWorkbench() {
                 {editingMcpServer ? `Editing ${editingMcpServer.name}` : "New MCP server"}
               </StatusBadge>
             </div>
-            <label>
-              <span className="label">Name</span>
-              <input ref={mcpNameInputRef} value={mcpName} onChange={(event) => setMcpName(event.target.value)} className="text-input" disabled={!canManageMcp} />
-            </label>
-            <label>
-              <span className="label">Transport</span>
-              <select value={mcpTransport} onChange={(event) => setMcpTransport(event.target.value as McpServer["transport"])} className="text-input" disabled={!canManageMcp}>
-                <option value="stdio">stdio</option>
-                <option value="streamable_http">streamable_http</option>
-              </select>
-            </label>
-            {mcpTransport === "stdio" ? (
-              <>
+
+            <div className="mcp-form-section">
+              <span className="mcp-form-section-title">Basic</span>
+              <div className="mcp-form-row">
                 <label>
-                  <span className="label">Command</span>
-                  <input
-                    value={mcpCommand}
-                    onChange={(event) => setMcpCommand(event.target.value)}
-                    className="text-input"
-                    disabled={!canManageMcp}
-                    placeholder="npx, node, /absolute/path/to/command"
-                  />
+                  <span className="label">Name</span>
+                  <input ref={mcpNameInputRef} value={mcpName} onChange={(event) => setMcpName(event.target.value)} className="text-input" disabled={!canManageMcp} />
                 </label>
                 <label>
-                  <span className="label">Args</span>
-                  <textarea
-                    value={mcpArgs}
-                    onChange={(event) => setMcpArgs(event.target.value)}
-                    className="text-input mcp-json-input"
-                    disabled={!canManageMcp}
-                    rows={4}
-                    placeholder={`["-y", "chrome-devtools-mcp@latest", "--isolated"]`}
-                  />
+                  <span className="label">Transport</span>
+                  <select value={mcpTransport} onChange={(event) => setMcpTransport(event.target.value as McpServer["transport"])} className="text-input" disabled={!canManageMcp}>
+                    <option value="stdio">stdio</option>
+                    <option value="streamable_http">streamable_http</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="mcp-form-section">
+              <span className="mcp-form-section-title">{mcpTransport === "stdio" ? "Command" : "Endpoint"}</span>
+              {mcpTransport === "stdio" ? (
+                <div className="mcp-form-rows">
+                  <label>
+                    <span className="label">Command</span>
+                    <input
+                      value={mcpCommand}
+                      onChange={(event) => setMcpCommand(event.target.value)}
+                      className="text-input"
+                      disabled={!canManageMcp}
+                      placeholder="npx, node, /absolute/path/to/command"
+                    />
+                  </label>
+                  <label>
+                    <span className="label">Args (JSON array)</span>
+                    <textarea
+                      value={mcpArgs}
+                      onChange={(event) => setMcpArgs(event.target.value)}
+                      className="text-input mcp-json-input"
+                      disabled={!canManageMcp}
+                      rows={3}
+                      placeholder={`["-y", "chrome-devtools-mcp@latest", "--isolated"]`}
+                    />
+                  </label>
+                  <label>
+                    <span className="label">Env (JSON object)</span>
+                    <textarea
+                      value={mcpEnv}
+                      onChange={(event) => setMcpEnv(event.target.value)}
+                      className="text-input mcp-json-input"
+                      disabled={!canManageMcp}
+                      rows={3}
+                      placeholder='{"API_KEY": "your-key"}'
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="mcp-form-rows">
+                  <label>
+                    <span className="label">URL</span>
+                    <input
+                      value={mcpUrl}
+                      onChange={(event) => setMcpUrl(event.target.value)}
+                      className="text-input"
+                      disabled={!canManageMcp}
+                      placeholder="https://mcp.example.com/mcp"
+                    />
+                  </label>
+                  <label>
+                    <span className="label">Headers (JSON object, optional)</span>
+                    <textarea
+                      value={mcpHeaders}
+                      onChange={(event) => setMcpHeaders(event.target.value)}
+                      className="text-input mcp-json-input"
+                      disabled={!canManageMcp}
+                      rows={3}
+                      placeholder='{"Authorization": "Bearer ..."}'
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="mcp-form-section">
+              <span className="mcp-form-section-title">Auth & Risk</span>
+              <div className="mcp-form-row mcp-form-row-3">
+                <label>
+                  <span className="label">Auth</span>
+                  <select value={mcpAuthType} onChange={(event) => setMcpAuthType(event.target.value as McpServer["authType"])} className="text-input" disabled={!canManageMcp}>
+                    <option value="none">none</option>
+                    <option value="bearer">bearer</option>
+                    <option value="api_key">api_key</option>
+                  </select>
                 </label>
                 <label>
-                  <span className="label">Env JSON</span>
-                  <textarea
-                    value={mcpEnv}
-                    onChange={(event) => setMcpEnv(event.target.value)}
-                    className="text-input mcp-json-input"
-                    disabled={!canManageMcp}
-                    rows={4}
-                  />
+                  <span className="label">Secret ref</span>
+                  <input value={mcpAuthSecretRef} onChange={(event) => setMcpAuthSecretRef(event.target.value)} className="text-input" disabled={!canManageMcp || mcpAuthType === "none"} placeholder="env:MCP_TOKEN" />
                 </label>
-              </>
-            ) : (
-              <label>
-                <span className="label">URL</span>
-                <input
-                  value={mcpUrl}
-                  onChange={(event) => setMcpUrl(event.target.value)}
-                  className="text-input"
-                  disabled={!canManageMcp}
-                  placeholder="https://mcp.example.com/mcp"
-                />
-              </label>
-            )}
-            <label>
-              <span className="label">Auth</span>
-              <select value={mcpAuthType} onChange={(event) => setMcpAuthType(event.target.value as McpServer["authType"])} className="text-input" disabled={!canManageMcp}>
-                <option value="none">none</option>
-                <option value="bearer">bearer</option>
-                <option value="api_key">api_key</option>
-              </select>
-            </label>
-            <label>
-              <span className="label">Secret ref</span>
-              <input value={mcpAuthSecretRef} onChange={(event) => setMcpAuthSecretRef(event.target.value)} className="text-input" disabled={!canManageMcp || mcpAuthType === "none"} placeholder="env:MCP_TOKEN" />
-            </label>
-            {mcpTransport === "streamable_http" ? (
-              <label>
-                <span className="label">Headers JSON</span>
-                <textarea
-                  value={mcpHeaders}
-                  onChange={(event) => setMcpHeaders(event.target.value)}
-                  className="text-input mcp-json-input"
-                  disabled={!canManageMcp}
-                  rows={4}
-                />
-              </label>
-            ) : null}
-            <label>
-              <span className="label">Risk</span>
-              <select value={mcpRiskLevel} onChange={(event) => setMcpRiskLevel(event.target.value as McpServer["riskLevel"])} className="text-input" disabled={!canManageMcp}>
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="critical">critical</option>
-              </select>
-            </label>
-            <button type="button" className="refresh-button" onClick={() => void createServer()} disabled={loading || !canManageMcp}>
-              <Server className="icon-sm" aria-hidden="true" />
-              {editingMcpServer ? "Update" : "Add"}
-            </button>
-            {editingMcpServerId ? (
-              <button type="button" className="refresh-button" onClick={cancelMcpEdit} disabled={loading}>
-                <X className="icon-sm" aria-hidden="true" />
-                Cancel
+                <label>
+                  <span className="label">Risk</span>
+                  <select value={mcpRiskLevel} onChange={(event) => setMcpRiskLevel(event.target.value as McpServer["riskLevel"])} className="text-input" disabled={!canManageMcp}>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                    <option value="critical">critical</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="mcp-form-actions">
+              {editingMcpServerId ? (
+                <button type="button" className="refresh-button" onClick={cancelMcpEdit} disabled={loading}>
+                  <X className="icon-sm" aria-hidden="true" />
+                  Cancel
+                </button>
+              ) : null}
+              <button type="button" className="refresh-button mcp-form-submit" onClick={() => void createServer()} disabled={loading || !canManageMcp}>
+                <Server className="icon-sm" aria-hidden="true" />
+                {editingMcpServer ? "Update" : "Add"}
               </button>
-            ) : null}
+            </div>
           </div>
 
           <div className="mcp-server-list">

@@ -10,3 +10,4 @@ blob-report/
 *.tsbuildinfo
 .agent-memory.json
 .agent-memory/
+.qoder/

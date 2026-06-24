@@ -12,6 +12,7 @@ import type {
   ModelToolCall,
   ModelUsage,
 } from "../model-gateway/model-gateway.types.js";
+import { ModelGatewayError } from "../model-gateway/model-gateway.errors.js";
 import { ModelGatewayService } from "../model-gateway/model-gateway.service.js";
 import { ObservabilityService } from "../observability/observability.service.js";
 import { RagService } from "../rag/rag.service.js";
@@ -214,6 +215,7 @@ export class AgentRuntimeService {
 
     let answer = "";
     let stopReason: AgentStopReason = "max_steps";
+    let modelErrorDetail: string | undefined;
 
     for (let step = 1; step <= maxSteps; step += 1) {
       if (Date.now() - startedAt >= maxDurationMs) {
@@ -239,15 +241,19 @@ export class AgentRuntimeService {
       let modelResponse;
       try {
         modelResponse = await this.modelGateway.generateText(modelRequest);
-      } catch {
+      } catch (error) {
+        modelErrorDetail = this.extractModelErrorDetail(error);
+        // eslint-disable-next-line no-console
+        console.error(`[AgentRuntime] model request failed at step ${step}:`, modelErrorDetail);
         stopReason = "model_error";
         this.completePlanStep(options, modelPlanStep, "failed", {
-          summary: "Model request failed",
-          metadata: { loopStep: step, messageCount: messages.length },
+          summary: `Model request failed: ${modelErrorDetail}`,
+          metadata: { loopStep: step, messageCount: messages.length, error: modelErrorDetail },
         });
         this.recordTrace(options, "model.failed", {
           step,
           messageCount: messages.length,
+          error: modelErrorDetail,
         });
         break;
       }
@@ -509,7 +515,7 @@ export class AgentRuntimeService {
     }
 
     if (!answer && stopReason !== "final_answer") {
-      answer = this.stopReasonMessage(stopReason);
+      answer = this.stopReasonMessage(stopReason, modelErrorDetail);
     }
 
     const finalizePlanStep = this.startPlanStep(options, plan, "finalize");
@@ -847,12 +853,13 @@ export class AgentRuntimeService {
     total.totalTokens += next.totalTokens;
   }
 
-  private stopReasonMessage(stopReason: AgentStopReason): string {
+  private stopReasonMessage(stopReason: AgentStopReason, errorDetail?: string): string {
     if (stopReason === "max_duration") {
       return "Agent stopped because the maximum duration was reached.";
     }
     if (stopReason === "model_error") {
-      return "Agent stopped because the model request failed.";
+      const base = "Agent stopped because the model request failed.";
+      return errorDetail ? `${base} (${errorDetail})` : base;
     }
     if (stopReason === "approval_required") {
       return "Agent stopped because a high-risk tool requires approval before execution.";
@@ -867,6 +874,33 @@ export class AgentRuntimeService {
       return "Agent stopped because the same tool call repeated too many times.";
     }
     return "Agent stopped because the maximum number of steps was reached.";
+  }
+
+  private extractModelErrorDetail(error: unknown): string {
+    const cause = error instanceof ModelGatewayError ? error.options.cause : error;
+
+    if (cause && typeof cause === "object") {
+      const obj = cause as Record<string, unknown>;
+      // OpenAI SDK errors carry an inner `.error` object with the provider message
+      const innerError = obj["error"];
+      if (innerError && typeof innerError === "object" && "message" in innerError) {
+        const innerMessage = String((innerError as Record<string, unknown>)["message"]);
+        const status = typeof obj["status"] === "number" ? obj["status"] : undefined;
+        return status ? `[HTTP ${status}] ${innerMessage}` : innerMessage;
+      }
+      if (typeof obj["message"] === "string") {
+        const status = typeof obj["status"] === "number" ? obj["status"] : undefined;
+        const modelStatus = error instanceof ModelGatewayError ? error.options.statusCode : undefined;
+        const httpStatus = status ?? modelStatus;
+        return httpStatus ? `[HTTP ${httpStatus}] ${obj["message"]}` : obj["message"];
+      }
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return String(error);
   }
 
   private evaluateToolLoopGuard(

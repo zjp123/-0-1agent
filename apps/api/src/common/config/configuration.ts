@@ -117,6 +117,14 @@ export function buildAppConfiguration() {
       process.env.SERVICE_TOKEN_TENANT_ID ?? "default",
     serviceTokenRoles: parseCsv(process.env.SERVICE_TOKEN_ROLES),
     serviceTokenPermissions: parseCsv(process.env.SERVICE_TOKEN_PERMISSIONS),
+    accessTokenTtlSeconds: parsePositiveInt(
+      process.env.AUTH_ACCESS_TOKEN_TTL_SECONDS,
+      2 * 60 * 60,
+    ),
+    refreshTokenTtlSeconds: parsePositiveInt(
+      process.env.AUTH_REFRESH_TOKEN_TTL_SECONDS,
+      7 * 24 * 60 * 60,
+    ),
   },
   database: {
     url:

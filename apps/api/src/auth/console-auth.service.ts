@@ -46,8 +46,8 @@ export type ConsoleAuthResponse = {
 
 @Injectable()
 export class ConsoleAuthService {
-  private readonly accessTokenTtlSeconds = 15 * 60;
-  private readonly refreshTokenTtlSeconds = 7 * 24 * 60 * 60;
+  private readonly accessTokenTtlSeconds: number;
+  private readonly refreshTokenTtlSeconds: number;
   private readonly passwordKeyLength = 64;
   private readonly passwordScryptCost = 16_384;
   private readonly passwordScryptBlockSize = 8;
@@ -63,7 +63,10 @@ export class ConsoleAuthService {
     @Inject(IdentityService)
     private readonly identity: IdentityService,
     @Inject(DRIZZLE_DB) private readonly db: Database,
-  ) {}
+  ) {
+    this.accessTokenTtlSeconds = this.config.get<number>("app.auth.accessTokenTtlSeconds", 2 * 60 * 60);
+    this.refreshTokenTtlSeconds = this.config.get<number>("app.auth.refreshTokenTtlSeconds", 7 * 24 * 60 * 60);
+  }
 
   async login(body: ConsoleLoginDto): Promise<ConsoleAuthResponse> {
     const user = await this.authenticateConsoleUser(body);

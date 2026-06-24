@@ -1567,9 +1567,10 @@ pre {
 }
 
 .mcp-create-grid {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  gap: 0.75rem;
+  gap: 1rem;
   scroll-margin-top: 5rem;
 }
 
@@ -1584,8 +1585,64 @@ pre {
   gap: 0.5rem;
 }
 
+.mcp-form-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--panel-soft);
+  padding: 0.75rem 0.875rem 0.875rem;
+}
+
+.mcp-form-section-title {
+  color: var(--accent-strong);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mcp-form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.625rem;
+}
+
+.mcp-form-row-3 {
+  grid-template-columns: 1fr;
+}
+
+.mcp-form-rows {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.625rem;
+}
+
+.mcp-form-rows .mcp-json-input {
+  min-height: 4.5rem;
+}
+
+.mcp-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.mcp-form-submit {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.mcp-form-submit:hover {
+  background: var(--accent-strong);
+}
+
 .mcp-json-input {
-  min-height: 7rem;
+  min-height: 4.5rem;
   resize: vertical;
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.8125rem;
@@ -1807,9 +1864,12 @@ pre {
     grid-template-columns: 18rem minmax(0, 1fr);
   }
 
-  .mcp-create-grid {
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-    align-items: end;
+  .mcp-form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mcp-form-row-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .mcp-server-row {

@@ -110,6 +110,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void restore();
   }, [applySession, clearSession]);
 
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    const expiresAtMs = new Date(session.expiresAt).getTime();
+    const delay = expiresAtMs - Date.now() - 5 * 60_000;
+    if (delay <= 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void refresh().catch(() => clearSession());
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [session, refresh, clearSession]);
+
   const value = useMemo<SessionContextValue>(
     () => ({
       status,
