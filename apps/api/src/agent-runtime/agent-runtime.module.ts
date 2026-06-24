@@ -10,6 +10,7 @@ import { ToolsModule } from "../tools/tools.module.js";
 import { WorkflowModule } from "../workflow/workflow.module.js";
 import { EvaluationModule } from "../evaluation/evaluation.module.js";
 import { AgentRuntimeController } from "./agent-runtime.controller.js";
+import { AgentConversationService } from "./agent-conversation.service.js";
 import { AgentRuntimeService } from "./agent-runtime.service.js";
 import { EvaluationAgentRunnerService } from "./evaluation-agent-runner.service.js";
 import { WorkflowRunExecutorService } from "./workflow-run-executor.service.js";
@@ -27,7 +28,12 @@ import { WorkflowRunExecutorService } from "./workflow-run-executor.service.js";
     EvaluationModule,
   ],
   controllers: [AgentRuntimeController],
-  providers: [AgentRuntimeService, WorkflowRunExecutorService, EvaluationAgentRunnerService],
+  providers: [
+    AgentRuntimeService,
+    AgentConversationService,
+    WorkflowRunExecutorService,
+    EvaluationAgentRunnerService,
+  ],
   exports: [AgentRuntimeService, WorkflowRunExecutorService, EvaluationAgentRunnerService],
 })
 export class AgentRuntimeModule {}

@@ -35,6 +35,7 @@ agent:run
 ```json
 {
   "requestId": "11111111-1111-4111-8111-111111111112",
+  "sessionId": "可选，已有会话 ID",
   "message": "用一句话介绍这个企业级 Agent 平台。",
   "maxSteps": 1,
   "maxDurationMs": 30000
@@ -57,13 +58,13 @@ error
 
 ```text
 event: started
-data: {"requestId":"...","timestamp":"..."}
+data: {"requestId":"...","sessionId":"...","timestamp":"..."}
 
 event: delta
-data: {"requestId":"...","content":"..."}
+data: {"requestId":"...","sessionId":"...","content":"..."}
 
 event: result
-data: {"requestId":"...","stopReason":"final_answer","steps":[],"context":{},"usage":{},"durationMs":1234}
+data: {"requestId":"...","sessionId":"...","stopReason":"final_answer","steps":[],"context":{},"usage":{},"durationMs":1234}
 
 event: done
 data: {"requestId":"...","timestamp":"..."}
@@ -76,6 +77,7 @@ data: {"requestId":"...","timestamp":"..."}
 - 后端仍复用现有 `AgentRuntimeService.run()`。
 - run 完成后，将 answer 分块发送为 `delta`。
 - 同时发送 `result`，包含 steps、context、usage、durationMs。
+- stream 入口会返回并维护 `sessionId`，对话历史以数据库为准。
 - 后续可升级 Model Gateway provider，实现 token-level streaming。
 
 这样可以先完成 Web 流式体验、SSE 协议、取消生成、错误状态和 UI 增量渲染，再逐步深入模型层 token stream。
@@ -98,14 +100,48 @@ http://localhost:3001/agent-chat
 - 展示 usage、duration、steps 摘要。
 - 支持 Stop 取消当前生成。
 - 支持 Retry 复用上一次请求。
-- 支持 Clear 清空当前对话。
-- 后续请求会把已有 user/assistant 消息作为 history 传给后端。
+- 支持 New 创建新会话。
+- 支持 Delete 删除当前会话。
+- 支持从后端加载历史会话和消息，切页、刷新、关闭浏览器后不会丢失。
+- 后续请求只传 `sessionId`，后端按当前登录用户校验会话归属并读取历史上下文。
 - 展示 context sources，可用于查看 RAG/context 注入情况。
 - 展示 answer source summary，用于快速查看最终答案引用摘要。
 - 展示 RAG knowledge source 卡片，包含 document/chunk/source metadata。
 - 展示 model/tool timeline。
 - 展示 tool outputs 卡片，包含结构化 output、风险等级和 required permissions。
 - 侧边栏 Agent Chat 导航可点击。
+
+## 后端持久化对话历史记录
+
+记录日期：2026-06-24
+
+现象：从 `/agent-chat` 切换到其他页面后再返回，原对话消失。原因是此前 Agent Chat 只把 `messages`、`events`、`metadata` 等状态保存在 React 组件内存中，页面卸载后自然丢失。`localStorage` 只能解决单浏览器临时恢复，清缓存、换浏览器、换设备都会丢，不适合作为企业级正式历史。
+
+修复：
+
+- 复用数据库已有 `sessions` 和 `messages` 表作为 Agent conversation 存储。
+- 新增后端服务 `AgentConversationService`，统一处理会话创建、列表、消息读取、消息追加、删除和归属校验。
+- 新增 API：
+
+```text
+GET /api/agent/conversations
+POST /api/agent/conversations
+GET /api/agent/conversations/:sessionId/messages
+DELETE /api/agent/conversations/:sessionId
+```
+
+- `POST /api/agent/run/stream` 支持 `sessionId`，没有传入时自动创建新会话。
+- Agent run 运行前从数据库读取该用户当前会话的历史消息作为上下文。
+- 用户消息和 assistant 最终消息写入数据库。
+- 前端新增会话列表，支持 New / 切换 / Delete。
+- 会话按当前认证用户和 tenant/workspace 隔离，前端不能通过伪造 history 注入别人的上下文。
+
+验证：
+
+```bash
+PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run check -w @enterprise-agent/api
+PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run check:web
+```
 
 ## 401 与长错误布局保护
 
@@ -156,6 +192,83 @@ error event: false
 ```
 
 当前本地 `.env` 的 `LLM_API_KEY` 仍是 placeholder 时，Agent 会返回 `stopReason=model_error` 和友好文本 `Agent stopped because the model request failed.`；这表示 stream 链路正常，真实模型调用需要配置有效 LLM key。
+
+## MCP 工具名兼容修复记录
+
+记录日期：2026-06-23
+
+现象：`/agent-chat` 点击 Send 后进入 Agent Runtime，但返回：
+
+```text
+Agent stopped because the model request failed.
+```
+
+在 `LLM_API_KEY` 未变且真实可用的情况下，根因不是登录态，也不是模型 key，而是 MCP 工具接入后，Agent Runtime 会把可用工具定义传给 OpenAI-compatible 模型接口。MCP 工具运行时名称可能包含 `.`、`/` 等字符，例如：
+
+```text
+github.search_repositories
+```
+
+部分 OpenAI-compatible provider 对 function/tool name 有更严格约束，只接受字母、数字、下划线、短横线。带 `.` 的工具名会导致模型请求被 provider 拒绝，最终表现为 `model_error`。
+
+修复：
+
+- Agent Runtime 发送给模型前，将工具名转换为模型安全别名。
+- 示例：`github.search_repositories` -> `github_search_repositories`。
+- 如果别名冲突，自动追加数字后缀。
+- 模型返回 tool call 后，再把安全别名反查为真实 Tool Registry 名称执行。
+- Tools 页面、Tool Registry、审计和 MCP server 配置仍保留真实工具名。
+
+新增文件：
+
+```text
+apps/api/src/agent-runtime/tool-name-alias.ts
+apps/api/test/unit/tool-name-alias.test.ts
+```
+
+验证：
+
+```bash
+PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run check -w @enterprise-agent/api
+PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run test:unit
+```
+
+## Web Search MCP 长工具调用心跳记录
+
+记录日期：2026-06-24
+
+现象：配置 `brave-search` MCP 后，server 显示 `active`，但 `/agent-chat` 测试实时搜索问题时，前端提示：
+
+```text
+Agent stream was disconnected before completion.
+```
+
+说明：
+
+- `brave-search` 使用 `command + args` 的本地 MCP 启动方式，在 Web Tools 中 `Transport` 应选择 `stdio`。
+- Cursor/Claude 风格配置通常不显式写 `transport`，因为这类客户端默认把 `command + args` 解释为 stdio MCP。
+- 本项目 Web 表单需要显式选择 `stdio`，用于区分本地进程 MCP 和 `streamable_http` remote MCP。
+
+根因：
+
+- Agent stream 之前只在开始和最终结果时写 SSE event。
+- Web search / MCP 工具调用期间，后端可能较长时间没有输出。
+- 首次 `npx -y brave-search-mcp` 还可能有安装、解析、启动耗时。
+- 前端 idle timeout 或浏览器连接中断时，会显示 disconnected before completion。
+
+修复：
+
+- `POST /api/agent/run/stream` 增加 `heartbeat` SSE event，每 15 秒发送一次。
+- 前端 `AgentStreamEvent` 增加 `heartbeat` 类型。
+- 前端 parser 识别 `heartbeat`，收到心跳会刷新 idle timeout。
+- Agent Chat 总超时从 120 秒调到 180 秒，给 Web Search + LLM 二轮调用留出更合理窗口。
+
+验证：
+
+```bash
+PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run check -w @enterprise-agent/api
+PATH=/Applications/Codex.app/Contents/Resources/cua_node/bin:$PATH npm run check:web
+```
 
 ## Web 消息区高度优化记录
 

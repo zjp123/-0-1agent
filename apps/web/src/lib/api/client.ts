@@ -32,16 +32,21 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>;
 export type AgentStreamEvent =
   | {
       event: "started";
+      data: { requestId: string; sessionId?: string; timestamp: string };
+    }
+  | {
+      event: "heartbeat";
       data: { requestId: string; timestamp: string };
     }
   | {
       event: "delta";
-      data: { requestId: string; content: string };
+      data: { requestId: string; sessionId?: string; content: string };
     }
   | {
       event: "result";
       data: {
         requestId: string;
+        sessionId?: string;
         stopReason: string;
         sourceSummary?: AgentSourceSummary[];
         plan?: AgentExecutionPlan;
@@ -61,11 +66,12 @@ export type AgentStreamEvent =
     }
   | {
       event: "error";
-      data: { requestId: string; message: string };
+      data: { requestId: string; sessionId?: string; message: string };
     };
 
 export type RunAgentStreamInput = {
   requestId: string;
+  sessionId?: string;
   message: string;
   messages?: AgentMessage[];
   accessToken?: string;
@@ -80,6 +86,26 @@ export type RunAgentStreamInput = {
 export type AgentMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string;
+};
+
+export type AgentConversation = {
+  id: string;
+  tenantId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+};
+
+export type AgentConversationMessage = {
+  id: string;
+  tenantId: string;
+  sessionId: string;
+  role: AgentMessage["role"];
+  content: string;
+  toolCallId?: string;
+  toolCalls?: unknown[];
+  createdAt: string;
 };
 
 export type AgentExecutionPlan = {
@@ -1515,6 +1541,26 @@ const agentRunHistoryItemSchema: z.ZodType<AgentRunHistoryItem> = z.object({
   completedAt: z.string().optional(),
 });
 
+const agentConversationSchema: z.ZodType<AgentConversation> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  title: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  messageCount: z.number(),
+});
+
+const agentConversationMessageSchema: z.ZodType<AgentConversationMessage> = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  sessionId: z.string(),
+  role: z.enum(["system", "user", "assistant", "tool"]),
+  content: z.string(),
+  toolCallId: z.string().optional(),
+  toolCalls: z.array(z.unknown()).optional(),
+  createdAt: z.string(),
+});
+
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_GET_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 300;
@@ -1574,6 +1620,7 @@ export async function runAgentStream(input: RunAgentStreamInput): Promise<void> 
       headers,
       body: JSON.stringify({
         requestId: input.requestId,
+        sessionId: input.sessionId,
         message: input.message,
         messages: input.messages,
       }),
@@ -1619,6 +1666,49 @@ export async function runAgentStream(input: RunAgentStreamInput): Promise<void> 
     clearTimeout(idleTimeout);
     cleanupSignals();
   }
+}
+
+export async function listAgentConversations(
+  credentials: AuthCredentials,
+): Promise<AgentConversation[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/agent/conversations`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(agentConversationSchema).parse(payload);
+}
+
+export async function createAgentConversation(
+  input: AuthCredentials & { title?: string },
+): Promise<AgentConversation> {
+  const payload = await fetchJson(`${apiBaseUrl}/agent/conversations`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({
+      title: input.title || undefined,
+    }),
+  });
+  return agentConversationSchema.parse(payload);
+}
+
+export async function listAgentConversationMessages(
+  credentials: AuthCredentials,
+  sessionId: string,
+): Promise<AgentConversationMessage[]> {
+  const payload = await fetchJson(`${apiBaseUrl}/agent/conversations/${sessionId}/messages`, {
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.array(agentConversationMessageSchema).parse(payload);
+}
+
+export async function deleteAgentConversation(
+  credentials: AuthCredentials,
+  sessionId: string,
+): Promise<{ deleted: true }> {
+  const payload = await fetchJson(`${apiBaseUrl}/agent/conversations/${sessionId}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.object({ deleted: z.literal(true) }).parse(payload);
 }
 
 function normalizeHttpErrorMessage(
@@ -1817,6 +1907,21 @@ export async function disableMcpServer(
   input: { serverId: string; reason: string } & AuthCredentials,
 ): Promise<McpServerMutationResponse> {
   return mcpServerAction(input.serverId, "disable", input.reason, input);
+}
+
+export async function deleteMcpServer(
+  input: { serverId: string; reason: string } & AuthCredentials,
+): Promise<McpServerMutationResponse> {
+  const response = await fetch(`${apiBaseUrl}/tools/mcp/servers/${input.serverId}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({ reason: input.reason }),
+  });
+  const payload: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(JSON.stringify(payload));
+  }
+  return mcpServerMutationResponseSchema.parse(payload);
 }
 
 export async function reloadMcpServers(
@@ -2553,6 +2658,7 @@ function parseSseEvent(raw: string): AgentStreamEvent | undefined {
 
   if (
     event === "started" ||
+    event === "heartbeat" ||
     event === "delta" ||
     event === "result" ||
     event === "done" ||

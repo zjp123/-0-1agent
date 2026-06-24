@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ChevronDown, PauseCircle, Play, Plus, RefreshCcw, Server, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ChevronDown, PauseCircle, Play, Plus, RefreshCcw, Server, ShieldCheck, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { useEffectiveCredentials, useSession } from "@/components/auth/session-provider";
@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   approveMcpServer,
   createMcpServer,
+  deleteMcpServer,
   disableMcpServer,
   executeTool,
   listTools,
@@ -123,9 +124,9 @@ export function ToolsWorkbench() {
     [selectedName, tools],
   );
   const toolGroups = useMemo(() => groupTools(tools), [tools]);
-  const matchingMcpServer = useMemo(
-    () => mcpServers.find((server) => server.name === mcpName.trim()),
-    [mcpName, mcpServers],
+  const editingMcpServer = useMemo(
+    () => mcpServers.find((server) => server.id === editingMcpServerId),
+    [editingMcpServerId, mcpServers],
   );
   const nextMcpName = useMemo(() => {
     const usedNames = new Set(mcpServers.map((server) => server.name));
@@ -199,7 +200,7 @@ export function ToolsWorkbench() {
       const env = parseStringRecordJson(mcpEnv, "Env JSON");
       const headers = JSON.parse(mcpHeaders) as Record<string, string>;
       const shouldPreserveMaskedEnv =
-        Boolean(matchingMcpServer) &&
+        Boolean(editingMcpServer) &&
         Object.values(env).some((value) => value === "********");
       const payload = {
         transport: mcpTransport,
@@ -214,9 +215,9 @@ export function ToolsWorkbench() {
         riskLevel: mcpRiskLevel,
         requiredPermissions: ["tools:execute"],
       };
-      if (matchingMcpServer) {
+      if (editingMcpServer) {
         await updateMcpServer({
-          serverId: matchingMcpServer.id,
+          serverId: editingMcpServer.id,
           ...payload,
           reason: "Update MCP server from Web Console",
           ...credentials,
@@ -229,6 +230,7 @@ export function ToolsWorkbench() {
           ...credentials,
         });
       }
+      setEditingMcpServerId(undefined);
       await refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to create MCP server.");
@@ -272,6 +274,29 @@ export function ToolsWorkbench() {
       await refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Failed to disable MCP server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteServer(serverId: string): Promise<void> {
+    setLoading(true);
+    setErrorMessage(undefined);
+    try {
+      if (!canManageMcp) {
+        throw new Error("MCP server management requires auth:manage permission.");
+      }
+      await deleteMcpServer({
+        serverId,
+        reason: "Delete MCP server from Web Console",
+        ...credentials,
+      });
+      if (editingMcpServerId === serverId) {
+        cancelMcpEdit();
+      }
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to delete MCP server.");
     } finally {
       setLoading(false);
     }
@@ -368,6 +393,21 @@ export function ToolsWorkbench() {
     scrollToMcpForm();
   }
 
+  function cancelMcpEdit(): void {
+    setEditingMcpServerId(undefined);
+    setMcpName(nextMcpName);
+    setMcpTransport("stdio");
+    setMcpCommand("npx");
+    setMcpUrl("");
+    setMcpArgs(JSON.stringify(["-y", "chrome-devtools-mcp@latest", "--isolated"], null, 2));
+    setMcpEnv("{}");
+    setMcpHeaders("{}");
+    setMcpAuthType("none");
+    setMcpAuthSecretRef("");
+    setMcpRiskLevel("medium");
+    setErrorMessage(undefined);
+  }
+
   function scrollToMcpForm(): void {
     window.requestAnimationFrame(() => {
       mcpFormRef.current?.scrollIntoView({
@@ -417,8 +457,8 @@ export function ToolsWorkbench() {
           ) : null}
           <div ref={mcpFormRef} className="mcp-create-grid">
             <div className="mcp-form-status">
-              <StatusBadge tone={matchingMcpServer ? "warning" : "neutral"}>
-                {matchingMcpServer ? `Editing ${matchingMcpServer.name}` : "New MCP server"}
+              <StatusBadge tone={editingMcpServer ? "warning" : "neutral"}>
+                {editingMcpServer ? `Editing ${editingMcpServer.name}` : "New MCP server"}
               </StatusBadge>
             </div>
             <label>
@@ -513,8 +553,14 @@ export function ToolsWorkbench() {
             </label>
             <button type="button" className="refresh-button" onClick={() => void createServer()} disabled={loading || !canManageMcp}>
               <Server className="icon-sm" aria-hidden="true" />
-              {matchingMcpServer ? "Update" : "Add"}
+              {editingMcpServer ? "Update" : "Add"}
             </button>
+            {editingMcpServerId ? (
+              <button type="button" className="refresh-button" onClick={cancelMcpEdit} disabled={loading}>
+                <X className="icon-sm" aria-hidden="true" />
+                Cancel
+              </button>
+            ) : null}
           </div>
 
           <div className="mcp-server-list">
@@ -549,6 +595,10 @@ export function ToolsWorkbench() {
                     </button>
                   )}
                   {server.enabled ? <CheckCircle2 className="icon-sm mcp-enabled-icon" aria-label="enabled" /> : null}
+                  <button type="button" className="icon-action-button danger" onClick={() => void deleteServer(server.id)} disabled={loading || !canManageMcp}>
+                    <Trash2 className="icon-sm" aria-hidden="true" />
+                    Delete
+                  </button>
                 </div>
               </article>
             )) : (

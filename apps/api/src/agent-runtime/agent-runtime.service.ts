@@ -34,6 +34,7 @@ import type {
   AgentRuntimeStep,
   AgentStopReason,
 } from "./agent-runtime.types.js";
+import { resolveModelToolCall, toModelSafeToolName } from "./tool-name-alias.js";
 
 const DEFAULT_MAX_TOTAL_TOOL_CALLS = 12;
 const DEFAULT_MAX_CONSECUTIVE_EMPTY_MODEL_OUTPUTS = 2;
@@ -194,9 +195,10 @@ export class AgentRuntimeService {
     });
 
     const messages = [...context.messages];
+    const toolNameAliases = new Map<string, string>();
     const toolDefinitions = this.tools
       .listDefinitions(this.toolRegistryContext(options))
-      .map((definition) => this.toModelToolDefinition(definition));
+      .map((definition) => this.toModelToolDefinition(definition, toolNameAliases));
     const planningPlanStep = this.startPlanStep(options, plan, "planning");
     this.completePlanStep(options, planningPlanStep, "completed", {
       summary: `${toolDefinitions.length} tools available for ReAct loop`,
@@ -340,7 +342,9 @@ export class AgentRuntimeService {
       }
 
       const guardStopReason = this.evaluateToolLoopGuard(
-        modelResponse.toolCalls,
+        modelResponse.toolCalls.map((toolCall) =>
+          resolveModelToolCall(toolCall, toolNameAliases),
+        ),
         loopGuard,
         maxTotalToolCalls,
       );
@@ -361,7 +365,8 @@ export class AgentRuntimeService {
         toolCall: ModelToolCall;
         toolResponse: ToolCallResponse;
       }> = [];
-      for (const toolCall of modelResponse.toolCalls) {
+      for (const rawToolCall of modelResponse.toolCalls) {
+          const toolCall = resolveModelToolCall(rawToolCall, toolNameAliases);
           const toolPlanStep = this.startPlanStep(
             options,
             plan,
@@ -789,11 +794,15 @@ export class AgentRuntimeService {
     };
   }
 
-  private toModelToolDefinition(definition: ToolDefinition): ModelToolDefinition {
+  private toModelToolDefinition(
+    definition: ToolDefinition,
+    aliases: Map<string, string>,
+  ): ModelToolDefinition {
+    const name = toModelSafeToolName(definition.name, aliases);
     return {
       type: "function",
       function: {
-        name: definition.name,
+        name,
         description: definition.description,
         parameters: definition.inputSchema,
       },

@@ -1,8 +1,8 @@
 "use client";
 
-import { RotateCcw, SendHorizonal, Square } from "lucide-react";
+import { Plus, RotateCcw, SendHorizonal, Square, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { ProtectedOperationHint } from "@/components/auth/protected-operation-hint";
 import { useEffectiveCredentials } from "@/components/auth/session-provider";
@@ -10,9 +10,14 @@ import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 import { notify } from "@/components/notifications/toast-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
+  createAgentConversation,
+  deleteAgentConversation,
+  listAgentConversationMessages,
+  listAgentConversations,
   runAgentStream,
+  type AgentConversation,
+  type AgentConversationMessage,
   type AgentExecutionPlan,
-  type AgentMessage,
   type AgentRunContext,
   type AgentRunStep,
   type AgentSourceSummary,
@@ -23,14 +28,14 @@ type ChatStatus = "idle" | "streaming" | "done" | "error" | "cancelled";
 
 type ChatMessage = {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
   state?: "streaming" | "completed" | "cancelled" | "error";
 };
 
 type RunSnapshot = {
   message: string;
-  history: AgentMessage[];
+  sessionId?: string;
 };
 
 type RunMetadata = {
@@ -53,6 +58,9 @@ export function AgentChat() {
   const [apiKey, setApiKey] = useState("");
   const [serviceToken, setServiceToken] = useState("");
   const [status, setStatus] = useState<ChatStatus>("idle");
+  const [conversations, setConversations] = useState<AgentConversation[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | undefined>();
+  const [conversationLoading, setConversationLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [events, setEvents] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
@@ -60,21 +68,80 @@ export function AgentChat() {
   const [lastRun, setLastRun] = useState<RunSnapshot | undefined>();
   const abortRef = useRef<AbortController | undefined>(undefined);
   const activeAssistantMessageIdRef = useRef<string | undefined>(undefined);
+  const pendingSessionIdRef = useRef<string | undefined>(undefined);
 
   const canSubmit = status !== "streaming" && message.trim().length > 0;
   const canRetry = status !== "streaming" && Boolean(lastRun);
   const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
 
-  const history = useMemo<AgentMessage[]>(
-    () =>
-      messages
-        .filter((item) => item.content.trim().length > 0)
-        .map((item) => ({
-          role: item.role,
-          content: item.content,
-        })),
-    [messages],
-  );
+  const loadConversations = useCallback(async (): Promise<void> => {
+    if (!hasCredentials) {
+      setConversations([]);
+      setActiveSessionId(undefined);
+      setMessages([]);
+      return;
+    }
+
+    setConversationLoading(true);
+    try {
+      const rows = await listAgentConversations(credentials);
+      setConversations(rows);
+      setActiveSessionId((current) => current ?? rows[0]?.id);
+    } catch (error) {
+      notify({
+        title: "Failed to load conversations",
+        message: normalizeStreamError(error),
+        tone: "danger",
+      });
+    } finally {
+      setConversationLoading(false);
+    }
+  }, [credentials, hasCredentials]);
+
+  useEffect(() => {
+    void loadConversations();
+  }, [loadConversations]);
+
+  useEffect(() => {
+    const sessionId = activeSessionId;
+    if (!sessionId || !hasCredentials) {
+      setMessages([]);
+      return;
+    }
+    const selectedSessionId = sessionId;
+    let cancelled = false;
+    async function loadMessages(): Promise<void> {
+      setConversationLoading(true);
+      try {
+        const rows = await listAgentConversationMessages(credentials, selectedSessionId);
+        if (!cancelled) {
+          setMessages(rows.map(toChatMessage));
+          setEvents([]);
+          setMetadata(undefined);
+          setErrorMessage(undefined);
+          setStatus("idle");
+          setLastRun(undefined);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          notify({
+            title: "Failed to load conversation",
+            message: normalizeStreamError(error),
+            tone: "danger",
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setConversationLoading(false);
+        }
+      }
+    }
+
+    void loadMessages();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, credentials, hasCredentials]);
 
   async function submit(): Promise<void> {
     if (!canSubmit) {
@@ -83,7 +150,7 @@ export function AgentChat() {
 
     const nextRun: RunSnapshot = {
       message: message.trim(),
-      history,
+      sessionId: activeSessionId,
     };
     setLastRun(nextRun);
     await startRun(nextRun, { appendUserMessage: true });
@@ -133,11 +200,11 @@ export function AgentChat() {
     try {
       await runAgentStream({
         requestId,
+        sessionId: run.sessionId,
         message: run.message,
-        messages: run.history,
         ...credentials,
         signal: controller.signal,
-        timeoutMs: 120_000,
+        timeoutMs: 180_000,
         idleTimeoutMs: 45_000,
         onEvent: (event) => handleStreamEvent(event, assistantMessage.id),
       });
@@ -145,8 +212,12 @@ export function AgentChat() {
         applyCancelledState(assistantMessage.id);
         return;
       }
+      if (pendingSessionIdRef.current) {
+        setActiveSessionId(pendingSessionIdRef.current);
+      }
       markAssistantMessage(assistantMessage.id, "completed");
       setStatus("done");
+      await loadConversations();
     } catch (error) {
       if (controller.signal.aborted) {
         applyCancelledState(assistantMessage.id);
@@ -163,6 +234,7 @@ export function AgentChat() {
       });
     } finally {
       abortRef.current = undefined;
+      pendingSessionIdRef.current = undefined;
       if (activeAssistantMessageIdRef.current === assistantMessage.id) {
         activeAssistantMessageIdRef.current = undefined;
       }
@@ -175,6 +247,12 @@ export function AgentChat() {
     }
 
     setEvents((current) => [...current, event.event]);
+
+    const eventSessionId =
+      "sessionId" in event.data ? event.data.sessionId : undefined;
+    if (eventSessionId) {
+      pendingSessionIdRef.current = eventSessionId;
+    }
 
     if (event.event === "delta") {
       setMessages((current) =>
@@ -220,12 +298,66 @@ export function AgentChat() {
   }
 
   function clearConversation(): void {
+    if (activeSessionId) {
+      void deleteCurrentConversation(activeSessionId);
+      return;
+    }
     setMessages([]);
     setEvents([]);
     setMetadata(undefined);
     setErrorMessage(undefined);
     setStatus("idle");
     setLastRun(undefined);
+  }
+
+  async function createNewConversation(): Promise<void> {
+    if (!hasCredentials || status === "streaming") {
+      return;
+    }
+    try {
+      const created = await createAgentConversation({
+        ...credentials,
+        title: "New conversation",
+      });
+      setConversations((current) => [created, ...current]);
+      setActiveSessionId(created.id);
+      setMessages([]);
+      setEvents([]);
+      setMetadata(undefined);
+      setErrorMessage(undefined);
+      setStatus("idle");
+      setLastRun(undefined);
+    } catch (error) {
+      notify({
+        title: "Failed to create conversation",
+        message: normalizeStreamError(error),
+        tone: "danger",
+      });
+    }
+  }
+
+  async function deleteCurrentConversation(sessionId: string): Promise<void> {
+    if (status === "streaming") {
+      return;
+    }
+    try {
+      await deleteAgentConversation(credentials, sessionId);
+      const remaining = conversations.filter((item) => item.id !== sessionId);
+      setConversations(remaining);
+      setActiveSessionId(remaining[0]?.id);
+      setMessages([]);
+      setEvents([]);
+      setMetadata(undefined);
+      setErrorMessage(undefined);
+      setStatus("idle");
+      setLastRun(undefined);
+    } catch (error) {
+      notify({
+        title: "Failed to delete conversation",
+        message: normalizeStreamError(error),
+        tone: "danger",
+      });
+    }
   }
 
   function markAssistantMessage(
@@ -272,6 +404,47 @@ export function AgentChat() {
       </div>
 
       <section className="chat-layout">
+        <aside className="conversation-side">
+          <div className="conversation-toolbar">
+            <button
+              type="button"
+              className="refresh-button"
+              onClick={() => void createNewConversation()}
+              disabled={!hasCredentials || status === "streaming"}
+              title="New conversation"
+            >
+              <Plus className="icon-sm" aria-hidden="true" />
+              New
+            </button>
+          </div>
+          <div className="conversation-list" aria-label="Conversations">
+            {conversationLoading && conversations.length === 0 ? (
+              <div className="empty-state compact">Loading conversations...</div>
+            ) : null}
+            {!conversationLoading && conversations.length === 0 ? (
+              <div className="empty-state compact">No saved conversations.</div>
+            ) : null}
+            {conversations.map((conversation) => (
+              <button
+                type="button"
+                key={conversation.id}
+                className={`conversation-item${conversation.id === activeSessionId ? " active" : ""}`}
+                onClick={() => {
+                  if (status !== "streaming") {
+                    setActiveSessionId(conversation.id);
+                  }
+                }}
+                disabled={status === "streaming"}
+              >
+                <span className="conversation-title">{conversation.title}</span>
+                <span className="conversation-meta">
+                  {conversation.messageCount} messages
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
+
         <div className="chat-main">
           <div className="message-list" aria-live="polite">
             {messages.length === 0 ? (
@@ -313,7 +486,8 @@ export function AgentChat() {
                 Stop
               </button>
               <button type="button" className="refresh-button" onClick={clearConversation} disabled={status === "streaming"}>
-                Clear
+                <Trash2 className="icon-sm" aria-hidden="true" />
+                Delete
               </button>
             </div>
           </div>
@@ -350,6 +524,15 @@ export function AgentChat() {
       </section>
     </div>
   );
+}
+
+function toChatMessage(message: AgentConversationMessage): ChatMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    state: message.role === "assistant" ? "completed" : undefined,
+  };
 }
 
 function normalizeStreamError(error: unknown): string {

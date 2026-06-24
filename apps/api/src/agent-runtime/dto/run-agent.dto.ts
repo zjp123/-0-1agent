@@ -27,6 +27,10 @@ export class RunAgentDto {
   tenantId?: string;
 
   @IsOptional()
+  @IsUUID()
+  sessionId?: string;
+
+  @IsOptional()
   @IsString()
   systemPrompt?: string;
 

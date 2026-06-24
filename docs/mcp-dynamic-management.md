@@ -13,6 +13,7 @@
   - `PATCH /api/tools/mcp/servers/:serverId`
   - `POST /api/tools/mcp/servers/:serverId/approve`
   - `POST /api/tools/mcp/servers/:serverId/disable`
+  - `DELETE /api/tools/mcp/servers/:serverId`
   - `POST /api/tools/mcp/servers/reload`
 - MCP server 配置支持：
   - `name`
@@ -43,6 +44,8 @@
 - Web Tools 页面支持 stdio / Streamable HTTP transport 切换。
 - MCP env 返回前统一掩码，避免明文展示。
 - MCP 配置变更写入 `auth_admin_audit_events`。
+- Web Tools 编辑态支持 Cancel 取消编辑，恢复新建表单。
+- Web Tools 支持 Delete 删除动态 MCP server，删除后自动 reload Tool Registry。
 
 ## 安全策略
 
@@ -123,6 +126,15 @@ github.search_repositories
 - Tool audit 增加 MCP server 归属字段。
 - Web Tools 页面调用 `GET /api/tools` 时携带当前登录凭证。
 
+2026-06-24 完成 MCP Web 管理 UX 补强：
+
+- 编辑 MCP server 时，表单主按钮显示 `Update`。
+- 编辑态新增 `Cancel`，可以退出编辑并恢复新建表单。
+- MCP server 列表新增 `Delete`，用于删除不再需要的动态 server。
+- 后端新增 `DELETE /api/tools/mcp/servers/:serverId`，按当前 tenant 校验归属后删除。
+- 删除操作写入审计事件 `tools.mcp_server.delete`。
+- 删除完成后自动 reload Tool Registry，避免已删除 MCP 工具继续出现在运行时列表。
+
 ## 本地测试流程
 
 1. 启动基础设施和迁移：
@@ -173,9 +185,13 @@ Risk: medium
 
 6. 点击 Add 后，系统会 reload MCP servers。
 
-如果同名 server 已存在，Web 会把主按钮切换为 Update，更新原有配置并重新加载，而不是再次创建导致 409。
+如果同名 server 已存在且当前不是编辑态，创建会返回 409，避免误把已有 server 当成更新目标。
 
 如果需要添加另一个 MCP server，点击 New，表单会切换到一个新的默认名称，主按钮会回到 Add。
+
+如果点击已有 server 的 Edit，表单会进入编辑态，主按钮变为 Update，并出现 Cancel。点击 Cancel 会退出编辑态，不会保存当前表单修改。
+
+如果需要移除 server，点击列表中的 Delete。删除是硬删除，会移除数据库配置并重新加载 MCP 工具列表。
 
 ### stdio 配置格式
 

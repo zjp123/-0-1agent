@@ -337,6 +337,41 @@ export class McpServerManagementService {
     return this.toResponse(updated, actor.tenantId);
   }
 
+  async deleteServer(
+    serverId: string,
+    body: McpServerActionDto,
+    actor: RequestUser,
+  ): Promise<McpServerResponse> {
+    const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
+    const existing = await this.getTenantServer(tenantUuid, serverId);
+    const [deleted] = await this.db
+      .delete(mcpServers)
+      .where(and(eq(mcpServers.tenantId, tenantUuid), eq(mcpServers.id, serverId)))
+      .returning();
+
+    if (!deleted) {
+      throw new Error("Failed to delete MCP server");
+    }
+
+    await this.recordAudit({
+      tenantUuid,
+      actor,
+      action: "tools.mcp_server.delete",
+      targetId: serverId,
+      reason: body.reason,
+      comment: body.comment,
+      metadata: {
+        name: existing.name,
+        transport: existing.transport,
+        command: existing.command,
+        url: existing.url,
+        status: existing.status,
+      },
+    });
+
+    return this.toResponse(deleted, actor.tenantId);
+  }
+
   async listEnabledConfigs(): Promise<McpServerConfig[]> {
     let rows: Array<typeof mcpServers.$inferSelect>;
     try {

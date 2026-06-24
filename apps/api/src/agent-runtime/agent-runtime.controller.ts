@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -17,6 +18,12 @@ import { PermissionsGuard } from "../auth/permissions.guard.js";
 import type { RequestUser } from "../auth/auth.types.js";
 import { QuotaService } from "../governance/quota.service.js";
 import { ObservabilityService } from "../observability/observability.service.js";
+import { AgentConversationService } from "./agent-conversation.service.js";
+import type {
+  AgentConversation,
+  AgentConversationMessage,
+} from "./agent-conversation.types.js";
+import { CreateAgentConversationDto } from "./dto/create-agent-conversation.dto.js";
 import {
   AgentCapabilitySnapshot,
   AgentRuntimeService,
@@ -51,6 +58,8 @@ export class AgentRuntimeController {
     private readonly workflowExecutor: WorkflowRunExecutorService,
     @Inject(EvaluationAgentRunnerService)
     private readonly evaluationAgentRunner: EvaluationAgentRunnerService,
+    @Inject(AgentConversationService)
+    private readonly conversations: AgentConversationService,
   ) {}
 
   @Get("capabilities")
@@ -66,10 +75,33 @@ export class AgentRuntimeController {
     @CurrentUser() user: RequestUser,
   ): Promise<AgentRunResult> {
     await this.enforceRequestQuota(body, user);
-    const options = this.toRunOptions(body, user);
+    const conversation = await this.conversations.ensureConversation(
+      user,
+      body.sessionId,
+      body.message,
+    );
+    const persistedHistory = await this.conversations.getModelHistory(
+      user,
+      conversation.id,
+    );
+    await this.conversations.appendMessage({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      sessionId: conversation.id,
+      role: "user",
+      content: body.message,
+    });
+    const options = this.toRunOptions(body, user, persistedHistory);
 
     const result = await this.agentRuntime.run(options);
     await this.enforceTokenQuota(body, user, result);
+    await this.conversations.appendMessage({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      sessionId: conversation.id,
+      role: "assistant",
+      content: result.answer,
+    });
     return result;
   }
 
@@ -91,25 +123,60 @@ export class AgentRuntimeController {
       response.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    writeEvent("started", {
-      requestId: body.requestId,
-      timestamp: new Date().toISOString(),
-    });
+    const heartbeat = setInterval(() => {
+      writeEvent("heartbeat", {
+        requestId: body.requestId,
+        timestamp: new Date().toISOString(),
+      });
+    }, 15_000);
 
+    let conversation: AgentConversation | undefined;
     try {
       await this.enforceRequestQuota(body, user);
-      const result = await this.agentRuntime.run(this.toRunOptions(body, user));
+      conversation = await this.conversations.ensureConversation(
+        user,
+        body.sessionId,
+        body.message,
+      );
+      writeEvent("started", {
+        requestId: body.requestId,
+        sessionId: conversation.id,
+        timestamp: new Date().toISOString(),
+      });
+      const persistedHistory = await this.conversations.getModelHistory(
+        user,
+        conversation.id,
+      );
+      await this.conversations.appendMessage({
+        tenantId: user.tenantId,
+        userId: user.userId,
+        sessionId: conversation.id,
+        role: "user",
+        content: body.message,
+      });
+      const result = await this.agentRuntime.run(
+        this.toRunOptions(body, user, persistedHistory),
+      );
       await this.enforceTokenQuota(body, user, result);
+      await this.conversations.appendMessage({
+        tenantId: user.tenantId,
+        userId: user.userId,
+        sessionId: conversation.id,
+        role: "assistant",
+        content: result.answer,
+      });
 
       for (const chunk of this.chunkText(result.answer, 120)) {
         writeEvent("delta", {
           requestId: result.requestId,
+          sessionId: conversation.id,
           content: chunk,
         });
       }
 
       writeEvent("result", {
         requestId: result.requestId,
+        sessionId: conversation.id,
         stopReason: result.stopReason,
         sourceSummary: result.sourceSummary,
         plan: result.plan,
@@ -123,13 +190,68 @@ export class AgentRuntimeController {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (conversation) {
+        await this.conversations.appendMessage({
+          tenantId: user.tenantId,
+          userId: user.userId,
+          sessionId: conversation.id,
+          role: "assistant",
+          content: "生成失败。请查看本次运行详情或稍后重试。",
+        });
+      }
       writeEvent("error", {
         requestId: body.requestId,
+        ...(conversation ? { sessionId: conversation.id } : {}),
         message: error instanceof Error ? error.message : "Agent stream failed.",
       });
     } finally {
+      clearInterval(heartbeat);
       response.end();
     }
+  }
+
+  @Get("conversations")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("agent:run")
+  listConversations(
+    @CurrentUser() user: RequestUser,
+  ): Promise<AgentConversation[]> {
+    return this.conversations.list(user);
+  }
+
+  @Post("conversations")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("agent:run")
+  createConversation(
+    @Body() body: CreateAgentConversationDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<AgentConversation> {
+    const input = {
+      tenantId: user.tenantId,
+      userId: user.userId,
+      ...(body.title ? { title: body.title } : {}),
+    };
+    return this.conversations.create(input);
+  }
+
+  @Get("conversations/:sessionId/messages")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("agent:run")
+  listConversationMessages(
+    @Param("sessionId") sessionId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<AgentConversationMessage[]> {
+    return this.conversations.getMessages(user, sessionId);
+  }
+
+  @Delete("conversations/:sessionId")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("agent:run")
+  deleteConversation(
+    @Param("sessionId") sessionId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<{ deleted: true }> {
+    return this.conversations.delete(user, sessionId);
   }
 
   @Post("workflows/:workflowId/steps/:stepId/execute")
@@ -176,7 +298,11 @@ export class AgentRuntimeController {
     return this.evaluationAgentRunner.runBatchWithAgent(body, user);
   }
 
-  private toRunOptions(body: RunAgentDto, user: RequestUser): AgentRunOptions {
+  private toRunOptions(
+    body: RunAgentDto,
+    user: RequestUser,
+    persistedHistory?: AgentRunOptions["messages"],
+  ): AgentRunOptions {
     const options: AgentRunOptions = {
       requestId: body.requestId,
       userMessage: body.message,
@@ -188,7 +314,9 @@ export class AgentRuntimeController {
     if (body.systemPrompt) {
       options.systemPrompt = body.systemPrompt;
     }
-    if (body.messages) {
+    if (persistedHistory) {
+      options.messages = persistedHistory;
+    } else if (body.messages) {
       options.messages = body.messages;
     }
     if (body.maxSteps !== undefined) {

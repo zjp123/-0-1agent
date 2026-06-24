@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -90,4 +91,14 @@ export class McpServerManagementController {
     return { server, registry };
   }
 
+  @Delete(":serverId")
+  async deleteServer(
+    @Param("serverId") serverId: string,
+    @Body() body: McpServerActionDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<{ server: McpServerResponse; registry: ToolRegistryStatus }> {
+    const server = await this.servers.deleteServer(serverId, body, user);
+    const registry = await this.registry.reloadMcpHandlers();
+    return { server, registry };
+  }
 }

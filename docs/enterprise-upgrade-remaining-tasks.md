@@ -50,6 +50,7 @@
 - [x] Security Hardening: audit pagination / break-glass / anomaly detection
 - [x] Dynamic MCP Management: DB 配置 / Web 管理 / runtime reload / command approval gate
 - [x] Remote MCP Transport: Streamable HTTP JSON-RPC POST / URL 配置 / 基础 auth
+- [x] Agent Chat 后端持久化对话历史 / 会话列表 / 切页刷新恢复
 
 ## 未完成
 
