@@ -2122,6 +2122,41 @@ export async function listAuthAuditEvents(
   return authAuditEventListSchema.parse(payload);
 }
 
+export async function exportAuthAuditEvents(
+  credentials: AuthCredentials,
+  query: AuthAuditEventQuery = {},
+): Promise<string> {
+  const params = new URLSearchParams();
+  if (query.action) {
+    params.set("action", query.action);
+  }
+  if (query.targetType) {
+    params.set("targetType", query.targetType);
+  }
+  if (query.targetId) {
+    params.set("targetId", query.targetId);
+  }
+  if (query.actorUserId) {
+    params.set("actorUserId", query.actorUserId);
+  }
+  if (query.from) {
+    params.set("from", query.from);
+  }
+  if (query.to) {
+    params.set("to", query.to);
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  const response = await fetch(`${apiBaseUrl}/auth/audit-events/export${suffix}`, {
+    headers: buildAuthHeaders(credentials),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Export failed (${response.status}): ${text || response.statusText}`);
+  }
+  return response.text();
+}
+
 export async function listSecurityAnomalies(
   credentials: AuthCredentials,
   query: { limit?: number; offset?: number; acknowledged?: boolean } = {},
@@ -2206,6 +2241,17 @@ export async function listKnowledgeDocuments(
   return z.array(knowledgeDocumentSchema).parse(payload);
 }
 
+export async function deleteKnowledgeDocument(
+  credentials: AuthCredentials,
+  documentId: string,
+): Promise<{ deleted: boolean; documentId: string }> {
+  const payload = await fetchJson(`${apiBaseUrl}/knowledge/documents/${encodeURIComponent(documentId)}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(credentials),
+  });
+  return z.object({ deleted: z.boolean(), documentId: z.string() }).parse(payload);
+}
+
 export async function ingestKnowledge(
   input: IngestKnowledgeInput,
 ): Promise<KnowledgeIngestResult> {
@@ -2220,6 +2266,43 @@ export async function ingestKnowledge(
       tags: input.tags,
     }),
   });
+  return knowledgeIngestResultSchema.parse(payload);
+}
+
+export type UploadKnowledgeFileInput = AuthCredentials & {
+  file: File;
+  tags?: string;
+  sourceUri?: string;
+};
+
+export async function uploadKnowledgeFile(
+  input: UploadKnowledgeFileInput,
+): Promise<KnowledgeIngestResult> {
+  const formData = new FormData();
+  formData.append("file", input.file);
+  if (input.tags) {
+    formData.append("tags", input.tags);
+  }
+  if (input.sourceUri) {
+    formData.append("sourceUri", input.sourceUri);
+  }
+
+  const headers = buildAuthHeaders(input);
+  const response = await fetch(`${apiBaseUrl}/knowledge/upload`, {
+    method: "POST",
+    headers,
+    body: formData,
+    signal: AbortSignal.timeout(60_000),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(
+      `Upload failed (${response.status}): ${text || response.statusText}`,
+    );
+  }
+
+  const payload: unknown = await response.json();
   return knowledgeIngestResultSchema.parse(payload);
 }
 
@@ -2352,6 +2435,33 @@ export async function executeWorkflowPendingSteps(
   return workflowPendingStepsExecutionResultSchema.parse(payload);
 }
 
+export async function pauseWorkflow(input: AuthCredentials & { workflowId: string }): Promise<Workflow> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows/${input.workflowId}/pause`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({}),
+  });
+  return workflowSchema.parse(payload);
+}
+
+export async function resumeWorkflow(input: AuthCredentials & { workflowId: string }): Promise<Workflow> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows/${input.workflowId}/resume`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({}),
+  });
+  return workflowSchema.parse(payload);
+}
+
+export async function cancelWorkflow(input: AuthCredentials & { workflowId: string }): Promise<Workflow> {
+  const payload = await fetchJson(`${apiBaseUrl}/workflows/${input.workflowId}/cancel`, {
+    method: "POST",
+    headers: buildAuthHeaders(input, true),
+    body: JSON.stringify({}),
+  });
+  return workflowSchema.parse(payload);
+}
+
 export async function getWorkflowSchedulerStatus(
   credentials: AuthCredentials,
 ): Promise<WorkflowSchedulerStatus> {
@@ -2413,6 +2523,56 @@ export async function triggerWorkflowSchedule(input: AuthCredentials & {
     },
   );
   return workflowScheduleRunSchema.parse(payload);
+}
+
+export type UpdateWorkflowScheduleInput = AuthCredentials & {
+  scheduleId: string;
+  name?: string;
+  scheduleType?: "interval" | "cron";
+  cronExpression?: string;
+  intervalSeconds?: number;
+  timezone?: string;
+  enabled?: boolean;
+  maxConcurrentRuns?: number;
+  nextRunAt?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export async function updateWorkflowSchedule(
+  input: UpdateWorkflowScheduleInput,
+): Promise<WorkflowSchedule> {
+  const payload = await fetchJson(
+    `${apiBaseUrl}/workflows/schedules/${input.scheduleId}`,
+    {
+      method: "PATCH",
+      headers: buildAuthHeaders(input, true),
+      body: JSON.stringify({
+        name: input.name,
+        scheduleType: input.scheduleType,
+        cronExpression: input.cronExpression,
+        intervalSeconds: input.intervalSeconds,
+        timezone: input.timezone,
+        enabled: input.enabled,
+        maxConcurrentRuns: input.maxConcurrentRuns,
+        nextRunAt: input.nextRunAt,
+        metadata: input.metadata,
+      }),
+    },
+  );
+  return workflowScheduleSchema.parse(payload);
+}
+
+export async function deleteWorkflowSchedule(
+  input: AuthCredentials & { scheduleId: string },
+): Promise<{ deleted: boolean; scheduleId: string }> {
+  const payload = await fetchJson(
+    `${apiBaseUrl}/workflows/schedules/${input.scheduleId}`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(input, true),
+    },
+  );
+  return payload as { deleted: boolean; scheduleId: string };
 }
 
 export async function listEvaluationCases(

@@ -7,13 +7,15 @@ import {
   Play,
   RefreshCcw,
   Search,
+  Trash2,
   UploadCloud,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LocalCredentialFields } from "@/components/auth/local-credential-fields";
 import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
+  deleteKnowledgeDocument,
   enqueueKnowledgeReindex,
   getIndexingWorkerAlerts,
   getIndexingWorkerStatus,
@@ -21,6 +23,7 @@ import {
   listIndexingJobs,
   listKnowledgeDocuments,
   retrieveKnowledge,
+  uploadKnowledgeFile,
   type AuthCredentials,
   type IndexingJob,
   type IndexingWorkerAlerts,
@@ -97,6 +100,7 @@ export function KnowledgeWorkbench() {
   const [ingesting, setIngesting] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [retrieving, setRetrieving] = useState(false);
+  const [deletingDocument, setDeletingDocument] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [successMessage, setSuccessMessage] = useState<string | undefined>();
@@ -116,6 +120,15 @@ export function KnowledgeWorkbench() {
   const [limit, setLimit] = useState(5);
 
   const { credentials, hasCredentials, usingSession } = useEffectiveCredentials(apiKey, serviceToken);
+
+  // Auto-load data when credentials become available (e.g. after page refresh
+  // with a restored session).
+  useEffect(() => {
+    if (hasCredentials) {
+      void refresh();
+    }
+  }, [hasCredentials]);
+
   const totalChunks = data.jobs.reduce((total, job) => total + job.totalChunks, 0);
   const processedChunks = data.jobs.reduce((total, job) => total + job.processedChunks, 0);
   const filteredDocuments = useMemo(() => {
@@ -217,18 +230,11 @@ export function KnowledgeWorkbench() {
     try {
       for (const file of files) {
         try {
-          const fileContent = await file.text();
-          if (!fileContent.trim()) {
-            summaries.push({ name: file.name, status: "failed", message: "File is empty." });
-            continue;
-          }
-          const response = await ingestKnowledge({
+          const response = await uploadKnowledgeFile({
             ...credentials,
-            title: file.name.replace(/\.[^/.]+$/, "") || file.name,
-            content: fileContent,
-            sourceType: "upload",
+            file,
+            tags: baseTags?.join(", "),
             sourceUri: file.name,
-            tags: mergeTags(baseTags, ["upload"]),
           });
           summaries.push({
             name: file.name,
@@ -320,6 +326,35 @@ export function KnowledgeWorkbench() {
     setSourceType(selectedDocument.sourceType);
     setSourceUri(selectedDocument.sourceUri ?? "");
     setTagsText(selectedDocument.tags.join(", "));
+  }
+
+  async function handleDeleteDocument(docId?: string, docTitle?: string): Promise<void> {
+    const targetId = docId ?? selectedDocument?.id;
+    const targetTitle = docTitle ?? selectedDocument?.title;
+    if (!targetId || !targetTitle || !hasCredentials) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete document "${targetTitle}"? This will remove all associated chunks and vectors.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingDocument(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      await deleteKnowledgeDocument(credentials, targetId);
+      setSuccessMessage(`Deleted document "${targetTitle}".`);
+      if (selectedDocumentId === targetId) {
+        setSelectedDocumentId("");
+      }
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to delete document.");
+    } finally {
+      setDeletingDocument(false);
+    }
   }
 
   return (
@@ -465,7 +500,7 @@ export function KnowledgeWorkbench() {
           <section className="section-card">
             <div className="section-card-header">
               <h2 className="section-card-title">Upload Files</h2>
-              <p className="section-card-description">Batch ingest local text, markdown, JSON, and CSV files.</p>
+              <p className="section-card-description">Batch ingest local text, markdown, JSON, CSV, PDF, and Word (docx) files.</p>
             </div>
             <div className="section-card-body auth-form">
               <label className="file-upload-control">
@@ -474,7 +509,7 @@ export function KnowledgeWorkbench() {
                 <input
                   type="file"
                   multiple
-                  accept=".txt,.md,.markdown,.json,.csv,.log,text/plain,text/markdown,application/json,text/csv"
+                  accept=".txt,.md,.markdown,.json,.csv,.log,.pdf,.docx,text/plain,text/markdown,application/json,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   disabled={uploadingFiles || !hasCredentials}
                   onChange={(event) => void submitFileUpload(event.currentTarget.files, event.currentTarget)}
                 />
@@ -586,6 +621,7 @@ export function KnowledgeWorkbench() {
                       <th>Source</th>
                       <th>Tags</th>
                       <th>Created</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -605,11 +641,25 @@ export function KnowledgeWorkbench() {
                         </td>
                         <td>{document.tags.join(", ") || "none"}</td>
                         <td>{formatDate(document.createdAt)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="icon-button danger-button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleDeleteDocument(document.id, document.title);
+                            }}
+                            disabled={deletingDocument}
+                            title="Delete document"
+                          >
+                            <Trash2 className="icon-sm" aria-hidden="true" />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {filteredDocuments.length === 0 ? (
                       <tr>
-                        <td colSpan={4}>
+                        <td colSpan={5}>
                           <div className="table-empty">No documents matched.</div>
                         </td>
                       </tr>
@@ -644,6 +694,15 @@ export function KnowledgeWorkbench() {
                 >
                   <FileText className="icon-sm" aria-hidden="true" />
                   Edit Draft
+                </button>
+                <button
+                  type="button"
+                  className="refresh-button danger-button"
+                  onClick={() => void handleDeleteDocument()}
+                  disabled={!selectedDocument || deletingDocument}
+                >
+                  <Trash2 className="icon-sm" aria-hidden="true" />
+                  {deletingDocument ? "Deleting..." : "Delete"}
                 </button>
               </div>
             </div>

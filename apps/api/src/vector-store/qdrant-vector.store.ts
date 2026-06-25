@@ -161,6 +161,23 @@ export class QdrantVectorStore implements VectorStore {
     }));
   }
 
+  async delete(pointIds: string[]): Promise<void> {
+    if (!this.enabled || pointIds.length === 0) {
+      return;
+    }
+
+    await this.ensureCollection();
+    await this.request(
+      `/collections/${encodeURIComponent(this.collection)}/points/delete?wait=true`,
+      {
+        method: "POST",
+        body: {
+          points: pointIds,
+        },
+      },
+    );
+  }
+
   private async collectionExists(encodedCollection: string): Promise<boolean> {
     const response = await this.requestRaw(`/collections/${encodedCollection}`, {
       method: "GET",

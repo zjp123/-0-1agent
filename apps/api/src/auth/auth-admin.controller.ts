@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Inject,
   Param,
   Patch,
@@ -163,6 +164,16 @@ export class AuthAdminController {
     @CurrentUser() user: RequestUser,
   ): Promise<AuthAuditEventListResponse> {
     return this.authAdmin.listAuditEvents(user, query);
+  }
+
+  @Get("audit-events/export")
+  @Header("Content-Type", "text/csv; charset=utf-8")
+  @Header("Content-Disposition", "attachment; filename=audit-events.csv")
+  exportAuditEvents(
+    @Query() query: ListAuditEventsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<string> {
+    return this.authAdmin.exportAuditEvents(user, query);
   }
 
   @Get("security/anomalies")

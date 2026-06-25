@@ -270,6 +270,25 @@ export function buildAppConfiguration() {
     timeoutMs: parsePositiveInt(process.env.LLM_TIMEOUT_MS, 30_000),
     maxRetries: parsePositiveInt(process.env.LLM_MAX_RETRIES, 2),
   },
+  workflow: {
+    schedulerEnabled: parseBoolean(process.env.WORKFLOW_SCHEDULER_ENABLED, true),
+    schedulerIntervalMs: parsePositiveInt(
+      process.env.WORKFLOW_SCHEDULER_INTERVAL_MS,
+      30_000,
+    ),
+    schedulerLeaseMs: parsePositiveInt(
+      process.env.WORKFLOW_SCHEDULER_LEASE_MS,
+      120_000,
+    ),
+    schedulerMaxSteps: parsePositiveInt(
+      process.env.WORKFLOW_SCHEDULER_MAX_STEPS,
+      10,
+    ),
+    schedulerStuckTimeoutMs: parsePositiveInt(
+      process.env.WORKFLOW_SCHEDULER_STUCK_TIMEOUT_MS,
+      300_000,
+    ),
+  },
   };
 }
 

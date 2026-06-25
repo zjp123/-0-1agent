@@ -646,6 +646,80 @@ export class AuthAdminService {
     return this.toListResponse(items, limit, offset, rows.length > limit);
   }
 
+  async exportAuditEvents(
+    actor: RequestUser,
+    query: ListAuditEventsDto = {},
+  ): Promise<string> {
+    const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
+    const exportLimit = 5_000;
+    const filters: SQL[] = [eq(authAdminAuditEvents.tenantId, tenantUuid)];
+    if (query.action) {
+      filters.push(eq(authAdminAuditEvents.action, query.action));
+    }
+    if (query.targetType) {
+      filters.push(eq(authAdminAuditEvents.targetType, query.targetType));
+    }
+    if (query.targetId) {
+      filters.push(eq(authAdminAuditEvents.targetId, query.targetId));
+    }
+    if (query.actorUserId) {
+      filters.push(eq(authAdminAuditEvents.actorUserId, query.actorUserId));
+    }
+    if (query.from) {
+      filters.push(gte(authAdminAuditEvents.createdAt, new Date(query.from)));
+    }
+    if (query.to) {
+      filters.push(lte(authAdminAuditEvents.createdAt, new Date(query.to)));
+    }
+
+    const rows = await this.db
+      .select()
+      .from(authAdminAuditEvents)
+      .where(and(...filters))
+      .orderBy(desc(authAdminAuditEvents.createdAt))
+      .limit(exportLimit);
+
+    const headers = [
+      "id",
+      "createdAt",
+      "actorUserId",
+      "actorAuthType",
+      "actorTokenId",
+      "action",
+      "targetType",
+      "targetId",
+      "reason",
+      "comment",
+      "metadata",
+    ];
+
+    const lines = [headers.join(",")];
+    for (const row of rows) {
+      const values = [
+        row.id,
+        row.createdAt.toISOString(),
+        row.actorUserId,
+        row.actorAuthType,
+        row.actorTokenId ?? "",
+        row.action,
+        row.targetType,
+        row.targetId,
+        row.reason,
+        row.comment ?? "",
+        JSON.stringify(row.metadata),
+      ].map((v) => this.escapeCsvField(v));
+      lines.push(values.join(","));
+    }
+    return lines.join("\n");
+  }
+
+  private escapeCsvField(value: string): string {
+    if (value.includes(",") || value.includes('"') || value.includes("\n") || value.includes("\r")) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    return value;
+  }
+
   async listSecurityAnomalies(
     actor: RequestUser,
     query: ListSecurityAnomaliesDto = {},

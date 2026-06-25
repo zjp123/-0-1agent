@@ -4,10 +4,13 @@ import {
   CalendarClock,
   CheckCircle2,
   GitBranch,
+  Pause,
   Play,
   Plus,
   RefreshCcw,
   RotateCcw,
+  Square,
+  Trash2,
   Workflow as WorkflowIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -15,15 +18,20 @@ import { LocalCredentialFields } from "@/components/auth/local-credential-fields
 import { useEffectiveCredentials } from "@/components/auth/session-provider";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
+  cancelWorkflow,
   createWorkflow,
   createWorkflowSchedule,
+  deleteWorkflowSchedule,
   executeWorkflowPendingSteps,
   executeWorkflowStep,
   getWorkflowSchedulerStatus,
   listWorkflowScheduleRuns,
   listWorkflowSchedules,
   listWorkflows,
+  pauseWorkflow,
+  resumeWorkflow,
   triggerWorkflowSchedule,
+  updateWorkflowSchedule,
   updateWorkflowStep,
   type AuthCredentials,
   type Workflow,
@@ -155,6 +163,9 @@ export function WorkflowWorkbench() {
   const [updatingStep, setUpdatingStep] = useState(false);
   const [executingStep, setExecutingStep] = useState(false);
   const [triggeringSchedule, setTriggeringSchedule] = useState(false);
+  const [togglingSchedule, setTogglingSchedule] = useState(false);
+  const [deletingSchedule, setDeletingSchedule] = useState(false);
+  const [updatingWorkflowStatus, setUpdatingWorkflowStatus] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
   const [successMessage, setSuccessMessage] = useState<string | undefined>();
   const [workflowTitle, setWorkflowTitle] = useState("Production Readiness Review");
@@ -379,6 +390,82 @@ export function WorkflowWorkbench() {
       setErrorMessage(error instanceof Error ? error.message : "Failed to trigger workflow schedule.");
     } finally {
       setTriggeringSchedule(false);
+    }
+  }
+
+  async function toggleScheduleEnabled(schedule: WorkflowSchedule): Promise<void> {
+    if (!hasCredentials) {
+      return;
+    }
+    setTogglingSchedule(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      await updateWorkflowSchedule({
+        ...credentials,
+        scheduleId: schedule.id,
+        enabled: !schedule.enabled,
+      });
+      setSuccessMessage(`${schedule.enabled ? "Disabled" : "Enabled"} schedule ${schedule.name}.`);
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to update schedule.");
+    } finally {
+      setTogglingSchedule(false);
+    }
+  }
+
+  async function removeSchedule(schedule: WorkflowSchedule): Promise<void> {
+    if (!hasCredentials) {
+      return;
+    }
+    if (!window.confirm(`Delete schedule "${schedule.name}"? This also removes its run history.`)) {
+      return;
+    }
+    setDeletingSchedule(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      await deleteWorkflowSchedule({
+        ...credentials,
+        scheduleId: schedule.id,
+      });
+      if (selectedScheduleId === schedule.id) {
+        setSelectedScheduleId("");
+      }
+      setSuccessMessage(`Deleted schedule ${schedule.name}.`);
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to delete schedule.");
+    } finally {
+      setDeletingSchedule(false);
+    }
+  }
+
+  async function changeWorkflowStatus(workflow: Workflow, action: "pause" | "resume" | "cancel"): Promise<void> {
+    if (!hasCredentials) {
+      return;
+    }
+    setUpdatingWorkflowStatus(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const input = { ...credentials, workflowId: workflow.id };
+      if (action === "pause") {
+        await pauseWorkflow(input);
+        setSuccessMessage(`Paused workflow ${workflow.title}.`);
+      } else if (action === "resume") {
+        await resumeWorkflow(input);
+        setSuccessMessage(`Resumed workflow ${workflow.title}.`);
+      } else {
+        await cancelWorkflow(input);
+        setSuccessMessage(`Cancelled workflow ${workflow.title}.`);
+      }
+      await refresh();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : `Failed to ${action} workflow.`);
+    } finally {
+      setUpdatingWorkflowStatus(false);
     }
   }
 
@@ -656,9 +743,48 @@ export function WorkflowWorkbench() {
 
         <div className="workflow-main">
           <section className="section-card">
-            <div className="section-card-header">
-              <h2 className="section-card-title">Workflow List</h2>
-              <p className="section-card-description">Drafts and execution history foundation for the current tenant.</p>
+            <div className="section-card-header table-card-header">
+              <div>
+                <h2 className="section-card-title">Workflow List</h2>
+                <p className="section-card-description">Drafts and execution history foundation for the current tenant.</p>
+              </div>
+              {selectedWorkflow ? (
+                <div className="workflow-status-actions">
+                  {(selectedWorkflow.status === "running" || selectedWorkflow.status === "draft") && (
+                    <button
+                      type="button"
+                      className="schedule-action-btn"
+                      onClick={() => void changeWorkflowStatus(selectedWorkflow, "pause")}
+                      disabled={updatingWorkflowStatus || !hasCredentials}
+                    >
+                      <Pause className="icon-sm" aria-hidden="true" />
+                      Pause
+                    </button>
+                  )}
+                  {selectedWorkflow.status === "paused" && (
+                    <button
+                      type="button"
+                      className="schedule-action-btn"
+                      onClick={() => void changeWorkflowStatus(selectedWorkflow, "resume")}
+                      disabled={updatingWorkflowStatus || !hasCredentials}
+                    >
+                      <Play className="icon-sm" aria-hidden="true" />
+                      Resume
+                    </button>
+                  )}
+                  {selectedWorkflow.status !== "completed" && selectedWorkflow.status !== "cancelled" && (
+                    <button
+                      type="button"
+                      className="schedule-action-btn schedule-action-danger"
+                      onClick={() => void changeWorkflowStatus(selectedWorkflow, "cancel")}
+                      disabled={updatingWorkflowStatus || !hasCredentials}
+                    >
+                      <Square className="icon-sm" aria-hidden="true" />
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
             <div className="section-card-body workflow-list">
               {data.workflows.map((workflow) => (
@@ -866,6 +992,7 @@ export function WorkflowWorkbench() {
                       <th>Type</th>
                       <th>Enabled</th>
                       <th>Next run</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -886,11 +1013,39 @@ export function WorkflowWorkbench() {
                           </StatusBadge>
                         </td>
                         <td>{formatDate(schedule.nextRunAt)}</td>
+                        <td>
+                          <div className="schedule-row-actions">
+                            <button
+                              type="button"
+                              className="schedule-action-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void toggleScheduleEnabled(schedule);
+                              }}
+                              disabled={togglingSchedule || !hasCredentials}
+                              title={schedule.enabled ? "Disable" : "Enable"}
+                            >
+                              {schedule.enabled ? "Disable" : "Enable"}
+                            </button>
+                            <button
+                              type="button"
+                              className="schedule-action-btn schedule-action-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void removeSchedule(schedule);
+                              }}
+                              disabled={deletingSchedule || !hasCredentials}
+                              title="Delete"
+                            >
+                              <Trash2 className="icon-sm" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {data.schedules.length === 0 ? (
                       <tr>
-                        <td colSpan={4}>
+                        <td colSpan={5}>
                           <div className="table-empty">No schedules loaded.</div>
                         </td>
                       </tr>

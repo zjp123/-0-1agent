@@ -252,10 +252,10 @@ POST /api/workflows/schedule-runs/:runId/complete
 
 未完成：
 
-- 内置后台 scheduler loop
-- workflow step executor
+- [x] 内置后台 scheduler loop
+- [x] workflow step executor
 - run retry policy
-- stuck run recovery worker
+- [x] stuck run recovery worker
 - timezone-aware cron calculation
 - schedule update / disable API
 - schedule deletion / archival API

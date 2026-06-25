@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   NotFoundException,
@@ -18,6 +19,7 @@ import type { RequestUser } from "../auth/auth.types.js";
 import { ClaimWorkflowSchedulesDto } from "./dto/claim-workflow-schedules.dto.js";
 import { CompleteWorkflowScheduleRunDto } from "./dto/complete-workflow-schedule-run.dto.js";
 import { CreateWorkflowScheduleDto } from "./dto/create-workflow-schedule.dto.js";
+import { UpdateWorkflowScheduleDto } from "./dto/update-workflow-schedule.dto.js";
 import { CreateWorkflowDto } from "./dto/create-workflow.dto.js";
 import { UpdateWorkflowStepDto } from "./dto/update-workflow-step.dto.js";
 import { WorkflowSchedulerService } from "./workflow-scheduler.service.js";
@@ -113,6 +115,23 @@ export class WorkflowController {
     return this.scheduler.triggerSchedule(scheduleId, user);
   }
 
+  @Patch("schedules/:scheduleId")
+  updateSchedule(
+    @Param("scheduleId") scheduleId: string,
+    @Body() body: UpdateWorkflowScheduleDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<WorkflowSchedule> {
+    return this.scheduler.updateSchedule(scheduleId, body, user);
+  }
+
+  @Delete("schedules/:scheduleId")
+  async deleteSchedule(
+    @Param("scheduleId") scheduleId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<{ deleted: boolean; scheduleId: string }> {
+    return this.scheduler.deleteSchedule(scheduleId, user);
+  }
+
   @Post("schedule-runs/:runId/complete")
   completeScheduleRun(
     @Param("runId") runId: string,
@@ -120,6 +139,57 @@ export class WorkflowController {
     @CurrentUser() user: RequestUser,
   ): Promise<WorkflowScheduleRun> {
     return this.scheduler.completeRun(runId, body, user);
+  }
+
+  @Post(":workflowId/pause")
+  async pauseWorkflow(
+    @Param("workflowId") workflowId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<Workflow> {
+    const workflow = await this.workflow.updateStatus({
+      tenantId: user.tenantId,
+      workflowId,
+      userId: user.userId,
+      status: "paused",
+    });
+    if (!workflow) {
+      throw new NotFoundException("Workflow not found");
+    }
+    return workflow;
+  }
+
+  @Post(":workflowId/resume")
+  async resumeWorkflow(
+    @Param("workflowId") workflowId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<Workflow> {
+    const workflow = await this.workflow.updateStatus({
+      tenantId: user.tenantId,
+      workflowId,
+      userId: user.userId,
+      status: "draft",
+    });
+    if (!workflow) {
+      throw new NotFoundException("Workflow not found");
+    }
+    return workflow;
+  }
+
+  @Post(":workflowId/cancel")
+  async cancelWorkflow(
+    @Param("workflowId") workflowId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<Workflow> {
+    const workflow = await this.workflow.updateStatus({
+      tenantId: user.tenantId,
+      workflowId,
+      userId: user.userId,
+      status: "cancelled",
+    });
+    if (!workflow) {
+      throw new NotFoundException("Workflow not found");
+    }
+    return workflow;
   }
 
   @Get(":workflowId")

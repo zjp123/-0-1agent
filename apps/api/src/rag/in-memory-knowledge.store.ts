@@ -71,6 +71,22 @@ export class InMemoryKnowledgeStore implements KnowledgeStore {
     );
   }
 
+  async deleteDocument(tenantId: string, documentId: string): Promise<string[]> {
+    const document = this.documents.get(documentId);
+    if (!document || document.tenantId !== tenantId) {
+      return [];
+    }
+
+    const allChunks = this.chunksByTenant.get(tenantId) ?? [];
+    const deletedChunks = allChunks.filter((chunk) => chunk.documentId === documentId);
+    const remainingChunks = allChunks.filter((chunk) => chunk.documentId !== documentId);
+    this.chunksByTenant.set(tenantId, remainingChunks);
+
+    this.documents.delete(documentId);
+
+    return deletedChunks.map((chunk) => chunk.id);
+  }
+
   private tokenize(query: string): string[] {
     return [
       ...new Set(

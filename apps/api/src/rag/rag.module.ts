@@ -9,6 +9,7 @@ import {
   INDEXING_JOB_STORE,
   KNOWLEDGE_STORE,
 } from "./knowledge.constants.js";
+import { DocumentExtractorService } from "./document-extractor.service.js";
 import { KnowledgeChunkerService } from "./knowledge-chunker.service.js";
 import { IndexingWorkerService } from "./indexing-worker.service.js";
 import { PostgresIndexingJobStore } from "./postgres-indexing-job.store.js";
@@ -28,6 +29,7 @@ import { RagService } from "./rag.service.js";
   controllers: [RagController],
   providers: [
     KnowledgeChunkerService,
+    DocumentExtractorService,
     RedisIndexingQueue,
     IndexingWorkerService,
     PostgresKnowledgeStore,

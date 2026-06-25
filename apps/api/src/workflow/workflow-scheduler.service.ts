@@ -19,6 +19,7 @@ import { ObservabilityService } from "../observability/observability.service.js"
 import type { ClaimWorkflowSchedulesDto } from "./dto/claim-workflow-schedules.dto.js";
 import type { CompleteWorkflowScheduleRunDto } from "./dto/complete-workflow-schedule-run.dto.js";
 import type { CreateWorkflowScheduleDto } from "./dto/create-workflow-schedule.dto.js";
+import type { UpdateWorkflowScheduleDto } from "./dto/update-workflow-schedule.dto.js";
 import type {
   WorkflowSchedule,
   WorkflowScheduleRun,
@@ -41,7 +42,7 @@ export class WorkflowSchedulerService {
     return {
       enabled: true,
       store: "postgres",
-      triggerModes: ["interval", "cron", "manual", "worker claim"],
+      triggerModes: ["interval", "cron", "manual", "worker claim", "background"],
       capabilities: [
         "schedule registry",
         "due schedule claiming",
@@ -50,6 +51,8 @@ export class WorkflowSchedulerService {
         "schedule run history",
         "run completion recording",
         "trace events",
+        "background scheduler loop",
+        "stuck run recovery",
       ],
     };
   }
@@ -100,6 +103,79 @@ export class WorkflowSchedulerService {
       enabled: created.enabled,
     });
     return this.toSchedule(created, actor.tenantId);
+  }
+
+  async updateSchedule(
+    scheduleId: string,
+    body: UpdateWorkflowScheduleDto,
+    actor: RequestUser,
+  ): Promise<WorkflowSchedule> {
+    const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
+    const existing = await this.getTenantSchedule(tenantUuid, scheduleId);
+
+    if (body.scheduleType === "cron" || (body.cronExpression !== undefined && existing.scheduleType === "cron")) {
+      if (body.cronExpression !== undefined) {
+        this.parseCronExpression(body.cronExpression);
+      }
+    }
+    if (body.scheduleType === "interval" && body.intervalSeconds !== undefined) {
+      if (body.intervalSeconds < 60) {
+        throw new ConflictException("intervalSeconds must be at least 60");
+      }
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (body.name !== undefined) updates.name = body.name.trim();
+    if (body.scheduleType !== undefined) updates.scheduleType = body.scheduleType;
+    if (body.cronExpression !== undefined) updates.cronExpression = body.cronExpression;
+    if (body.intervalSeconds !== undefined) updates.intervalSeconds = body.intervalSeconds;
+    if (body.timezone !== undefined) updates.timezone = body.timezone;
+    if (body.enabled !== undefined) updates.enabled = body.enabled;
+    if (body.maxConcurrentRuns !== undefined) updates.maxConcurrentRuns = body.maxConcurrentRuns;
+    if (body.nextRunAt !== undefined) updates.nextRunAt = new Date(body.nextRunAt);
+    if (body.metadata !== undefined) updates.metadata = body.metadata;
+
+    const [updated] = await this.db
+      .update(workflowSchedules)
+      .set(updates)
+      .where(
+        and(
+          eq(workflowSchedules.tenantId, tenantUuid),
+          eq(workflowSchedules.id, scheduleId),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      throw new NotFoundException("Workflow schedule not found");
+    }
+    this.recordTrace(actor, updated.id, "workflow.schedule.updated", {
+      workflowId: updated.workflowId,
+      fields: Object.keys(updates).filter((key) => key !== "updatedAt").join(","),
+    });
+    return this.toSchedule(updated, actor.tenantId);
+  }
+
+  async deleteSchedule(
+    scheduleId: string,
+    actor: RequestUser,
+  ): Promise<{ deleted: boolean; scheduleId: string }> {
+    const tenantUuid = await this.identity.ensureTenant(actor.tenantId);
+    await this.getTenantSchedule(tenantUuid, scheduleId);
+
+    await this.db
+      .delete(workflowScheduleRuns)
+      .where(eq(workflowScheduleRuns.scheduleId, scheduleId));
+    await this.db
+      .delete(workflowSchedules)
+      .where(
+        and(
+          eq(workflowSchedules.tenantId, tenantUuid),
+          eq(workflowSchedules.id, scheduleId),
+        ),
+      );
+
+    this.recordTrace(actor, scheduleId, "workflow.schedule.deleted", {});
+    return { deleted: true, scheduleId };
   }
 
   async listRuns(

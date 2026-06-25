@@ -173,6 +173,43 @@ export class PostgresKnowledgeStore implements KnowledgeStore {
       .filter((chunk): chunk is KnowledgeChunk => Boolean(chunk));
   }
 
+  async deleteDocument(tenantId: string, documentId: string): Promise<string[]> {
+    const resolvedTenantId = await this.identity.ensureTenant(tenantId);
+
+    const chunkRows = await this.db
+      .select({ id: knowledgeChunks.id })
+      .from(knowledgeChunks)
+      .where(
+        and(
+          eq(knowledgeChunks.tenantId, resolvedTenantId),
+          eq(knowledgeChunks.documentId, documentId),
+        ),
+      );
+    const chunkIds = chunkRows.map((row) => row.id);
+
+    if (chunkIds.length > 0) {
+      await this.db
+        .delete(knowledgeChunks)
+        .where(
+          and(
+            eq(knowledgeChunks.tenantId, resolvedTenantId),
+            eq(knowledgeChunks.documentId, documentId),
+          ),
+        );
+    }
+
+    await this.db
+      .delete(knowledgeDocuments)
+      .where(
+        and(
+          eq(knowledgeDocuments.tenantId, resolvedTenantId),
+          eq(knowledgeDocuments.id, documentId),
+        ),
+      );
+
+    return chunkIds;
+  }
+
   private toDocument(
     row: typeof knowledgeDocuments.$inferSelect,
     externalTenantId: string,

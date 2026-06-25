@@ -14,6 +14,7 @@ import { AgentConversationService } from "./agent-conversation.service.js";
 import { AgentRuntimeService } from "./agent-runtime.service.js";
 import { EvaluationAgentRunnerService } from "./evaluation-agent-runner.service.js";
 import { WorkflowRunExecutorService } from "./workflow-run-executor.service.js";
+import { WorkflowSchedulerLoopService } from "./workflow-scheduler-loop.service.js";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { WorkflowRunExecutorService } from "./workflow-run-executor.service.js";
     AgentConversationService,
     WorkflowRunExecutorService,
     EvaluationAgentRunnerService,
+    WorkflowSchedulerLoopService,
   ],
   exports: [AgentRuntimeService, WorkflowRunExecutorService, EvaluationAgentRunnerService],
 })

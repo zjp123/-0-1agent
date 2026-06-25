@@ -68,9 +68,17 @@ export type UpdateWorkflowStepInput = {
   error?: string;
 };
 
+export type UpdateWorkflowStatusInput = {
+  tenantId: string;
+  workflowId: string;
+  userId: string;
+  status: WorkflowStatusValue;
+};
+
 export interface WorkflowStore {
   create(input: CreateWorkflowInput): Promise<Workflow>;
   get(tenantId: string, workflowId: string): Promise<Workflow | undefined>;
   list(tenantId: string): Promise<Workflow[]>;
   updateStep(input: UpdateWorkflowStepInput): Promise<Workflow | undefined>;
+  updateStatus(input: UpdateWorkflowStatusInput): Promise<Workflow | undefined>;
 }

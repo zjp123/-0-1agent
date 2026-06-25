@@ -1,14 +1,18 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Inject,
   NotFoundException,
   Param,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 
 import { ApiKeyGuard } from "../auth/api-key.guard.js";
 import { CurrentUser } from "../auth/current-user.decorator.js";
@@ -16,6 +20,7 @@ import { RequirePermissions } from "../auth/permissions.decorator.js";
 import { PermissionsGuard } from "../auth/permissions.guard.js";
 import type { RequestUser } from "../auth/auth.types.js";
 import { QuotaService } from "../governance/quota.service.js";
+import { DocumentExtractorService } from "./document-extractor.service.js";
 import { IndexingWorkerService } from "./indexing-worker.service.js";
 import { IngestKnowledgeDto } from "./dto/ingest-knowledge.dto.js";
 import { RetrieveKnowledgeDto } from "./dto/retrieve-knowledge.dto.js";
@@ -43,6 +48,8 @@ export class RagController {
     private readonly indexingWorker: IndexingWorkerService,
     @Inject(QuotaService)
     private readonly quota: QuotaService,
+    @Inject(DocumentExtractorService)
+    private readonly extractor: DocumentExtractorService,
   ) {}
 
   @Post("ingest")
@@ -77,6 +84,77 @@ export class RagController {
     return this.rag.ingest(input);
   }
 
+  @Post("upload")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:write")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 20 * 1024 * 1024 },
+    }),
+  )
+  async uploadFile(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() body: { tags?: string; sourceUri?: string },
+    @CurrentUser() user: RequestUser,
+  ): Promise<KnowledgeIngestResult> {
+    if (!file) {
+      throw new NotFoundException("No file uploaded. Use 'file' field in multipart form data.");
+    }
+    if (!file.buffer || file.buffer.length === 0) {
+      throw new NotFoundException("Uploaded file is empty.");
+    }
+
+    // Multer interprets multipart filenames as Latin-1 by default.
+    // Re-decode as UTF-8 so CJK characters are preserved.
+    const originalName = Buffer.from(file.originalname, "latin1").toString("utf-8");
+
+    const extracted = await this.extractor.extract(
+      file.buffer,
+      originalName,
+      file.mimetype,
+    );
+
+    if (!extracted.text.trim()) {
+      throw new NotFoundException("No text content could be extracted from the file.");
+    }
+
+    await this.quota.enforce({
+      tenantId: user.tenantId,
+      userId: user.userId,
+      action: "knowledge.ingest",
+      tokenCost: Math.ceil(extracted.text.length / 4),
+      metadata: {
+        title: extracted.title,
+        sourceType: extracted.sourceType,
+        fileName: originalName,
+      },
+    });
+
+    const input: IngestKnowledgeInput = {
+      tenantId: user.tenantId,
+      title: extracted.title,
+      content: extracted.text,
+      sourceType: "upload",
+      sourceUri: body.sourceUri?.trim() || originalName,
+    };
+
+    if (body.tags) {
+      const tags = body.tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+      if (tags.length > 0) {
+        input.tags = [...tags, "upload", extracted.sourceType];
+      } else {
+        input.tags = ["upload", extracted.sourceType];
+      }
+    } else {
+      input.tags = ["upload", extracted.sourceType];
+    }
+
+    return this.rag.ingest(input);
+  }
+
   @Post("retrieve")
   @UseGuards(ApiKeyGuard, PermissionsGuard)
   @RequirePermissions("knowledge:read")
@@ -98,6 +176,17 @@ export class RagController {
   @RequirePermissions("knowledge:read")
   listDocuments(@CurrentUser() user: RequestUser): Promise<KnowledgeDocument[]> {
     return this.rag.listDocuments(user.tenantId);
+  }
+
+  @Delete("documents/:documentId")
+  @UseGuards(ApiKeyGuard, PermissionsGuard)
+  @RequirePermissions("knowledge:write")
+  async deleteDocument(
+    @Param("documentId") documentId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<{ deleted: boolean; documentId: string }> {
+    await this.rag.deleteDocument(user.tenantId, documentId);
+    return { deleted: true, documentId };
   }
 
   @Post("reindex")

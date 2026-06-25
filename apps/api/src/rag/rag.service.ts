@@ -73,6 +73,13 @@ export class RagService {
     return this.store.listDocuments(tenantId);
   }
 
+  async deleteDocument(tenantId: string, documentId: string): Promise<void> {
+    const chunkIds = await this.store.deleteDocument(tenantId, documentId);
+    if (chunkIds.length > 0) {
+      await this.vectorStore.delete(chunkIds);
+    }
+  }
+
   async createReindexJob(input: {
     tenantId: string;
     userId: string;

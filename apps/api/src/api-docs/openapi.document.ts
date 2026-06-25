@@ -26,6 +26,7 @@ const routes: ApiRoute[] = [
   { method: "post", path: "/knowledge/ingest", tag: "Knowledge", summary: "Ingest a knowledge document", operationId: "ingestKnowledge", permission: "knowledge:write", requestSchema: "IngestKnowledgeRequest" },
   { method: "post", path: "/knowledge/retrieve", tag: "Knowledge", summary: "Retrieve knowledge chunks", operationId: "retrieveKnowledge", permission: "knowledge:read", requestSchema: "RetrieveKnowledgeRequest" },
   { method: "get", path: "/knowledge/documents", tag: "Knowledge", summary: "List knowledge documents", operationId: "listKnowledgeDocuments", permission: "knowledge:read" },
+  { method: "delete", path: "/knowledge/documents/{documentId}", tag: "Knowledge", summary: "Delete a knowledge document", operationId: "deleteKnowledgeDocument", permission: "knowledge:write" },
   { method: "post", path: "/knowledge/reindex", tag: "Knowledge Indexing", summary: "Enqueue tenant reindex job", operationId: "reindexKnowledge", permission: "knowledge:write" },
   { method: "get", path: "/knowledge/reindex/jobs", tag: "Knowledge Indexing", summary: "List indexing jobs", operationId: "listIndexingJobs", permission: "knowledge:read" },
   { method: "get", path: "/knowledge/reindex/jobs/{jobId}", tag: "Knowledge Indexing", summary: "Get indexing job", operationId: "getIndexingJob", permission: "knowledge:read" },
@@ -81,6 +82,7 @@ const routes: ApiRoute[] = [
   { method: "get", path: "/secrets/provider-credentials", tag: "Secrets", summary: "List provider credentials", operationId: "listProviderCredentials", permission: "auth:manage" },
   { method: "post", path: "/secrets/provider-credentials", tag: "Secrets", summary: "Create provider credential", operationId: "createProviderCredential", permission: "auth:manage" },
   { method: "get", path: "/auth/audit-events", tag: "Security", summary: "List auth admin audit events", operationId: "listAuthAuditEvents", permission: "auth:manage", responseSchema: "AuthAuditEventListResponse" },
+  { method: "get", path: "/auth/audit-events/export", tag: "Security", summary: "Export auth admin audit events as CSV", operationId: "exportAuthAuditEvents", permission: "auth:manage" },
   { method: "get", path: "/auth/security/anomalies", tag: "Security", summary: "List security anomaly events", operationId: "listSecurityAnomalies", permission: "auth:manage", responseSchema: "SecurityAnomalyEventListResponse" },
   { method: "post", path: "/auth/security/anomalies/{eventId}/acknowledge", tag: "Security", summary: "Acknowledge security anomaly event", operationId: "acknowledgeSecurityAnomaly", permission: "auth:manage", requestSchema: "AcknowledgeSecurityAnomalyRequest", responseSchema: "SecurityAnomalyEvent" },
 ];

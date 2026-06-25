@@ -268,4 +268,5 @@ export interface KnowledgeStore {
   listChunks(tenantId: string): Promise<KnowledgeChunk[]>;
   search(input: RetrieveKnowledgeInput): Promise<KnowledgeSearchResult[]>;
   findChunksByIds(tenantId: string, chunkIds: string[]): Promise<KnowledgeChunk[]>;
+  deleteDocument(tenantId: string, documentId: string): Promise<string[]>;
 }

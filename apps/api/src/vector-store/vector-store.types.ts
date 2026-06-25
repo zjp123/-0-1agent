@@ -41,4 +41,5 @@ export interface VectorStore {
   ensurePayloadIndexes(): Promise<void>;
   upsert(points: VectorPoint[]): Promise<void>;
   search(input: VectorSearchInput): Promise<VectorSearchResult[]>;
+  delete(pointIds: string[]): Promise<void>;
 }

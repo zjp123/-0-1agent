@@ -8,6 +8,7 @@ import { workflows, workflowSteps } from "../db/schema.js";
 import type {
   CreateWorkflowInput,
   UpdateWorkflowStepInput,
+  UpdateWorkflowStatusInput,
   Workflow,
   WorkflowEvent,
   WorkflowStatusValue,
@@ -131,12 +132,67 @@ export class PostgresWorkflowStore implements WorkflowStore {
     }
 
     const steps = await this.loadSteps(resolvedTenantId, input.workflowId);
-    const status = this.deriveWorkflowStatus(steps);
+    const [currentWorkflow] = await this.db
+      .select({ status: workflows.status })
+      .from(workflows)
+      .where(
+        and(
+          eq(workflows.tenantId, resolvedTenantId),
+          eq(workflows.id, input.workflowId),
+        ),
+      )
+      .limit(1);
+    const status = this.deriveWorkflowStatus(steps, currentWorkflow?.status as WorkflowStatusValue | undefined);
     await this.db
       .update(workflows)
       .set({
         status,
         updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(workflows.tenantId, resolvedTenantId),
+          eq(workflows.id, input.workflowId),
+        ),
+      );
+
+    return this.get(input.tenantId, input.workflowId);
+  }
+
+  async updateStatus(input: UpdateWorkflowStatusInput): Promise<Workflow | undefined> {
+    const resolvedTenantId = await this.identity.ensureTenant(input.tenantId);
+    const now = new Date();
+
+    if (input.status === "paused") {
+      await this.db
+        .update(workflowSteps)
+        .set({ status: "pending", updatedAt: now })
+        .where(
+          and(
+            eq(workflowSteps.tenantId, resolvedTenantId),
+            eq(workflowSteps.workflowId, input.workflowId),
+            eq(workflowSteps.status, "running"),
+          ),
+        );
+    }
+
+    if (input.status === "cancelled") {
+      await this.db
+        .update(workflowSteps)
+        .set({ status: "skipped", updatedAt: now })
+        .where(
+          and(
+            eq(workflowSteps.tenantId, resolvedTenantId),
+            eq(workflowSteps.workflowId, input.workflowId),
+          ),
+        );
+    }
+
+    await this.db
+      .update(workflows)
+      .set({
+        status: input.status,
+        updatedAt: now,
       })
       .where(
         and(
@@ -235,7 +291,11 @@ export class PostgresWorkflowStore implements WorkflowStore {
 
   private deriveWorkflowStatus(
     steps: Array<typeof workflowSteps.$inferSelect>,
+    currentStatus?: WorkflowStatusValue,
   ): WorkflowStatusValue {
+    if (currentStatus === "paused" || currentStatus === "cancelled") {
+      return currentStatus;
+    }
     if (steps.some((step) => step.status === "failed")) {
       return "failed";
     }

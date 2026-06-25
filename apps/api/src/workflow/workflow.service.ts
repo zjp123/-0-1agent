@@ -4,6 +4,7 @@ import { WORKFLOW_STORE } from "./workflow.constants.js";
 import type {
   CreateWorkflowInput,
   UpdateWorkflowStepInput,
+  UpdateWorkflowStatusInput,
   Workflow,
   WorkflowStore,
 } from "./workflow.types.js";
@@ -32,6 +33,10 @@ export class WorkflowService {
 
   updateStep(input: UpdateWorkflowStepInput): Promise<Workflow | undefined> {
     return this.store.updateStep(input);
+  }
+
+  updateStatus(input: UpdateWorkflowStatusInput): Promise<Workflow | undefined> {
+    return this.store.updateStatus(input);
   }
 
   getStatus(): WorkflowStatus {

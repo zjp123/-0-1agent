@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  Download,
   KeyRound,
   Search,
   Plus,
@@ -19,6 +20,7 @@ import {
   ALL_PERMISSIONS,
   createAuthRole,
   decideApprovalRequest,
+  exportAuthAuditEvents,
   listAgentRunHistory,
   listApprovalRequests,
   listAuthAuditEvents,
@@ -140,6 +142,7 @@ export function SecurityGovernance() {
   const [selectedAuditEventId, setSelectedAuditEventId] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [acknowledgingId, setAcknowledgingId] = useState<string | undefined>();
   const [decidingApprovalId, setDecidingApprovalId] = useState<string | undefined>();
@@ -268,6 +271,33 @@ export function SecurityGovernance() {
     const nextFilters = { ...auditFilters, offset };
     setAuditFilters(nextFilters);
     await refreshAuditEvents(nextFilters);
+  }
+
+  async function exportAuditEvents(): Promise<void> {
+    if (!hasCredentials) {
+      setErrorMessage("Enter an API key or service token before exporting audit events.");
+      return;
+    }
+    setExporting(true);
+    setErrorMessage(undefined);
+    setSuccessMessage(undefined);
+    try {
+      const csv = await exportAuthAuditEvents(credentials, toAuditQuery(auditFilters));
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `audit-events-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setSuccessMessage("Audit events exported successfully.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to export audit events.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   function togglePermission(permission: Permission): void {
@@ -779,6 +809,15 @@ export function SecurityGovernance() {
                   disabled={auditLoading || !hasCredentials}
                 >
                   Clear
+                </button>
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => void exportAuditEvents()}
+                  disabled={exporting || auditLoading || !hasCredentials}
+                >
+                  <Download className="icon-sm" aria-hidden="true" />
+                  {exporting ? "Exporting..." : "Export CSV"}
                 </button>
               </div>
 

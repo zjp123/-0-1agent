@@ -3,6 +3,7 @@ import { Injectable } from "@nestjs/common";
 import type {
   CreateWorkflowInput,
   UpdateWorkflowStepInput,
+  UpdateWorkflowStatusInput,
   Workflow,
   WorkflowEvent,
   WorkflowStatusValue,
@@ -97,6 +98,39 @@ export class InMemoryWorkflowStore implements WorkflowStore {
       ),
     );
 
+    return workflow;
+  }
+
+  async updateStatus(input: UpdateWorkflowStatusInput): Promise<Workflow | undefined> {
+    const workflow = this.workflows.get(this.key(input.tenantId, input.workflowId));
+    if (!workflow) {
+      return undefined;
+    }
+    const now = new Date().toISOString();
+    workflow.status = input.status;
+    workflow.updatedAt = now;
+
+    if (input.status === "paused") {
+      for (const step of workflow.steps) {
+        if (step.status === "running") {
+          step.status = "pending";
+          step.updatedAt = now;
+        }
+      }
+    }
+
+    if (input.status === "cancelled") {
+      for (const step of workflow.steps) {
+        if (step.status === "pending" || step.status === "running") {
+          step.status = "skipped";
+          step.updatedAt = now;
+        }
+      }
+    }
+
+    workflow.events.push(
+      this.event("status_updated", `Workflow ${input.status}`, input.userId, now),
+    );
     return workflow;
   }
 
